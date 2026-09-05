@@ -185,6 +185,7 @@ export function createMockApi(): CswapApi {
     onAutoStatus: on('autoStatus'),
     onCommandLog: on('log'),
     onSettings: on('settings'),
-    onNavigate: on('navigate')
+    onNavigate: on('navigate'),
+    onBinary: on('binary')
   }
 }

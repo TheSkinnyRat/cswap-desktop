@@ -47,7 +47,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       api.onAutoStatus((a) => setAuto(a)),
       api.onAutoEvent((e) => setAutoEvents((prev) => [...prev.slice(-499), e])),
       api.onCommandLog((e) => setLog((prev) => [...prev.slice(-299), e])),
-      api.onNavigate((p) => setPage(p as Page))
+      api.onNavigate((p) => setPage(p as Page)),
+      api.onBinary((b) => setBinary(b))
     ]
     const t = setInterval(() => setNow(Date.now()), 15000)
     return () => {
@@ -66,7 +67,6 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     setSettings((s) => ({ ...s, ...patch }))
     const s = await api.setSettings(patch)
     setSettings(s)
-    if (patch.cswapPath !== undefined) setBinary(await api.getBinaryInfo())
   }, [])
   const redetect = useCallback(async () => {
     setBinary(await api.detectBinary())

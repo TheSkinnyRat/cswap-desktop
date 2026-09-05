@@ -27,6 +27,7 @@ export function registerIpc(core: AppCore, getWindow: () => BrowserWindow | null
   core.on('autoStatus', (s) => broadcast(IPC.evAutoStatus, s))
   core.on('log', (e) => broadcast(IPC.evCommandLog, e))
   core.on('settings', (s) => broadcast(IPC.evSettings, s))
+  core.on('binary', (b) => broadcast(IPC.evBinary, b))
 
   const d = core.driver
   ipcMain.handle(IPC.getAccounts, () => core.getAccounts())

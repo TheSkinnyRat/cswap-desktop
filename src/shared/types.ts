@@ -267,7 +267,8 @@ export interface CswapApi {
   // app
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
-  getBinaryInfo(): Promise<CswapBinaryInfo>
+  // null until the first detection has finished
+  getBinaryInfo(): Promise<CswapBinaryInfo | null>
   detectBinary(): Promise<CswapBinaryInfo>
   pickBinary(): Promise<string | null>
   installCswap(): Promise<Result<PlainOutput>>
@@ -285,6 +286,7 @@ export interface CswapApi {
   onCommandLog(cb: (entry: CommandLogEntry) => void): () => void
   onSettings(cb: (s: AppSettings) => void): () => void
   onNavigate(cb: (page: string) => void): () => void
+  onBinary(cb: (info: CswapBinaryInfo) => void): () => void
 }
 
 export const IPC = {
@@ -334,5 +336,6 @@ export const IPC = {
   evAutoStatus: 'ev:autoStatus',
   evCommandLog: 'ev:commandLog',
   evSettings: 'ev:settings',
-  evNavigate: 'ev:navigate'
+  evNavigate: 'ev:navigate',
+  evBinary: 'ev:binary'
 } as const

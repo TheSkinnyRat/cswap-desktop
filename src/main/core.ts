@@ -24,7 +24,7 @@ export class AppCore extends EventEmitter {
   readonly auto = new AutoSwitchRunner()
   readonly settings: SettingsStore
   readonly vault = new VaultWatcher()
-  private binary: CswapBinaryInfo = { path: null, source: 'none', version: null, candidates: [] }
+  private binary: CswapBinaryInfo | null = null
   private accounts: AccountsState = { payload: null, fetchedAt: null, refreshing: false, error: null }
   private refreshTimer: NodeJS.Timeout | null = null
   private inflight: Promise<AccountsState> | null = null
@@ -46,21 +46,24 @@ export class AppCore extends EventEmitter {
   async init(): Promise<void> {
     await this.detectBinary()
     this.scheduleRefresh()
-    if (this.binary.path) {
+    if (this.binary?.path) {
       void this.refresh()
-      if (this.settings.get().autoStartAutoSwitch) this.auto.start(this.binary.path, { dryRun: this.settings.get().autoDryRun })
+      if (this.settings.get().autoStartAutoSwitch) this.auto.start(this.driver.getBinary(), { dryRun: this.settings.get().autoDryRun })
     }
   }
 
   // ---- binary --------------------------------------------------------------
-  getBinaryInfo(): CswapBinaryInfo {
+  getBinaryInfo(): CswapBinaryInfo | null {
     return this.binary
   }
   async detectBinary(): Promise<CswapBinaryInfo> {
-    this.binary = await resolveCswap(this.settings.get().cswapPath)
-    this.driver.setBinary(this.binary.version ? this.binary.path : null)
+    const info = await resolveCswap(this.settings.get().cswapPath)
+    this.binary = info
+    this.driver.setBinary(info.version ? info.path : null)
     await this.resolveVault()
-    return this.binary
+    // The renderer may have mounted before detection finished — push, don't wait to be asked.
+    this.emit('binary', info)
+    return info
   }
   private async resolveVault(): Promise<void> {
     let vault: string | null = null

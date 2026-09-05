@@ -55,7 +55,8 @@ const api: CswapApi = {
   onAutoStatus: on(IPC.evAutoStatus),
   onCommandLog: on(IPC.evCommandLog),
   onSettings: on(IPC.evSettings),
-  onNavigate: on(IPC.evNavigate)
+  onNavigate: on(IPC.evNavigate),
+  onBinary: on(IPC.evBinary)
 }
 
 contextBridge.exposeInMainWorld('cswap', api)
