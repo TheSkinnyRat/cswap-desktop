@@ -38,6 +38,8 @@ portable:
 linux:
   icon: resources/icon.png
   category: Utility
+  maintainer: TheSkinnyRat <cswap-desktop@users.noreply.github.com>
+  synopsis: Desktop app for claude-swap (cswap)
   target:
     - target: AppImage
       arch: [x64]
