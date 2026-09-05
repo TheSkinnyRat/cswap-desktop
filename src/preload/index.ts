@@ -36,6 +36,9 @@ const api: CswapApi = {
   tokenStatus: () => ipcRenderer.invoke(IPC.tokenStatus),
   launchSession: (t) => ipcRenderer.invoke(IPC.launchSession, t),
   checkForUpdate: () => ipcRenderer.invoke(IPC.checkForUpdate),
+  updaterState: () => ipcRenderer.invoke(IPC.updaterState),
+  updaterCheck: () => ipcRenderer.invoke(IPC.updaterCheck),
+  updaterInstall: () => ipcRenderer.invoke(IPC.updaterInstall),
   autoOnce: (o) => ipcRenderer.invoke(IPC.autoOnce, o),
   autoStart: (o) => ipcRenderer.invoke(IPC.autoStart, o),
   autoStop: () => ipcRenderer.invoke(IPC.autoStop),
@@ -60,6 +63,7 @@ const api: CswapApi = {
   onCommandLog: on(IPC.evCommandLog),
   onSettings: on(IPC.evSettings),
   onNavigate: on(IPC.evNavigate),
+  onUpdater: on(IPC.evUpdater),
   onBinary: on(IPC.evBinary)
 }
 

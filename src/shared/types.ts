@@ -171,6 +171,16 @@ export interface UpdateInfo {
   error?: string
 }
 
+export interface UpdaterState {
+  status: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'
+  current: string
+  version?: string
+  percent?: number
+  error?: string
+  checkedAt?: string
+  releaseUrl?: string
+}
+
 export interface CswapBinaryInfo {
   path: string | null
   source: 'settings' | 'uv' | 'pipx' | 'path' | 'none'
@@ -191,6 +201,7 @@ export interface AppSettings {
   notifyOnAutoSwitch: boolean
   autoStartAutoSwitch: boolean
   autoDryRun: boolean
+  autoUpdate: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -202,7 +213,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   notifyOnAutoSwitch: true,
   autoStartAutoSwitch: false,
-  autoDryRun: false
+  autoDryRun: false,
+  autoUpdate: true
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: CswapError }
@@ -276,6 +288,9 @@ export interface CswapApi {
   tokenStatus(): Promise<Result<PlainOutput>>
   launchSession(target: string): Promise<Result<{ command: string }>>
   checkForUpdate(): Promise<UpdateInfo>
+  updaterState(): Promise<UpdaterState>
+  updaterCheck(): Promise<UpdaterState>
+  updaterInstall(): Promise<void>
   // auto-switch process
   autoStart(opts?: { dryRun?: boolean }): Promise<AutoStatus>
   autoStop(): Promise<AutoStatus>
@@ -304,6 +319,7 @@ export interface CswapApi {
   onCommandLog(cb: (entry: CommandLogEntry) => void): () => void
   onSettings(cb: (s: AppSettings) => void): () => void
   onNavigate(cb: (page: string) => void): () => void
+  onUpdater(cb: (st: UpdaterState) => void): () => void
   onBinary(cb: (info: CswapBinaryInfo) => void): () => void
 }
 
@@ -334,6 +350,10 @@ export const IPC = {
   tokenStatus: 'cswap:tokenStatus',
   launchSession: 'cswap:launchSession',
   checkForUpdate: 'app:checkForUpdate',
+  updaterState: 'update:state',
+  updaterCheck: 'update:check',
+  updaterInstall: 'update:install',
+  evUpdater: 'ev:updater',
   autoOnce: 'auto:once',
   autoStart: 'auto:start',
   autoStop: 'auto:stop',

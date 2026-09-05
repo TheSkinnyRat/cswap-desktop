@@ -29,6 +29,7 @@ export function registerIpc(core: AppCore, getWindow: () => BrowserWindow | null
   core.on('autoStatus', (s) => broadcast(IPC.evAutoStatus, s))
   core.on('log', (e) => broadcast(IPC.evCommandLog, e))
   core.on('settings', (s) => broadcast(IPC.evSettings, s))
+  core.on('updater', (s) => broadcast(IPC.evUpdater, s))
   core.on('binary', (b) => broadcast(IPC.evBinary, b))
 
   const d = core.driver
@@ -101,6 +102,9 @@ export function registerIpc(core: AppCore, getWindow: () => BrowserWindow | null
   ipcMain.handle(IPC.tokenStatus, () => d.tokenStatus())
   ipcMain.handle(IPC.launchSession, (_e, t: string) => launchSession(d.getBinary(), t))
   ipcMain.handle(IPC.checkForUpdate, () => checkForUpdate(appInfo().version))
+  ipcMain.handle(IPC.updaterState, () => core.updater.getState())
+  ipcMain.handle(IPC.updaterCheck, () => core.updater.check())
+  ipcMain.handle(IPC.updaterInstall, () => core.updater.install())
   ipcMain.handle(IPC.autoOnce, async (_e, o?: { dryRun?: boolean }) => core.afterMutation(await d.autoOnce(!!o?.dryRun)))
   ipcMain.handle(IPC.autoStart, (_e, o?: { dryRun?: boolean }) => {
     core.settings.set({ autoDryRun: !!o?.dryRun })

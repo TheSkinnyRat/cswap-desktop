@@ -9,10 +9,15 @@ import { LogPage } from './pages/Log'
 import { SettingsPage } from './pages/Settings'
 import { Onboarding } from './pages/Onboarding'
 import { useStore, useTheme } from './lib/store'
+import { useToast } from './lib/toast'
 
 export function App(): React.JSX.Element {
-  const { settings, page, binary, setPage, refresh } = useStore()
+  const { settings, page, binary, setPage, refresh, updater } = useStore()
+  const { notify } = useToast()
   const [palette, setPalette] = useState(false)
+  useEffect(() => {
+    if (updater.status === 'downloaded') notify('info', `Update ${updater.version} downloaded`, 'Restart from Settings → About to install it; otherwise it installs when you quit.')
+  }, [updater.status, updater.version, notify])
   useTheme(settings.theme)
 
   useEffect(() => {

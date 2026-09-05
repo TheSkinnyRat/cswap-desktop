@@ -6,6 +6,7 @@ import { CswapDriver, parseMappings, parseUnclaimed } from './cswap/driver'
 import { AutoSwitchRunner } from './cswap/auto'
 import { findUv, resolveCswap } from './cswap/resolve'
 import { SettingsStore } from './settings'
+import { Updater } from './updater'
 import { VaultWatcher, defaultVaultPath, readMappingsFile, vaultFromSettingsPath } from './vault'
 import type {
   AccountsState,
@@ -24,6 +25,7 @@ export class AppCore extends EventEmitter {
   readonly auto = new AutoSwitchRunner()
   readonly settings: SettingsStore
   readonly vault = new VaultWatcher()
+  readonly updater = new Updater()
   private binary: CswapBinaryInfo | null = null
   private accounts: AccountsState = { payload: null, fetchedAt: null, refreshing: false, error: null }
   private refreshTimer: NodeJS.Timeout | null = null
@@ -39,13 +41,16 @@ export class AppCore extends EventEmitter {
     this.settings.on('change', (s) => {
       this.emit('settings', s)
       this.scheduleRefresh()
+      this.updater.schedule(s.autoUpdate)
     })
     this.vault.on('change', () => void this.refresh())
+    this.updater.on('state', (st) => this.emit('updater', st))
   }
 
   async init(): Promise<void> {
     await this.detectBinary()
     this.scheduleRefresh()
+    this.updater.schedule(this.settings.get().autoUpdate)
     if (this.binary?.path) {
       void this.refresh()
       if (this.settings.get().autoStartAutoSwitch) this.auto.start(this.driver.getBinary(), { dryRun: this.settings.get().autoDryRun })
@@ -168,6 +173,7 @@ export class AppCore extends EventEmitter {
 
   dispose(): void {
     if (this.refreshTimer) clearInterval(this.refreshTimer)
+    this.updater.dispose()
     this.vault.close()
     void this.auto.stop()
   }

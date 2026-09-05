@@ -11,7 +11,7 @@ const items: { id: Page; label: string; icon: React.JSX.Element }[] = [
 ]
 
 export function Sidebar(): React.JSX.Element {
-  const { page, setPage, binary, auto, accounts } = useStore()
+  const { page, setPage, binary, auto, accounts, updater } = useStore()
   const count = accounts.payload?.accounts.length
   return (
     <nav className="flex w-[196px] shrink-0 flex-col border-r border-border bg-surface/40 px-2 py-2" aria-label="Main">
@@ -27,6 +27,7 @@ export function Sidebar(): React.JSX.Element {
           <span className="flex-1 text-left">{it.label}</span>
           {it.id === 'accounts' && count !== undefined && <span className="text-[11px] text-fg-3">{count}</span>}
           {it.id === 'auto' && auto.running && <span className="h-[6px] w-[6px] rounded-full bg-ok" title="Auto-switch running" />}
+          {it.id === 'settings' && updater.status === 'downloaded' && <span className="h-[6px] w-[6px] rounded-full bg-accent" title={`Update ${updater.version} ready`} />}
         </button>
       ))}
       <div className="flex-1" />

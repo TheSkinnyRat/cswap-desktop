@@ -8,7 +8,7 @@ import { Button, Card, Chip, Field, Input, Segmented, Select, Switch } from '../
 import { PageHeader } from '../components/PageHeader'
 
 export function SettingsPage(): React.JSX.Element {
-  const { settings, updateSettings, binary, redetect } = useStore()
+  const { settings, updateSettings, binary, redetect, updater } = useStore()
   const { notify } = useToast()
   const [pathDraft, setPathDraft] = useState(settings.cswapPath ?? '')
   const [vault, setVault] = useState<string | null>(null)
@@ -215,29 +215,67 @@ export function SettingsPage(): React.JSX.Element {
               {info?.electron && <span className="text-fg-3"> · Electron {info.electron}</span>}
             </div>
             <p>A desktop front-end for claude-swap. It drives the CLI you already have installed; nothing here talks to Anthropic directly.</p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                icon={<ArrowUpCircle size={13} />}
-                loading={busy === 'update'}
-                data-testid="check-update"
-                onClick={async () => {
-                  setBusy('update')
-                  const u = await api.checkForUpdate()
-                  setBusy(null)
-                  setUpdate(u)
-                  if (u.error) notify('error', 'Could not check for updates', u.error)
-                  else if (u.updateAvailable) notify('info', `Version ${u.latest} is available`, 'Open the releases page to download it.')
-                  else notify('ok', 'You are on the latest version')
-                }}
-              >
-                Check for updates
-              </Button>
-              {update?.updateAvailable && update.url && (
-                <Button size="sm" variant="primary" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal(update.url!)}>
-                  Get {update.latest}
-                </Button>
+            <div className="rounded-md border border-border bg-bg/50 px-3 py-2" data-testid="updater">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[12.5px] font-medium text-fg">
+                    {updater.status === 'disabled' && (info?.electron ? 'Automatic updates are off in this build' : 'Automatic updates need the packaged app')}
+                    {updater.status === 'idle' && 'Automatic updates on'}
+                    {updater.status === 'checking' && 'Checking for updates…'}
+                    {updater.status === 'not-available' && 'You are on the latest version'}
+                    {updater.status === 'available' && `Version ${updater.version} found — downloading`}
+                    {updater.status === 'downloading' && `Downloading ${updater.version}… ${updater.percent ?? 0}%`}
+                    {updater.status === 'downloaded' && `Version ${updater.version} is ready to install`}
+                    {updater.status === 'error' && 'Update check failed'}
+                  </div>
+                  <div className="text-[11.5px] text-fg-3">
+                    {updater.status === 'error' ? updater.error : updater.status === 'disabled' && platform !== 'win32' ? 'macOS builds are unsigned, so updates there are manual.' : updater.checkedAt ? `Checked ${new Date(updater.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · installs on quit or on request` : 'Checks at start and every 6 hours; installs on quit or on request.'}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {updater.status === 'downloaded' ? (
+                    <Button size="sm" variant="primary" icon={<ArrowUpCircle size={13} />} onClick={() => void api.updaterInstall()} data-testid="update-install">
+                      Restart & install
+                    </Button>
+                  ) : updater.status !== 'disabled' ? (
+                    <Button size="sm" loading={updater.status === 'checking' || updater.status === 'downloading' || updater.status === 'available'} icon={<RefreshCw size={13} />} onClick={() => void api.updaterCheck()} data-testid="update-check">
+                      Check now
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      icon={<ArrowUpCircle size={13} />}
+                      loading={busy === 'update'}
+                      data-testid="check-update"
+                      onClick={async () => {
+                        setBusy('update')
+                        const u = await api.checkForUpdate()
+                        setBusy(null)
+                        setUpdate(u)
+                        if (u.error) notify('error', 'Could not check for updates', u.error)
+                        else if (u.updateAvailable) notify('info', `Version ${u.latest} is available`, 'Open the releases page to download it.')
+                        else notify('ok', 'You are on the latest version')
+                      }}
+                    >
+                      Check for updates
+                    </Button>
+                  )}
+                  {update?.updateAvailable && update.url && (
+                    <Button size="sm" variant="primary" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal(update.url!)}>
+                      Get {update.latest}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {(updater.status === 'downloading' || updater.status === 'available') && (
+                <div className="mt-2 h-[4px] w-full overflow-hidden rounded-full bg-surface-3">
+                  <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${updater.percent ?? 0}%` }} />
+                </div>
               )}
+              <label className="mt-2 flex items-center justify-between gap-3 text-[12px] text-fg-2">
+                Download updates automatically
+                <Switch checked={settings.autoUpdate} onChange={(v) => void updateSettings({ autoUpdate: v })} label="Download updates automatically" disabled={updater.status === 'disabled'} />
+              </label>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal('https://github.com/TheSkinnyRat/cswap-desktop')}>
