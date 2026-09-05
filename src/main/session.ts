@@ -8,8 +8,10 @@ export function launchSession(bin: string | null, target: string): Result<{ comm
   const command = `cswap run ${target}`
   try {
     if (process.platform === 'win32') {
-      // `start` gives the new console its own window; /k keeps it open when claude exits.
-      spawn('cmd.exe', ['/d', '/c', 'start', '"cswap run"', 'cmd', '/k', `"${bin}" run ${target}`], { detached: true, stdio: 'ignore', windowsHide: false, shell: false }).unref()
+      // detached → its own console window. Verbatim args: cmd does not understand the
+      // backslash-escaped quotes Node would otherwise produce; /s strips the outer pair.
+      const line = `"title cswap run ${target}& "${bin}" run ${target}"`
+      spawn('cmd.exe', ['/d', '/s', '/k', line], { detached: true, stdio: 'ignore', windowsHide: false, windowsVerbatimArguments: true }).unref()
     } else if (process.platform === 'darwin') {
       const script = `tell application "Terminal" to do script "${bin.replace(/"/g, '\\"')} run ${target}"`
       spawn('osascript', ['-e', script, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref()

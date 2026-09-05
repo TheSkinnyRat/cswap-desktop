@@ -8,11 +8,14 @@ A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap
 
 - **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, and status (token expired, API key, …). Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
 - **Add / remove** — from the current Claude Code login, or from a setup-token / API key (handed to cswap over stdin, never on the command line). Aliases, slot moves and swaps, disable / enable (hold an account out of rotation).
-- **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches.
+- **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches. **Check now** runs a single `cswap auto --once` tick.
+- **Session mode** — open a terminal running `cswap run <slot>` from an account's menu (that terminal only; the default login is untouched).
+- **Token diagnostics** — `cswap list --token-status` in a dialog when a token misbehaves.
 - **Directory mappings** — see and edit the `cswap map` table for session mode (`cswap run`).
 - **Export / import** — `.cswap` backups, single account or all, `--full` and `--force` as switches.
 - **Tray** — active account and usage in the tooltip, switch from the tray menu, close-to-tray, launch at login.
 - **Log** — every cswap call the app made: arguments, exit code, duration, output.
+- Not in the UI on purpose: `cswap purge` (deletes every account) — use the CLI if you really mean it.
 - Light theme by default (tinted, not plain white), dark theme, or follow the system.
 
 <p>
@@ -60,6 +63,11 @@ Useful environment variables while developing or testing:
 | `CSWAP_DESKTOP_BIN` | Use this executable instead of auto-detection (a path set in Settings still wins) |
 | `CSWAP_DESKTOP_USERDATA` | Where the app keeps its own `settings.json` |
 | `FAKE_CSWAP_STATE` | State file for `test/fake-cswap` |
+| `CSWAP_REAL=1` | Run the read-only e2e against the cswap installed on this machine |
+| `CSWAP_REAL_SWITCH=<slot>` | One real switch to that slot and back, through the UI |
+| `CSWAP_REAL_RUN=<slot>` | Open one real session-mode terminal from the UI |
+
+Keyboard: <kbd>Ctrl</kbd>+<kbd>K</kbd> switch account · <kbd>Ctrl</kbd>+<kbd>R</kbd> refresh usage · <kbd>Ctrl</kbd>+<kbd>,</kbd> settings.
 
 Releases: tag `vX.Y.Z` and push the tag — the Release workflow builds Windows, Linux and macOS packages and attaches them to a GitHub release.
 
