@@ -11,7 +11,7 @@ import { Onboarding } from './pages/Onboarding'
 import { useStore, useTheme } from './lib/store'
 
 export function App(): React.JSX.Element {
-  const { settings, page, binary, setPage } = useStore()
+  const { settings, page, binary, setPage, refresh } = useStore()
   const [palette, setPalette] = useState(false)
   useTheme(settings.theme)
 
@@ -21,6 +21,10 @@ export function App(): React.JSX.Element {
         e.preventDefault()
         setPalette((p) => !p)
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+        e.preventDefault()
+        void refresh()
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault()
         setPage('settings')
@@ -28,7 +32,7 @@ export function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setPage])
+  }, [setPage, refresh])
 
   const needsOnboarding = binary !== null && !binary.version && page !== 'settings' && page !== 'log'
 

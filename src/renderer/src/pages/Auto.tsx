@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Pause, Play } from 'lucide-react'
+import { Activity, Pause, Play, Zap } from 'lucide-react'
 import type { AutoEvent, ConfigSetting } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
@@ -70,6 +70,9 @@ export function AutoPage(): React.JSX.Element {
   const [cfgErr, setCfgErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState<'all' | 'important'>('important')
+  const [onceEvents, setOnceEvents] = useState<AutoEvent[]>([])
+  const [checking, setChecking] = useState(false)
+  const allEvents = useMemo(() => [...autoEvents, ...onceEvents].sort((a, b) => a.ts.localeCompare(b.ts)), [autoEvents, onceEvents])
   const feed = useRef<HTMLDivElement>(null)
 
   const loadConfig = async (): Promise<void> => {
@@ -82,11 +85,11 @@ export function AutoPage(): React.JSX.Element {
   useEffect(() => void loadConfig(), [])
   useEffect(() => {
     feed.current?.scrollTo({ top: feed.current.scrollHeight })
-  }, [autoEvents.length, filter])
+  }, [allEvents.length, filter])
 
-  const shown = useMemo(() => (filter === 'all' ? autoEvents : autoEvents.filter((e) => e.event !== 'poll' && e.event !== 'sleep')), [autoEvents, filter])
-  const lastPoll = [...autoEvents].reverse().find((e) => e.event === 'poll')
-  const switches = autoEvents.filter((e) => e.event === 'switch').length
+  const shown = useMemo(() => (filter === 'all' ? allEvents : allEvents.filter((e) => e.event !== 'poll' && e.event !== 'sleep')), [allEvents, filter])
+  const lastPoll = [...allEvents].reverse().find((e) => e.event === 'poll')
+  const switches = allEvents.filter((e) => e.event === 'switch').length
 
   const toggle = async (): Promise<void> => {
     setBusy(true)
@@ -121,6 +124,25 @@ export function AutoPage(): React.JSX.Element {
               <Switch checked={settings.autoDryRun} disabled={auto.running} onChange={(v) => void updateSettings({ autoDryRun: v })} label="Dry run" />
               Dry run
             </label>
+            <Button
+              variant="default"
+              loading={checking}
+              disabled={auto.running}
+              title="cswap auto --once: evaluate once and switch if needed"
+              icon={<Zap size={14} />}
+              data-testid="auto-once"
+              onClick={async () => {
+                setChecking(true)
+                const r = await api.autoOnce({ dryRun: settings.autoDryRun })
+                setChecking(false)
+                if (!r.ok) return notify('error', 'Check failed', r.error.message)
+                setOnceEvents((prev) => [...prev, ...r.value.events])
+                const label = { switched: 'Switched account', 'no-action': 'Nothing to do — below threshold', blocked: 'Wanted to switch, but no viable target', error: 'Check reported an error', unknown: `Exit ${r.value.exitCode}` }[r.value.outcome]
+                notify(r.value.outcome === 'switched' ? 'ok' : r.value.outcome === 'blocked' || r.value.outcome === 'error' ? 'error' : 'info', label, settings.autoDryRun ? 'dry run' : undefined)
+              }}
+            >
+              Check now
+            </Button>
             <Button variant={auto.running ? 'default' : 'primary'} loading={busy} onClick={() => void toggle()} icon={auto.running ? <Pause size={14} /> : <Play size={14} />} data-testid="auto-toggle">
               {auto.running ? 'Stop' : 'Start'}
             </Button>
@@ -132,7 +154,7 @@ export function AutoPage(): React.JSX.Element {
           <div className="grid grid-cols-3 gap-3">
             <Stat label="State" value={auto.running ? (auto.dryRun ? 'Running · dry run' : 'Running') : auto.exitCode != null && auto.exitCode !== 0 ? `Exited (${auto.exitCode})` : 'Stopped'} tone={auto.running ? 'ok' : auto.exitCode ? 'danger' : 'muted'} sub={auto.running && auto.startedAt ? `since ${clockOf(auto.startedAt)} · pid ${auto.pid}` : auto.lastError} />
             <Stat label="Last poll" value={lastPoll ? relTime(lastPoll.ts, now).replace('in ', '') : '—'} sub={lastPoll ? `threshold ${String(lastPoll.threshold)}%` : 'no polls yet'} />
-            <Stat label="Switches this session" value={String(switches)} sub={`${autoEvents.length} events`} />
+            <Stat label="Switches this session" value={String(switches)} sub={`${allEvents.length} events`} />
           </div>
           <Card
             className="flex min-h-0 flex-1 flex-col"

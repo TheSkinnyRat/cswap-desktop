@@ -157,6 +157,20 @@ export interface CommandLogEntry {
   error?: string
 }
 
+export interface AutoOnceResult {
+  exitCode: number | null
+  outcome: 'switched' | 'error' | 'no-action' | 'blocked' | 'unknown'
+  events: AutoEvent[]
+}
+
+export interface UpdateInfo {
+  current: string
+  latest: string | null
+  url: string | null
+  updateAvailable: boolean
+  error?: string
+}
+
 export interface CswapBinaryInfo {
   path: string | null
   source: 'settings' | 'uv' | 'pipx' | 'path' | 'none'
@@ -259,11 +273,15 @@ export interface CswapApi {
   listUnclaimed(): Promise<Result<UnclaimedEntry[]>>
   purgeUnclaimed(id: string): Promise<Result<PlainOutput>>
   upgradeCswap(): Promise<Result<PlainOutput>>
+  tokenStatus(): Promise<Result<PlainOutput>>
+  launchSession(target: string): Promise<Result<{ command: string }>>
+  checkForUpdate(): Promise<UpdateInfo>
   // auto-switch process
   autoStart(opts?: { dryRun?: boolean }): Promise<AutoStatus>
   autoStop(): Promise<AutoStatus>
   autoStatus(): Promise<AutoStatus>
   autoEvents(): Promise<AutoEvent[]>
+  autoOnce(opts?: { dryRun?: boolean }): Promise<Result<AutoOnceResult>>
   // app
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
@@ -313,6 +331,10 @@ export const IPC = {
   listUnclaimed: 'cswap:listUnclaimed',
   purgeUnclaimed: 'cswap:purgeUnclaimed',
   upgradeCswap: 'cswap:upgrade',
+  tokenStatus: 'cswap:tokenStatus',
+  launchSession: 'cswap:launchSession',
+  checkForUpdate: 'app:checkForUpdate',
+  autoOnce: 'auto:once',
   autoStart: 'auto:start',
   autoStop: 'auto:stop',
   autoStatus: 'auto:status',

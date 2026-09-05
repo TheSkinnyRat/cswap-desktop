@@ -2,6 +2,8 @@ import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import { readFileSync } from 'node:fs'
 import type { AppCore } from './core'
 import { appInfo } from './core'
+import { launchSession } from './session'
+import { checkForUpdate } from './update'
 import { IPC, type AddAccountOptions, type AddTokenOptions, type AppSettings, type ExportOptions, type ImportOptions } from '@shared/types'
 
 // e2e seam: when set, native dialogs answer from this JSON file instead of opening
@@ -96,6 +98,10 @@ export function registerIpc(core: AppCore, getWindow: () => BrowserWindow | null
     return r
   })
 
+  ipcMain.handle(IPC.tokenStatus, () => d.tokenStatus())
+  ipcMain.handle(IPC.launchSession, (_e, t: string) => launchSession(d.getBinary(), t))
+  ipcMain.handle(IPC.checkForUpdate, () => checkForUpdate(appInfo().version))
+  ipcMain.handle(IPC.autoOnce, async (_e, o?: { dryRun?: boolean }) => core.afterMutation(await d.autoOnce(!!o?.dryRun)))
   ipcMain.handle(IPC.autoStart, (_e, o?: { dryRun?: boolean }) => {
     core.settings.set({ autoDryRun: !!o?.dryRun })
     return core.auto.start(d.getBinary(), o)

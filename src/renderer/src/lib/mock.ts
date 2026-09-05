@@ -144,6 +144,10 @@ export function createMockApi(): CswapApi {
     listUnclaimed: async () => ({ ok: true, value: [{ id: 'a1b2c3', slot: '2', reason: 'keychain locked' }] }),
     purgeUnclaimed: async () => okOut(),
     upgradeCswap: async () => okOut('claude-swap is already at the latest version'),
+    tokenStatus: async () => okOut('Account-1: you@example.com\n  token: valid (expires in 6h) source=keychain\nAccount-2: work@company.com\n  token: expired'),
+    launchSession: async (t) => ({ ok: true, value: { command: `cswap run ${t}` } }),
+    checkForUpdate: async () => ({ current: '0.1.0', latest: '0.1.0', url: 'https://github.com/TheSkinnyRat/cswap-desktop/releases/latest', updateAvailable: false }),
+    autoOnce: async () => ({ ok: true, value: { exitCode: 2, outcome: 'no-action', events: [{ schemaVersion: 1, event: 'no-switch', ts: new Date().toISOString(), reason: 'below-threshold', detail: 'active headroom 55%' }] } }),
     autoStart: async (o) => {
       auto = { running: true, pid: 4242, startedAt: new Date().toISOString(), dryRun: !!o?.dryRun, exitCode: null }
       emit('autoStatus', auto)

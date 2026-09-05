@@ -141,6 +141,24 @@ test.describe('accounts', () => {
   })
 })
 
+test.describe('extras', () => {
+  test('token diagnostics dialog shows --token-status output; Check now runs auto --once', async () => {
+    const { app, page, state } = await launch()
+    await page.getByTestId('more-menu').click()
+    await page.getByRole('menuitem', { name: /Token diagnostics/ }).click()
+    await expect(page.getByTestId('diag-output')).toContainText('Account-1: you@example.com')
+    expect(state().log).toContainEqual(['list', '--token-status'])
+    await shot(page, 'dialog-diag')
+    await page.keyboard.press('Escape')
+    await page.getByTestId('nav-auto').click()
+    await page.getByTestId('auto-once').click()
+    await expect(page.getByRole('status')).toContainText('Nothing to do')
+    await expect(page.getByTestId('auto-feed')).toContainText('below-threshold')
+    expect(state().log).toContainEqual(['auto', '--once', '--json'])
+    await app.close()
+  })
+})
+
 test.describe('other pages', () => {
   test('auto-switch starts the child, streams events, saves config, stops', async () => {
     const { app, page, state } = await launch({ env: { FAKE_CSWAP_AUTO_INTERVAL: '0.3' } })

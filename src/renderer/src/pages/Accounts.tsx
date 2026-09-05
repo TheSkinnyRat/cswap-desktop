@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowRightLeft, ChevronDown, Download, Ellipsis, Eye, EyeOff, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Tag, Trash2, Upload, UserPlus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowRightLeft, ChevronDown, Download, Ellipsis, Eye, EyeOff, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { Account, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
@@ -8,7 +8,7 @@ import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Switch, cx } from
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, orgTag, pct, relTime, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
-type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
+type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
 export function AccountsPage(): React.JSX.Element {
   const { accounts, now } = useStore()
@@ -87,7 +87,9 @@ export function AccountsPage(): React.JSX.Element {
               trigger={() => <Button variant="ghost" className="!px-2" aria-label="More" data-testid="more-menu" icon={<Ellipsis size={16} />} />}
               items={[
                 { label: 'Export all accounts…', icon: <Download size={14} />, onSelect: () => setDlg({ kind: 'export' }) },
-                { label: 'Import accounts…', icon: <Upload size={14} />, onSelect: () => setDlg({ kind: 'import' }) }
+                { label: 'Import accounts…', icon: <Upload size={14} />, onSelect: () => setDlg({ kind: 'import' }) },
+                { separator: true, label: '' },
+                { label: 'Token diagnostics…', hint: '--token-status', icon: <Stethoscope size={14} />, onSelect: () => setDlg({ kind: 'diag' }) }
               ]}
             />
           </>
@@ -139,7 +141,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
+              <AccountRow key={a.number} a={a} now={now} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} onLaunch={() => void act(`run-${a.number}`, () => api.launchSession(String(a.number)), (v) => `Opened a terminal running ${(v as { command: string }).command}`)} />
             ))}
           </div>
         )}
@@ -160,6 +162,7 @@ export function AccountsPage(): React.JSX.Element {
       {dlg?.kind === 'remove' && <RemoveDialog a={dlg.a} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'export' && <ExportDialog a={dlg.a} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'import' && <ImportDialog onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'diag' && <DiagDialog onClose={() => setDlg(null)} />}
     </div>
   )
 }
@@ -189,7 +192,7 @@ function WindowCell({ w, now, label }: { w: UsageWindow | undefined; now: number
   )
 }
 
-function AccountRow({ a, now, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
+function AccountRow({ a, now, busy, onSwitch, onAction, onToggleDisabled, onLaunch }: { a: Account; now: number; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void; onLaunch: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
@@ -255,6 +258,7 @@ function AccountRow({ a, now, busy, onSwitch, onAction, onToggleDisabled }: { a:
             { label: 'Move to slot…', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
             { label: a.disabled ? 'Enable (back in rotation)' : 'Disable (hold out of rotation)', icon: a.disabled ? <Eye size={14} /> : <EyeOff size={14} />, onSelect: onToggleDisabled },
             { separator: true, label: '' },
+            { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: onLaunch },
             { label: 'Export this account…', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
             { label: 'Re-add from current login', hint: `slot ${a.number}`, icon: <Pencil size={14} />, onSelect: () => onAction({ kind: 'add' }) },
             { separator: true, label: '' },
@@ -604,6 +608,24 @@ function ImportDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
         </span>
         <Switch checked={force} onChange={setForce} label="Overwrite existing" />
       </label>
+    </Dialog>
+  )
+}
+
+function DiagDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
+  const [text, setText] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    void api.tokenStatus().then((r) => (r.ok ? setText(r.value.stdout.replace(/\x1b\[[0-9;]*m/g, '')) : setErr(r.error.message)))
+  }, [])
+  return (
+    <Dialog open onClose={onClose} title="Token diagnostics" width={640} footer={<Button onClick={onClose}>Close</Button>}>
+      <p className="mb-3 text-[12.5px] text-fg-2">
+        Output of <span className="mono">cswap list --token-status</span>: where each account's OAuth token comes from and whether it is still valid.
+      </p>
+      {err && <div className="text-[12px] text-danger">{err}</div>}
+      {!text && !err && <div className="text-[12px] text-fg-3">Running…</div>}
+      {text && <pre className="selectable mono max-h-[46vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-bg px-3 py-2 text-fg-2" data-testid="diag-output">{text.trim()}</pre>}
     </Dialog>
   )
 }

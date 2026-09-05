@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, FolderOpen, Monitor, Moon, RefreshCw, Sun, Trash2 } from 'lucide-react'
-import type { UnclaimedEntry } from '@shared/types'
+import { ExternalLink, FolderOpen, Monitor, Moon, RefreshCw, Sun, Trash2, ArrowUpCircle } from 'lucide-react'
+import type { UnclaimedEntry, UpdateInfo } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api, isElectron, platform } from '../lib/api'
 import { useToast } from '../lib/toast'
@@ -15,6 +15,7 @@ export function SettingsPage(): React.JSX.Element {
   const [unclaimed, setUnclaimed] = useState<UnclaimedEntry[] | null>(null)
   const [info, setInfo] = useState<{ version: string; electron: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null)
 
   useEffect(() => setPathDraft(settings.cswapPath ?? ''), [settings.cswapPath])
   useEffect(() => {
@@ -214,7 +215,31 @@ export function SettingsPage(): React.JSX.Element {
               {info?.electron && <span className="text-fg-3"> · Electron {info.electron}</span>}
             </div>
             <p>A desktop front-end for claude-swap. It drives the CLI you already have installed; nothing here talks to Anthropic directly.</p>
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                icon={<ArrowUpCircle size={13} />}
+                loading={busy === 'update'}
+                data-testid="check-update"
+                onClick={async () => {
+                  setBusy('update')
+                  const u = await api.checkForUpdate()
+                  setBusy(null)
+                  setUpdate(u)
+                  if (u.error) notify('error', 'Could not check for updates', u.error)
+                  else if (u.updateAvailable) notify('info', `Version ${u.latest} is available`, 'Open the releases page to download it.')
+                  else notify('ok', 'You are on the latest version')
+                }}
+              >
+                Check for updates
+              </Button>
+              {update?.updateAvailable && update.url && (
+                <Button size="sm" variant="primary" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal(update.url!)}>
+                  Get {update.latest}
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal('https://github.com/TheSkinnyRat/cswap-desktop')}>
                 cswap-desktop on GitHub
               </Button>

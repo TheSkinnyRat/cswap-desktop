@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import type {
+  AutoEvent,
+  AutoOnceResult,
   CommandLogEntry,
   ConfigPayload,
   CswapError,
@@ -239,6 +241,33 @@ export class CswapDriver extends EventEmitter {
   }
   purgeUnclaimed(id: string): Promise<Result<PlainOutput>> {
     return this.serial(async () => this.plain(await this.run(['unclaimed', '--purge', id])))
+  }
+  async tokenStatus(): Promise<Result<PlainOutput>> {
+    return this.plain(await this.run(['list', '--token-status'], { timeoutMs: 120000 }))
+  }
+  // `cswap auto --once`: exit 0 switched · 1 error · 2 nothing to do · 3 blocked.
+  autoOnce(dryRun = false): Promise<Result<AutoOnceResult>> {
+    const args = ['auto', '--once', '--json']
+    if (dryRun) args.push('--dry-run')
+    return this.serial(async () => {
+      const out = await this.run(args, { timeoutMs: 180000 })
+      if (out.spawnError) return { ok: false, error: { type: 'SpawnError', message: out.spawnError } }
+      const events: AutoEvent[] = []
+      for (const line of out.stdout.split(/\r?\n/)) {
+        const t = line.trim()
+        if (!t.startsWith('{')) continue
+        try {
+          const obj = JSON.parse(t) as AutoEvent & { error?: CswapError }
+          if (obj.error) return { ok: false, error: obj.error }
+          events.push(obj)
+        } catch {
+          /* ignore noise */
+        }
+      }
+      const outcome = out.exitCode === 0 ? 'switched' : out.exitCode === 2 ? 'no-action' : out.exitCode === 3 ? 'blocked' : out.exitCode === 1 ? 'error' : 'unknown'
+      if (outcome === 'error' && !events.length) return { ok: false, error: { type: 'CliError', message: (out.stderr || out.stdout || 'exit 1').trim() } }
+      return { ok: true, value: { exitCode: out.exitCode, outcome, events } }
+    })
   }
   upgrade(): Promise<Result<PlainOutput>> {
     return this.serial(async () => this.plain(await this.run(['upgrade'], { timeoutMs: 300000 })))

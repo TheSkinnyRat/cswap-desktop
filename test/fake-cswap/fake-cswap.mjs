@@ -104,6 +104,7 @@ async function main() {
     return i >= 0 ? argv[i + 1] : undefined
   }
   s.log.push(argv)
+  save(s) // every call is recorded, reads included
   if (process.env.FAKE_CSWAP_FAIL && process.env.FAKE_CSWAP_FAIL === verb) {
     save(s)
     fail('ConfigError', `forced failure for ${verb}`, json)
@@ -114,6 +115,10 @@ async function main() {
       out(`cswap ${s.version}`)
       return
     case 'list': {
+      if (argv.includes('--token-status')) {
+        for (const n of s.sequence) out(`Account-${n}: ${s.accounts[n].email}\n  token: ${s.accounts[n].usageStatus === 'api_key' ? 'api key' : 'valid'} (expires in 6h) source=file`)
+        return
+      }
       const accounts = s.sequence.map((n) => row(n, s.accounts[n], s.activeAccountNumber === n))
       if (json) out(JSON.stringify({ schemaVersion: 1, activeAccountNumber: s.activeAccountNumber, accounts }, null, 2))
       else for (const r of accounts) out(`${r.active ? '*' : ' '} Account-${r.number}: ${r.email}`)
