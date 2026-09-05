@@ -19,7 +19,18 @@ export function ageSeconds(sec: number | undefined): string {
   if (sec === undefined) return ''
   if (sec < 60) return 'just now'
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  return `${Math.floor(sec / 3600)}h ago`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
+  return `${Math.floor(sec / 86400)}d ago`
+}
+
+// "3h 30m left" for a future reset; a reset already in the past (stale last-good
+// data) says so instead of printing "41d ago left".
+export function resetText(iso: string | undefined, now = Date.now()): string {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  if (t <= now) return 'reset passed'
+  return `${relTime(iso, now).replace(/^in /, '')} left`
 }
 
 export function clockOf(iso: string | undefined): string {

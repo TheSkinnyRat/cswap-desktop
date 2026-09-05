@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Switch, cx } from '../components/ui'
 import { PageHeader } from '../components/PageHeader'
-import { ageSeconds, clockOf, orgTag, pct, relTime, statusLabel, statusTone, tone } from '../lib/format'
+import { ageSeconds, clockOf, orgTag, pct, relTime, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
@@ -179,7 +179,7 @@ function WindowCell({ w, now, label }: { w: UsageWindow | undefined; now: number
           )}
           {w.resetsAt && (
             <span className="truncate tabular-nums" title={`Resets ${clockOf(w.resetsAt)}`}>
-              {relTime(w.resetsAt, now).replace(/^in /, '')} left
+              {resetText(w.resetsAt, now)}
             </span>
           )}
         </span>
