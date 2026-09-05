@@ -205,7 +205,7 @@ function AccountRow({ a, now, busy, onSwitch, onAction, onToggleDisabled }: { a:
       </div>
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-fg" title={a.email}>
+          <span className="truncate text-[13px] font-medium text-fg" title={a.email} data-testid={a.alias ? `alias-${a.number}` : undefined}>
             {a.alias || a.email}
           </span>
           {a.active && <Chip tone="accent">active</Chip>}

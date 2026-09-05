@@ -34,16 +34,18 @@ export async function launch(opts: { seedState?: object; settings?: object; env?
   mkdirSync(userData, { recursive: true })
   if (opts.settings) writeFileSync(join(userData, 'settings.json'), JSON.stringify(opts.settings))
   mkdirSync(SHOTS, { recursive: true })
+  const env: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    CSWAP_DESKTOP_USERDATA: userData,
+    FAKE_CSWAP_STATE: statePath,
+    ELECTRON_ENABLE_LOGGING: '0',
+    ...opts.env
+  }
+  if (opts.bin === '') delete env.CSWAP_DESKTOP_BIN
+  else env.CSWAP_DESKTOP_BIN = opts.bin ?? FAKE
   const app = await electron.launch({
     args: [join(ROOT, 'out', 'main', 'index.js'), '--no-sandbox'],
-    env: {
-      ...process.env,
-      CSWAP_DESKTOP_BIN: opts.bin ?? FAKE,
-      CSWAP_DESKTOP_USERDATA: userData,
-      FAKE_CSWAP_STATE: statePath,
-      ELECTRON_ENABLE_LOGGING: '0',
-      ...opts.env
-    }
+    env
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')

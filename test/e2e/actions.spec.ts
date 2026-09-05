@@ -38,7 +38,8 @@ test.describe('accounts', () => {
     await page.getByTestId('alias-input').fill('work')
     await shot(page, 'dialog-alias')
     await page.getByTestId('alias-submit').click()
-    await expect(page.getByTestId('account-row-2')).toContainText('work')
+    // "work" alone would match the email — wait for the alias element itself
+    await expect(page.getByTestId('alias-2')).toHaveText('work')
     expect(state().accounts['2'].alias).toBe('work')
 
     await page.getByTestId('row-menu-2').click()
