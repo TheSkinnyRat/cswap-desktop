@@ -24,6 +24,13 @@ export interface RunOutcome extends PlainOutput {
 
 const isWin = process.platform === 'win32'
 
+// child.kill() only reaches the shell when a .cmd shim is involved; the node/python
+// grandchild would keep stdout open and the timeout would never resolve.
+function killTree(pid: number | undefined, fallback: () => void): void {
+  if (isWin && pid) spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true }).on('error', fallback)
+  else fallback()
+}
+
 function quoteWin(a: string): string {
   return /[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a
 }
@@ -65,7 +72,7 @@ export class CswapDriver extends EventEmitter {
       let done = false
       const timer = setTimeout(() => {
         if (done) return
-        child.kill()
+        killTree(child.pid, () => child.kill())
         stderr += `\n[cswap-desktop] timed out after ${opts.timeoutMs ?? 60000} ms`
       }, opts.timeoutMs ?? 60000)
       child.stdout.setEncoding('utf8')

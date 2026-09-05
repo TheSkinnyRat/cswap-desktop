@@ -5,7 +5,7 @@
 //   FAKE_CSWAP_DELAY  ms to sleep before answering (default 0)
 //   FAKE_CSWAP_FAIL   verb name that should fail with an error envelope
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const STATE = process.env.FAKE_CSWAP_STATE || 'fake-cswap-state.json'
 const argv = process.argv.slice(2)
@@ -343,7 +343,7 @@ async function main() {
         ['ui.theme', 'auto']
       ]
       const action = pos[1] || 'list'
-      const path = `${dirname(STATE)}/settings.json`
+      const path = join(dirname(STATE), 'settings.json')
       if (action === 'path') return out(path)
       if (action === 'list') {
         const settings = specs.map(([key, def]) => ({ key, value: key in s.settings ? s.settings[key] : def, isSet: key in s.settings }))
