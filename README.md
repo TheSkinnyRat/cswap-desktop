@@ -1,0 +1,68 @@
+# cswap desktop
+
+A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap`) — manage and switch your Claude Code accounts without the terminal. Windows first; Linux and macOS builds come out of the same CI.
+
+![Accounts, light theme](docs/screenshots/accounts-light.png)
+
+## What it does
+
+- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, and status (token expired, API key, …). Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
+- **Add / remove** — from the current Claude Code login, or from a setup-token / API key (handed to cswap over stdin, never on the command line). Aliases, slot moves and swaps, disable / enable (hold an account out of rotation).
+- **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches.
+- **Directory mappings** — see and edit the `cswap map` table for session mode (`cswap run`).
+- **Export / import** — `.cswap` backups, single account or all, `--full` and `--force` as switches.
+- **Tray** — active account and usage in the tooltip, switch from the tray menu, close-to-tray, launch at login.
+- **Log** — every cswap call the app made: arguments, exit code, duration, output.
+- Light theme by default (tinted, not plain white), dark theme, or follow the system.
+
+<p>
+  <img src="docs/screenshots/accounts-dark.png" width="49%" alt="Accounts, dark theme">
+  <img src="docs/screenshots/auto-running.png" width="49%" alt="Auto-switch running">
+</p>
+
+## Install
+
+1. Install cswap once — it serves the terminal, the TUI and this app:
+   ```bash
+   uv tool install claude-swap    # or: pipx install claude-swap
+   ```
+   The app finds it in the uv / pipx install directory or on `PATH`; you can also point it at the executable in **Settings**. If cswap is missing, the app offers to run the uv install for you.
+2. Download the installer for your platform from [Releases](https://github.com/TheSkinnyRat/cswap-desktop/releases) (Windows: `-setup.exe` or the portable `.exe`; Linux: AppImage / deb; macOS: dmg, unsigned).
+
+## How it works
+
+The app never touches your credentials itself. **Every read and write goes through the cswap CLI** — `cswap list --json`, `cswap switch 2 --json`, `cswap auto --json`, and so on — so the vault stays consistent with the terminal, the TUI and the macOS menu bar, and cswap's own locks and OAuth handling keep working. The only direct reads are `mappings.json` (for the mappings page) and a file watcher on the vault root, so changes made from a terminal show up in the window within a second.
+
+Python and claude-swap are deliberately **not** bundled: two cswap versions writing the same vault is how accounts go missing.
+
+```
+src/main      Electron main — cswap driver (spawn + JSON), auto-switch runner, vault watcher, tray, IPC
+src/preload   contextBridge: window.cswap (typed in src/shared/types.ts)
+src/renderer  React + Tailwind UI (works in a plain browser with a mock API for UI work)
+test/fake-cswap  a stand-in cswap with the same verbs, --json schema and stdin prompts
+```
+
+## Development
+
+```bash
+npm ci
+npm run dev          # electron-vite with HMR
+npm run typecheck
+npm test             # vitest: driver against the fake cswap
+npm run build && npx playwright test    # Electron e2e against the fake cswap (Linux: xvfb-run -a npx playwright test)
+npm run dist:win     # installer + portable exe into release/
+```
+
+Useful environment variables while developing or testing:
+
+| Variable | Effect |
+| --- | --- |
+| `CSWAP_DESKTOP_BIN` | Use this executable instead of auto-detection (a path set in Settings still wins) |
+| `CSWAP_DESKTOP_USERDATA` | Where the app keeps its own `settings.json` |
+| `FAKE_CSWAP_STATE` | State file for `test/fake-cswap` |
+
+Releases: tag `vX.Y.Z` and push the tag — the Release workflow builds Windows, Linux and macOS packages and attaches them to a GitHub release.
+
+## License
+
+MIT — see [LICENSE](LICENSE). claude-swap is a separate project by [realiti4](https://github.com/realiti4/claude-swap), also MIT.

@@ -1,0 +1,59 @@
+import { useEffect, useState } from 'react'
+import { Sidebar } from './components/Sidebar'
+import { TitleBar } from './components/TitleBar'
+import { CommandPalette } from './components/CommandPalette'
+import { AccountsPage } from './pages/Accounts'
+import { AutoPage } from './pages/Auto'
+import { MappingsPage } from './pages/Mappings'
+import { LogPage } from './pages/Log'
+import { SettingsPage } from './pages/Settings'
+import { Onboarding } from './pages/Onboarding'
+import { useStore, useTheme } from './lib/store'
+
+export function App(): React.JSX.Element {
+  const { settings, page, binary, setPage } = useStore()
+  const [palette, setPalette] = useState(false)
+  useTheme(settings.theme)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalette((p) => !p)
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault()
+        setPage('settings')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [setPage])
+
+  const needsOnboarding = binary !== null && !binary.version && page !== 'settings' && page !== 'log'
+
+  return (
+    <div className="flex h-full flex-col bg-bg">
+      <TitleBar onPalette={() => setPalette(true)} />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <main className="min-w-0 flex-1 overflow-y-auto" data-page={page}>
+          {needsOnboarding ? (
+            <Onboarding />
+          ) : page === 'accounts' ? (
+            <AccountsPage />
+          ) : page === 'auto' ? (
+            <AutoPage />
+          ) : page === 'mappings' ? (
+            <MappingsPage />
+          ) : page === 'log' ? (
+            <LogPage />
+          ) : (
+            <SettingsPage />
+          )}
+        </main>
+      </div>
+      <CommandPalette open={palette} onClose={() => setPalette(false)} />
+    </div>
+  )
+}

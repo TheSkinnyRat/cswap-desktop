@@ -1,0 +1,54 @@
+appId: id.my.reinahatsuki.cswap-desktop
+productName: cswap
+copyright: Copyright © 2026 Purwa Sabrang Ramadhan
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+extraResources:
+  - from: resources/tray.png
+    to: tray.png
+  - from: resources/trayTemplate.png
+    to: trayTemplate.png
+asar: true
+npmRebuild: false
+publish:
+  provider: github
+  owner: TheSkinnyRat
+  repo: cswap-desktop
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: ${productName}-desktop-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: cswap
+  artifactName: ${productName}-desktop-${version}-win-${arch}-setup.${ext}
+portable:
+  artifactName: ${productName}-desktop-${version}-win-${arch}-portable.${ext}
+linux:
+  icon: resources/icon.png
+  category: Utility
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: ${productName}-desktop-${version}-linux-${arch}.${ext}
+mac:
+  icon: resources/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: ${productName}-desktop-${version}-mac-${arch}.${ext}
+  identity: null

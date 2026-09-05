@@ -1,0 +1,195 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/* Light is the default and it is tinted, never plain white. Dark is opt-in via .dark on <html>. */
+:root {
+  --bg: hsl(228 14% 94.5%);
+  --surface: hsl(228 18% 98%);
+  --surface-2: hsl(228 14% 92%);
+  --surface-3: hsl(228 12% 89%);
+  --border: hsl(228 12% 86%);
+  --border-strong: hsl(228 10% 76%);
+  --text: hsl(232 22% 13%);
+  --text-2: hsl(232 10% 40%);
+  --text-3: hsl(232 8% 58%);
+  --accent: hsl(235 58% 57%);
+  --accent-hover: hsl(235 58% 52%);
+  --accent-soft: hsl(235 58% 57% / 0.12);
+  --accent-fg: #ffffff;
+  --ok: hsl(152 52% 40%);
+  --ok-soft: hsl(152 52% 40% / 0.14);
+  --warn: hsl(36 92% 46%);
+  --warn-soft: hsl(36 92% 50% / 0.16);
+  --danger: hsl(2 68% 54%);
+  --danger-soft: hsl(2 68% 54% / 0.12);
+  --shadow: 0 1px 2px hsl(232 20% 10% / 0.06), 0 8px 24px -12px hsl(232 20% 10% / 0.18);
+  --shadow-pop: 0 2px 6px hsl(232 20% 10% / 0.08), 0 16px 40px -16px hsl(232 20% 10% / 0.28);
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  color-scheme: light;
+}
+.dark {
+  --bg: hsl(240 6% 8%);
+  --surface: hsl(240 6% 11%);
+  --surface-2: hsl(240 6% 14%);
+  --surface-3: hsl(240 6% 17%);
+  --border: hsl(240 6% 18%);
+  --border-strong: hsl(240 6% 27%);
+  --text: hsl(240 12% 93%);
+  --text-2: hsl(240 7% 66%);
+  --text-3: hsl(240 6% 48%);
+  --accent: hsl(235 72% 70%);
+  --accent-hover: hsl(235 72% 75%);
+  --accent-soft: hsl(235 72% 70% / 0.16);
+  --accent-fg: hsl(240 20% 10%);
+  --ok: hsl(152 48% 52%);
+  --ok-soft: hsl(152 48% 52% / 0.16);
+  --warn: hsl(38 90% 58%);
+  --warn-soft: hsl(38 90% 58% / 0.16);
+  --danger: hsl(2 72% 64%);
+  --danger-soft: hsl(2 72% 64% / 0.14);
+  --shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 24px -12px hsl(0 0% 0% / 0.6);
+  --shadow-pop: 0 2px 8px hsl(0 0% 0% / 0.4), 0 20px 48px -16px hsl(0 0% 0% / 0.7);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-pop);
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  overflow: hidden;
+  user-select: none;
+}
+::selection {
+  background: var(--accent-soft);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+input,
+textarea {
+  user-select: text;
+}
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  box-shadow: var(--focus);
+  border-radius: var(--radius-sm);
+}
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.selectable {
+  user-select: text;
+}
+
+/* Scrollbars: thin, quiet */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.anim-fade {
+  animation: fade-in 150ms ease-out;
+}
+.anim-pop {
+  animation: pop-in 150ms ease-out;
+}
+.spin {
+  animation: spin 900ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade,
+  .anim-pop {
+    animation: none;
+  }
+}
