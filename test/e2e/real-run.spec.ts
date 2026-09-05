@@ -14,5 +14,8 @@ test('row menu opens a terminal running cswap run <slot>', async () => {
   await page.getByRole('menuitem', { name: /Open terminal as this account/ }).click()
   await expect(page.getByRole('status')).toContainText(`cswap run ${slot}`, { timeout: 15000 })
   await shot(page, 'real-run')
-  await app.close()
+  // With a detached console child alive, Playwright's close() has been seen to hang on
+  // Windows even though the app itself exits fine — do not let that fail the proof.
+  await Promise.race([app.close(), new Promise((r) => setTimeout(r, 10000))])
+  if (app.process().exitCode === null) app.process().kill()
 })
