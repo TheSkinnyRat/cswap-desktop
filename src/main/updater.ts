@@ -69,7 +69,8 @@ export class Updater extends EventEmitter {
   }
 
   install(): void {
-    if (this.auto && this.state.status === 'downloaded') this.auto.quitAndInstall(false, true)
+    // silent: the NSIS wizard would otherwise pop up on every update
+    if (this.auto && this.state.status === 'downloaded') this.auto.quitAndInstall(true, true)
   }
 
   dispose(): void {
