@@ -21,7 +21,7 @@ export function Sidebar(): React.JSX.Element {
           onClick={() => setPage(it.id)}
           aria-current={page === it.id ? 'page' : undefined}
           data-testid={`nav-${it.id}`}
-          className={cx('flex h-[32px] items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors duration-150', page === it.id ? 'bg-surface-2 font-medium text-fg' : 'text-fg-2 hover:bg-surface-2/70 hover:text-fg')}
+          className={cx('flex h-[32px] items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors duration-150 focus-visible:!shadow-[inset_0_0_0_2px_var(--accent)]', page === it.id ? 'bg-surface-2 font-medium text-fg' : 'text-fg-2 hover:bg-surface-2/70 hover:text-fg')}
         >
           <span className={page === it.id ? 'text-accent' : 'text-fg-3'}>{it.icon}</span>
           <span className="flex-1 text-left">{it.label}</span>

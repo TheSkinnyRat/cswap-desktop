@@ -198,10 +198,11 @@ test.describe('views and session mode', () => {
     await page.getByRole('menuitem', { name: /Open terminal/ }).click()
     // a directory already mapped to this account is filled in for you
     await expect(page.getByTestId('run-dir')).toHaveValue('/home/you/work/client-app')
-    await page.getByTestId('run-dir').fill('/tmp')
+    const elsewhere = mkdtempSync(join(tmpdir(), 'cswap-elsewhere-')) // '/tmp' does not exist on Windows
+    await page.getByTestId('run-dir').fill(elsewhere)
     await page.getByTestId('run-submit').click()
     await expect(page.getByRole('status')).toContainText('cswap run 2')
-    await expect(page.getByRole('status')).toContainText('/tmp')
+    await expect(page.getByRole('status')).toContainText(elsewhere)
     await app.close()
   })
 

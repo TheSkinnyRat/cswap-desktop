@@ -10,7 +10,7 @@ import { Tooltip } from '../components/Tooltip'
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
-const BAR_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px]'
+const BAR_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1.7fr)_148px_104px]'
 const RING_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(116px,1fr)_minmax(232px,1.7fr)_148px_104px]'
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'run'; a: Account } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
@@ -286,18 +286,40 @@ function AccountRow({ a, now, cols, mask, rings, plan, busy, onSwitch, onAction,
         </div>
       </div>
       <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} />
-      <div className={cx('min-w-0', rings && 'flex flex-wrap items-center gap-x-4 gap-y-1')}>
-        <WindowCell w={usage?.sevenDay} now={now} label="7d" ring={rings} />
-        {usage?.scoped?.map((s) =>
-          rings ? (
-            <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring />
-          ) : (
-            <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
-              <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
-            </div>
-          )
-        )}
-      </div>
+      {(() => {
+        const windows = (
+          <>
+            {rings ? (
+              <WindowCell w={usage?.sevenDay} now={now} label="7d" ring />
+            ) : (
+              // an equal flex child, or the full-width 7-day track pushes the model one
+              // out of the cell entirely once they sit in a row
+              <div className="min-w-0 flex-1">
+                <WindowCell w={usage?.sevenDay} now={now} label="7d" />
+              </div>
+            )}
+            {usage?.scoped?.map((s) =>
+              rings ? (
+                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring />
+              ) : (
+                <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
+                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
+                </div>
+              )
+            )}
+          </>
+        )
+        // Bars go beside the 7-day one once this cell is wide enough for two readable
+        // tracks, and under it when it is not. A container query, not a window
+        // breakpoint: what decides is the width of this cell.
+        return rings ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">{windows}</div>
+        ) : (
+          <div className="@container min-w-0">
+            <div className="flex flex-col gap-2 @[330px]:flex-row @[330px]:items-start @[330px]:gap-4">{windows}</div>
+          </div>
+        )
+      })()}
       <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
         <Chip tone={sTone} title={a.usageStatus} className="max-w-full">
           <span className="truncate">{statusLabel(a.usageStatus)}</span>

@@ -27,17 +27,15 @@ test('columns line up at every width, whatever the status labels say', async () 
   await page.getByTestId('view-toggle').click()
   await page.setViewportSize({ width: 1327, height: 620 })
 
-  // Every bar is a full-width track. The tooltip wrapper is inline-flex, and inside the
-  // 7-day cell — which is a block, not the grid item itself — it shrank to its content,
-  // so that bar came out shorter than the 5-hour one.
-  const track = async (cell: string): Promise<number> => {
-    // row 3 is the one carrying a per-model window in this seed
-    const box = await page.getByTestId('account-row-3').getByTestId(cell).locator('[role="progressbar"]').first().boundingBox()
-    return box!.width
+  // Every bar fills its own cell. The tooltip wrapper is inline-flex, and inside a cell
+  // that is not itself the grid item it shrank to its content, taking the track with it —
+  // so compare each track against the cell around it, not against the other columns
+  // (5-hour and 7-day are deliberately different widths).
+  for (const cell of ['window-5h', 'window-7d', 'window-model-Fable']) {
+    const outer = await page.getByTestId('account-row-3').getByTestId(cell).boundingBox()
+    const track = await page.getByTestId('account-row-3').getByTestId(cell).locator('[role="progressbar"]').first().boundingBox()
+    expect(Math.abs(outer!.width - track!.width), `${cell}: cell ${Math.round(outer!.width)}px vs track ${Math.round(track!.width)}px`).toBeLessThan(2)
   }
-  const [five, seven, fable] = [await track('window-5h'), await track('window-7d'), await track('window-model-Fable')]
-  expect(Math.abs(five - seven), `5h ${five}px vs 7d ${seven}px`).toBeLessThan(2)
-  expect(Math.abs(seven - fable), `7d ${seven}px vs Fable ${fable}px`).toBeLessThan(2)
 
   await shot(page, 'align-wide')
   // a narrow window scrolls the table instead of squeezing it
@@ -51,6 +49,34 @@ test('columns line up at every width, whatever the status labels say', async () 
   expect(scroll.canScroll).toBe(true)
   expect(scroll.scrolled).toBe(true)
   await shot(page, 'align-narrow-scrolled')
+  await app.close()
+})
+
+test('a per-model window sits beside the 7-day one when there is room, under it when there is not', async () => {
+  const { app, page } = await launch({ seedState: seed })
+  await page.waitForSelector('[data-testid="accounts-table"]')
+  const box = async (cell: string) => (await page.getByTestId('account-row-3').getByTestId(cell).boundingBox())!
+
+  await page.setViewportSize({ width: 1700, height: 620 })
+  await page.waitForTimeout(250)
+  let seven = await box('window-7d')
+  let fable = await box('scoped-Fable')
+  expect(fable.x, 'wide: beside').toBeGreaterThan(seven.x + seven.width - 1)
+  expect(Math.abs(fable.y - seven.y), 'wide: same line').toBeLessThan(6)
+
+  await page.setViewportSize({ width: 1000, height: 620 })
+  await page.waitForTimeout(250)
+  seven = await box('window-7d')
+  fable = await box('scoped-Fable')
+  expect(fable.y, 'narrow: below').toBeGreaterThan(seven.y + seven.height - 1)
+
+  // Rings keep a fixed pitch, so a row whose window has no reset line does not shift
+  // the per-model ring left of the row above it.
+  await page.setViewportSize({ width: 1700, height: 620 })
+  await page.getByTestId('view-toggle').click()
+  await page.waitForTimeout(300)
+  const ringX = async (row: number): Promise<number> => (await page.getByTestId(`account-row-${row}`).getByTestId('window-7d').boundingBox())!.x
+  expect(Math.abs((await ringX(3)) - (await ringX(1))), 'rings share a column').toBeLessThan(2)
   await app.close()
 })
 

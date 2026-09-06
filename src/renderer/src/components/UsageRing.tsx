@@ -15,7 +15,7 @@ export function UsageRing({ pct, label, tooltip, sub }: { pct: number | undefine
   const value = pct === undefined ? 0 : Math.max(0, Math.min(pct, 100))
   const filled = useGrow(value)
   return (
-    <Tooltip label={tooltip} focusable={false} className="items-center gap-2 rounded-md px-1 py-0.5 transition-colors duration-150 hover:bg-surface-2">
+    <Tooltip label={tooltip} focusable={false} className="min-w-[92px] items-center gap-2 rounded-md px-1 py-0.5 transition-colors duration-150 hover:bg-surface-2">
       <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0 -rotate-90" data-testid="usage-ring" aria-hidden>
         <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" strokeWidth={STROKE} className="stroke-border-strong opacity-40" />
         <circle
