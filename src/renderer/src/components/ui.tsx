@@ -141,6 +141,7 @@ export interface MenuItem {
   hint?: string
 }
 export function Menu({ trigger, items, align = 'end', width = 220 }: { trigger: (open: boolean) => ReactNode; items: MenuItem[]; align?: 'start' | 'end'; width?: number }): React.JSX.Element {
+  // `width` is a minimum; the menu grows to fit its longest label so nothing is cut.
   const [open, setOpen] = useState(false)
   const btn = useRef<HTMLDivElement>(null)
   const pop = useRef<HTMLDivElement>(null)
@@ -149,8 +150,9 @@ export function Menu({ trigger, items, align = 'end', width = 220 }: { trigger: 
     if (!open || !btn.current) return
     const r = btn.current.getBoundingClientRect()
     const h = pop.current?.offsetHeight ?? 0
+    const w = Math.max(width, pop.current?.offsetWidth ?? 0)
     const top = r.bottom + 4 + h > window.innerHeight - 8 ? Math.max(8, r.top - 4 - h) : r.bottom + 4
-    const left = align === 'end' ? Math.max(8, r.right - width) : Math.min(r.left, window.innerWidth - width - 8)
+    const left = align === 'end' ? Math.max(8, r.right - w) : Math.min(r.left, window.innerWidth - w - 8)
     setPos({ top, left })
   }, [open, align, width])
   useEffect(() => {
@@ -175,7 +177,7 @@ export function Menu({ trigger, items, align = 'end', width = 220 }: { trigger: 
       </div>
       {open &&
         createPortal(
-          <div ref={pop} role="menu" style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width }} className="anim-pop fixed z-[90] rounded-lg border border-border bg-surface p-1 shadow-pop">
+          <div ref={pop} role="menu" style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, minWidth: width, maxWidth: 'calc(100vw - 16px)' }} className="anim-pop fixed z-[90] w-max rounded-lg border border-border bg-surface p-1 shadow-pop">
             {items.map((it, i) =>
               it.separator ? (
                 <div key={i} className="my-1 h-px bg-border" />
@@ -188,11 +190,11 @@ export function Menu({ trigger, items, align = 'end', width = 220 }: { trigger: 
                     setOpen(false)
                     it.onSelect?.()
                   }}
-                  className={cx('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] disabled:opacity-40', it.danger ? 'text-danger hover:bg-danger-soft' : 'text-fg hover:bg-surface-2')}
+                  className={cx('flex w-full items-center gap-3 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-[13px] disabled:opacity-40', it.danger ? 'text-danger hover:bg-danger-soft' : 'text-fg hover:bg-surface-2')}
                 >
-                  {it.icon && <span className="text-fg-3">{it.icon}</span>}
-                  <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                  {it.hint && <span className="text-[11px] text-fg-3">{it.hint}</span>}
+                  {it.icon && <span className="shrink-0 text-fg-3">{it.icon}</span>}
+                  <span className="flex-1">{it.label}</span>
+                  {it.hint && <span className="shrink-0 pl-2 text-[11px] text-fg-3">{it.hint}</span>}
                   {it.checked && <Check size={14} className="text-accent" />}
                 </button>
               )

@@ -37,10 +37,10 @@
   --text: hsl(240 12% 93%);
   --text-2: hsl(240 7% 66%);
   --text-3: hsl(240 6% 48%);
-  --accent: hsl(235 72% 70%);
-  --accent-hover: hsl(235 72% 75%);
-  --accent-soft: hsl(235 72% 70% / 0.16);
-  --accent-fg: hsl(240 20% 10%);
+  --accent: hsl(235 62% 62%);
+  --accent-hover: hsl(235 62% 67%);
+  --accent-soft: hsl(235 70% 70% / 0.18);
+  --accent-fg: #ffffff;
   --ok: hsl(152 48% 52%);
   --ok-soft: hsl(152 48% 52% / 0.16);
   --warn: hsl(38 90% 58%);

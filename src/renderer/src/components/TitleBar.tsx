@@ -2,10 +2,10 @@ import { RefreshCw, Search } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { platform, isElectron } from '../lib/api'
 import { Kbd, cx } from './ui'
-import { ageSeconds } from '../lib/format'
+import { ageSeconds, maskEmail } from '../lib/format'
 
 export function TitleBar({ onPalette }: { onPalette: () => void }): React.JSX.Element {
-  const { accounts, refresh, now } = useStore()
+  const { accounts, refresh, now, settings } = useStore()
   const active = accounts.payload?.accounts.find((a) => a.active)
   const mac = platform === 'darwin'
   const fetchedAge = accounts.fetchedAt ? ageSeconds((now - new Date(accounts.fetchedAt).getTime()) / 1000) : ''
@@ -28,7 +28,7 @@ export function TitleBar({ onPalette }: { onPalette: () => void }): React.JSX.El
       {active && (
         <div className="no-drag hidden items-center gap-2 rounded-md bg-accent-soft px-2 py-[3px] text-[12px] text-accent md:flex" data-testid="active-pill">
           <span className="h-[6px] w-[6px] rounded-full bg-accent" />
-          <span className="font-medium">{active.alias || active.email}</span>
+          <span className="font-medium">{active.alias || maskEmail(active.email, settings.maskEmails)}</span>
         </div>
       )}
       <button

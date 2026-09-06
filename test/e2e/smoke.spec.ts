@@ -7,6 +7,16 @@ test('renders every page in light and dark and lists the fake accounts', async (
   await expect(page.getByTestId('account-row-1')).toHaveAttribute('data-active', 'true')
   await expect(page.getByTestId('sidebar-status')).toContainText('cswap 0.25.0')
   await shot(page, 'accounts-light')
+  // eye button masks emails everywhere (rows, subtitle, title-bar pill) and persists as a setting
+  await page.getByTestId('mask-toggle').click()
+  await expect(page.getByTestId('account-row-2')).toContainText('wor•••')
+  await expect(page.getByTestId('account-row-2')).not.toContainText('work@company.com')
+  await expect(page.getByTestId('active-pill')).toContainText('main')
+  await shot(page, 'accounts-masked')
+  await page.getByTestId('mask-toggle').click()
+  await expect(page.getByTestId('account-row-2')).toContainText('work@company.com')
+  // per-model window sits under the 7-day column
+  await expect(page.getByTestId('account-row-1').getByTestId('scoped-Fable')).toContainText('Fable 17%')
   for (const p of ['auto', 'mappings', 'log', 'settings'] as const) {
     await page.getByTestId(`nav-${p}`).click()
     await expect(page.getByTestId(`page-${p}`)).toBeVisible()

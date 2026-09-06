@@ -203,6 +203,8 @@ export interface AppSettings {
   autoStartAutoSwitch: boolean
   autoDryRun: boolean
   autoUpdate: boolean
+  maskEmails: boolean
+  refreshOnFocus: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -215,7 +217,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifyOnAutoSwitch: true,
   autoStartAutoSwitch: false,
   autoDryRun: false,
-  autoUpdate: true
+  autoUpdate: true,
+  maskEmails: false,
+  refreshOnFocus: true
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: CswapError }

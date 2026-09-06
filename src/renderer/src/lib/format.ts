@@ -98,3 +98,10 @@ export function binding(a: Account): { label: string; window: UsageWindow } | nu
 export function shortArgs(args: string[]): string {
   return args.join(' ')
 }
+
+// Privacy mask for screenshots / streams: keep the first three characters only.
+export function maskEmail(email: string, on: boolean): string {
+  if (!on || !email) return email
+  const local = email.split('@')[0] ?? email
+  return `${local.slice(0, 3)}${'•'.repeat(Math.max(3, Math.min(8, email.length - 3)))}`
+}

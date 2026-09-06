@@ -40,6 +40,8 @@ function createWindow(): BrowserWindow {
   w.on('ready-to-show', () => {
     if (!(process.argv.includes('--hidden') || core.settings.get().startMinimized)) w.show()
   })
+  w.on('focus', () => core?.refreshOnFocus())
+  w.on('show', () => core?.refreshOnFocus())
   w.on('close', (e) => {
     if (!quitting && core.settings.get().closeToTray && tray) {
       e.preventDefault()

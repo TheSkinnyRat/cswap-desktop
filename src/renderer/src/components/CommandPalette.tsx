@@ -5,10 +5,10 @@ import { useStore } from '../lib/store'
 import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { Kbd, cx } from './ui'
-import { pct } from '../lib/format'
+import { maskEmail, pct } from '../lib/format'
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }): React.JSX.Element | null {
-  const { accounts, setPage } = useStore()
+  const { accounts, setPage, settings } = useStore()
   const { notify } = useToast()
   const [q, setQ] = useState('')
   const [i, setI] = useState(0)
@@ -80,7 +80,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <span className={cx('h-[6px] w-[6px] rounded-full', r.a.active ? 'bg-accent' : 'bg-border-strong')} />
                   <span className="min-w-0 flex-1 truncate text-fg">
                     {r.a.alias && <span className="mr-1.5 font-medium">{r.a.alias}</span>}
-                    <span className={r.a.alias ? 'text-fg-2' : ''}>{r.a.email}</span>
+                    <span className={r.a.alias ? 'text-fg-2' : ''}>{maskEmail(r.a.email, settings.maskEmails)}</span>
                   </span>
                   {r.a.usage?.fiveHour && <span className="text-[11.5px] text-fg-3">5h {pct(r.a.usage.fiveHour.pct)} · 7d {pct(r.a.usage.sevenDay?.pct)}</span>}
                   {r.a.active ? <span className="text-[11px] text-accent">active</span> : <ArrowRightLeft size={13} className="text-fg-3" />}

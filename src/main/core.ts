@@ -120,8 +120,20 @@ export class AppCore extends EventEmitter {
   }
   private scheduleRefresh(): void {
     if (this.refreshTimer) clearInterval(this.refreshTimer)
-    const secs = Math.max(15, this.settings.get().refreshSeconds || 60)
-    this.refreshTimer = setInterval(() => void this.refresh(), secs * 1000)
+    this.refreshTimer = null
+    const secs = this.settings.get().refreshSeconds
+    if (!secs || secs <= 0) return // 0 = never; manual, focus and vault changes still refresh
+    this.refreshTimer = setInterval(() => void this.refresh(), Math.max(15, secs) * 1000)
+  }
+
+  // Window shown or focused: re-read once, but not more often than every 10 s.
+  private lastFocusRefresh = 0
+  refreshOnFocus(): void {
+    if (!this.settings.get().refreshOnFocus) return
+    const now = Date.now()
+    if (now - this.lastFocusRefresh < 10000) return
+    this.lastFocusRefresh = now
+    void this.refresh()
   }
 
   // Every mutation ends with a refresh so the UI never shows a stale row.

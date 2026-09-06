@@ -131,12 +131,18 @@ export function SettingsPage(): React.JSX.Element {
             </Field>
             <Field label="Refresh usage every" hint="cswap itself throttles calls to Anthropic; this only decides how often the list is re-read." inline>
               <Select value={String(settings.refreshSeconds)} onChange={(e) => void updateSettings({ refreshSeconds: Number(e.target.value) })} className="w-[120px]" aria-label="Refresh interval">
-                {[30, 60, 120, 300, 600].map((s) => (
+                {[30, 60, 120, 300, 600, 0].map((s) => (
                   <option key={s} value={s}>
-                    {s < 60 ? `${s}s` : `${s / 60} min`}
+                    {s === 0 ? 'Never' : s < 60 ? `${s}s` : `${s / 60} min`}
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field label="Refresh when the window opens or gets focus" hint="At most once every 10 seconds." inline>
+              <Switch checked={settings.refreshOnFocus} onChange={(v) => void updateSettings({ refreshOnFocus: v })} label="Refresh on focus" />
+            </Field>
+            <Field label="Hide email addresses" hint="Keeps the first three characters — for screenshots and streams." inline>
+              <Switch checked={settings.maskEmails} onChange={(v) => void updateSettings({ maskEmails: v })} label="Hide email addresses" />
             </Field>
             <Field label="Close to tray" hint="Closing the window keeps the app running in the tray." inline>
               <Switch checked={settings.closeToTray} onChange={(v) => void updateSettings({ closeToTray: v })} label="Close to tray" />
