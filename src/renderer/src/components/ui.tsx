@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
+import { useGrow } from '../lib/use-grow'
 import { Check, ChevronDown, Loader2, X } from 'lucide-react'
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -121,10 +122,11 @@ export function Field({ label, hint, children, inline }: { label: string; hint?:
 // ---- Usage bar -------------------------------------------------------------------
 export function Bar({ pct, tone, className }: { pct: number | undefined; tone: 'ok' | 'warn' | 'danger' | 'muted'; className?: string }): React.JSX.Element {
   const fill = { ok: 'bg-accent', warn: 'bg-warn', danger: 'bg-danger', muted: 'bg-border-strong' }[tone]
-  const w = pct === undefined ? 0 : Math.max(0, Math.min(100, pct))
+  // Grown into rather than drawn at, like the ring: a transition needs a change.
+  const w = useGrow(pct === undefined ? 0 : Math.max(0, Math.min(100, pct)))
   return (
     <div className={cx('h-[5px] w-full overflow-hidden rounded-full bg-surface-3', className)} role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
-      <div className={cx('h-full rounded-full transition-[width] duration-300', fill)} style={{ width: `${w}%` }} />
+      <div className={cx('h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none', fill)} style={{ width: `${w}%` }} />
     </div>
   )
 }

@@ -1,27 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Tooltip } from './Tooltip'
 import { cx } from './ui'
 import { pct as fmtPct } from '../lib/format'
-
-/**
- * A reading that arrives by growing into place: a CSS transition needs a *change*,
- * and a first render has none, so the arc would simply be drawn at its figure.
- * Someone who asked for less motion gets the figure immediately.
- */
-function useGrow(target: number): number {
-  const [shown, setShown] = useState(() => {
-    try {
-      return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? target : 0
-    } catch {
-      return 0
-    }
-  })
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(target))
-    return () => cancelAnimationFrame(id)
-  }, [target])
-  return shown
-}
+import { useGrow } from '../lib/use-grow'
 
 const SIZE = 26
 const STROKE = 3.5
@@ -31,7 +11,7 @@ const C = 2 * Math.PI * R
 // Same thresholds as the bars, so one glance means the same thing in both views.
 const ringTone = (p: number): string => (p >= 100 ? 'stroke-danger' : p >= 80 ? 'stroke-warn' : 'stroke-accent')
 
-export function UsageRing({ pct, label, tooltip, sub }: { pct: number | undefined; label: string; tooltip: string; sub?: string }): React.JSX.Element {
+export function UsageRing({ pct, label, tooltip, sub }: { pct: number | undefined; label?: string; tooltip: string; sub?: string }): React.JSX.Element {
   const value = pct === undefined ? 0 : Math.max(0, Math.min(pct, 100))
   const filled = useGrow(value)
   return (
@@ -54,7 +34,7 @@ export function UsageRing({ pct, label, tooltip, sub }: { pct: number | undefine
       </svg>
       <span className="min-w-0">
         <span className="block truncate text-[12px] leading-tight">
-          <span className="text-fg-3">{label} </span>
+          {label && <span className="text-fg-3">{label} </span>}
           <span className={cx('font-medium tabular-nums', value >= 100 ? 'text-danger' : value >= 80 ? 'text-warn' : 'text-fg')}>{pct === undefined ? '—' : fmtPct(pct)}</span>
         </span>
         {sub && <span className="block truncate text-[11px] leading-tight text-fg-3">{sub}</span>}

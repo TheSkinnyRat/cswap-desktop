@@ -6,8 +6,12 @@ import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Select, Switch, cx } from '../components/ui'
 import { UsageRing } from '../components/UsageRing'
+import { Tooltip } from '../components/Tooltip'
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
+
+const BAR_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px]'
+const RING_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(116px,1fr)_minmax(232px,1.7fr)_148px_104px]'
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'run'; a: Account } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
@@ -17,6 +21,9 @@ export function AccountsPage(): React.JSX.Element {
   const [dlg, setDlg] = useState<DialogKind>(null)
   const mask = settings.maskEmails
   const rings = settings.usageView === 'rings'
+  // One template, shared by the header and every row: a per-row grid is how the columns
+  // drifted apart before, and the ring view needs a wider 7-day column than the bars do.
+  const cols = rings ? RING_COLS : BAR_COLS
   const [busy, setBusy] = useState<string | null>(null)
   const list = accounts.payload?.accounts ?? []
   const active = list.find((a) => a.active)
@@ -157,7 +164,7 @@ export function AccountsPage(): React.JSX.Element {
         {list.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-scroller">
             <div className="min-w-min" data-testid="accounts-table">
-            <div className="grid grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
+            <div className={cx('grid items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3', cols)}>
               <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
@@ -166,7 +173,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} mask={mask} rings={rings} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
+              <AccountRow key={a.number} a={a} now={now} cols={cols} mask={mask} rings={rings} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
               ))}
             </div>
           </div>
@@ -194,50 +201,53 @@ export function AccountsPage(): React.JSX.Element {
   )
 }
 
+function windowTooltip(w: UsageWindow, name: string, now: number, showPace: boolean): string {
+  const lines = [`${name} · ${pct(w.pct)} used`]
+  if (w.resetsAt) lines.push(`resets ${clockOf(w.resetsAt)} · ${resetText(w.resetsAt, now)}`)
+  if (showPace && w.expectedPct !== undefined) lines.push(`${w.aheadOfPace ? 'ahead of pace' : 'on pace'} — even use would be ~${pct(w.expectedPct)} by now`)
+  if (w.willLastToReset === false) lines.push('at this rate it runs out before the reset')
+  return lines.join('\n')
+}
+
 function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showPace?: boolean; ring?: boolean }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
+  // The header already says 5-hour and 7-day; only a per-model window needs naming.
+  const full = name ?? (label === '5h' ? '5-hour window' : label === '7d' ? '7-day window' : label)
+  const tip = windowTooltip(w, full, now, showPace)
   if (ring) {
-    const nice = name ?? (label === '5h' ? '5h' : label === '7d' ? '7d' : label)
-    const detail = [w.resetsAt ? `resets ${clockOf(w.resetsAt)} · ${resetText(w.resetsAt, now)}` : null, showPace && w.aheadOfPace ? `ahead of pace — even use would be ~${pct(w.expectedPct)} by now` : null].filter(Boolean).join('\n')
     return (
       <div className="min-w-0" data-testid={`window-${label}`}>
-        <UsageRing pct={w.pct} label={nice} tooltip={`${nice} · ${pct(w.pct)}${detail ? `\n${detail}` : ''}`} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} />
+        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} />
       </div>
     )
   }
   return (
-    <div className="min-w-0" data-testid={`window-${label}`}>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
-        <span className="truncate">
-          {name && <span className="text-fg-3">{name} </span>}
-          <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
-        </span>
-        <span className="flex min-w-0 items-center gap-1 text-fg-3">
-          {showPace && w.aheadOfPace && (
-            <Chip tone="warn" title={`Ahead of pace — spread evenly you would be at ~${pct(w.expectedPct)} by now`}>
-              ahead
-            </Chip>
-          )}
-          {w.resetsAt && (
-            <span className="truncate tabular-nums" title={`Resets ${clockOf(w.resetsAt)}`}>
-              {resetText(w.resetsAt, now)}
-            </span>
-          )}
-        </span>
+    <Tooltip label={tip} focusable={false} className="min-w-0 flex-col" >
+      <div className="min-w-0 flex-1" data-testid={`window-${label}`}>
+        <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
+          <span className="truncate">
+            {name && <span className="text-fg-3">{name} </span>}
+            <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-fg-3">
+            {showPace && w.aheadOfPace && <Chip tone="warn">ahead</Chip>}
+            {w.resetsAt && <span className="truncate tabular-nums">{resetText(w.resetsAt, now)}</span>}
+          </span>
+        </div>
+        <Bar pct={w.pct} tone={t} />
       </div>
-      <Bar pct={w.pct} tone={t} />
-    </div>
+    </Tooltip>
   )
 }
 
-function AccountRow({ a, now, mask, rings, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; mask: boolean; rings: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
+function AccountRow({ a, now, cols, mask, rings, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; mask: boolean; rings: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
   return (
     <div
-      className={cx('group grid grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px] items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
+      className={cx('group grid items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', cols, a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
       data-testid={`account-row-${a.number}`}
       data-active={a.active || undefined}
     >
@@ -276,13 +286,17 @@ function AccountRow({ a, now, mask, rings, plan, busy, onSwitch, onAction, onTog
         </div>
       </div>
       <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} />
-      <div className="min-w-0">
+      <div className={cx('min-w-0', rings && 'flex flex-wrap items-center gap-x-4 gap-y-1')}>
         <WindowCell w={usage?.sevenDay} now={now} label="7d" ring={rings} />
-        {usage?.scoped?.map((s) => (
-          <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
-            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring={rings} />
-          </div>
-        ))}
+        {usage?.scoped?.map((s) =>
+          rings ? (
+            <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring />
+          ) : (
+            <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
+              <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
+            </div>
+          )
+        )}
       </div>
       <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
         <Chip tone={sTone} title={a.usageStatus} className="max-w-full">

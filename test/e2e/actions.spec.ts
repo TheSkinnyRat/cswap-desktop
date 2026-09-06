@@ -166,13 +166,30 @@ test.describe('views and session mode', () => {
     await expect(page.getByTestId('usage-ring')).toHaveCount(0) // lucide icons draw circles too — count the rings, not every <circle>
     await page.getByTestId('view-toggle').click()
     await expect(page.getByTestId('account-row-1').getByTestId('usage-ring').first()).toBeVisible()
-    await expect(page.getByTestId('window-5h').first()).toContainText('5h 45%')
+    await expect(page.getByTestId('window-5h').first()).toContainText('45%')
+    await expect(page.getByTestId('window-5h').first()).not.toContainText('5h') // the header already says which window it is
+    // a per-model window sits beside the 7-day one, not under it
+    const seven = await page.getByTestId('account-row-1').getByTestId('window-7d').boundingBox()
+    const fable = await page.getByTestId('account-row-1').getByTestId('window-model-Fable').boundingBox()
+    expect(fable!.x).toBeGreaterThan(seven!.x + seven!.width - 1)
+    expect(Math.abs(fable!.y - seven!.y)).toBeLessThan(6)
     await shot(page, 'rings')
     await app.close()
     expect(JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).usageView).toBe('rings')
     const l2 = await launch({ settings: JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')) })
     await expect(l2.page.getByTestId('account-row-1').getByTestId('usage-ring').first()).toBeVisible()
     await l2.app.close()
+  })
+
+  test('both shapes explain themselves on hover', async () => {
+    const { app, page } = await launch()
+    await page.getByTestId('window-5h').first().hover()
+    await expect(page.getByRole('tooltip')).toContainText('5-hour window · 45% used')
+    await expect(page.getByRole('tooltip')).toContainText('resets')
+    await page.getByTestId('view-toggle').click()
+    await page.getByTestId('window-model-Fable').first().hover()
+    await expect(page.getByRole('tooltip')).toContainText('Fable · 17% used')
+    await app.close()
   })
 
   test('open terminal asks where to start and passes that directory', async () => {

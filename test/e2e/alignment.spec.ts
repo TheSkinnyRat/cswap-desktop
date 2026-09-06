@@ -19,18 +19,12 @@ const seed = {
 test('columns line up at every width, whatever the status labels say', async () => {
   const { app, page } = await launch({ seedState: seed })
   await page.waitForSelector('[data-testid="accounts-table"]')
-  for (const width of [900, 1024, 1327, 1600, 1920]) {
-    await page.setViewportSize({ width, height: 620 })
-    await page.waitForTimeout(150)
-    const cols = await page.evaluate(() => {
-      const table = document.querySelector('[data-testid="accounts-table"]')!
-      return Array.from(table.children).map((row) =>
-        Array.from(row.children).map((c) => Math.round((c as HTMLElement).getBoundingClientRect().left))
-      )
-    })
-    const [header, ...rows] = cols
-    for (const [i, row] of rows.entries()) expect(row, `width ${width}, row ${i + 1}`).toEqual(header)
+  // Both views: each has its own column template, and each is a grid per row.
+  for (const view of ['bars', 'rings'] as const) {
+    if (view === 'rings') await page.getByTestId('view-toggle').click()
+    await checkWidths(page, view)
   }
+  await page.getByTestId('view-toggle').click()
   await page.setViewportSize({ width: 1327, height: 620 })
   await shot(page, 'align-wide')
   // a narrow window scrolls the table instead of squeezing it
@@ -46,3 +40,18 @@ test('columns line up at every width, whatever the status labels say', async () 
   await shot(page, 'align-narrow-scrolled')
   await app.close()
 })
+
+async function checkWidths(page: import('@playwright/test').Page, view: string): Promise<void> {
+  for (const width of [900, 1024, 1327, 1600, 1920]) {
+    await page.setViewportSize({ width, height: 620 })
+    await page.waitForTimeout(150)
+    const cols = await page.evaluate(() => {
+      const table = document.querySelector('[data-testid="accounts-table"]')!
+      return Array.from(table.children).map((row) =>
+        Array.from(row.children).map((c) => Math.round((c as HTMLElement).getBoundingClientRect().left))
+      )
+    })
+    const [header, ...rows] = cols
+    for (const [i, row] of rows.entries()) expect(row, `${view} at ${width}px, row ${i + 1}`).toEqual(header)
+  }
+}
