@@ -207,6 +207,7 @@ export interface AppSettings {
   refreshOnFocus: boolean
   usageView: 'bars' | 'rings'
   showPace: boolean
+  sidebarCollapsed: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -223,7 +224,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maskEmails: false,
   refreshOnFocus: true,
   usageView: 'bars',
-  showPace: true
+  showPace: true,
+  sidebarCollapsed: false
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: CswapError }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlignLeft, ArrowRightLeft, Gauge, GaugeCircle, ChevronDown, CircleDashed, Download, Ellipsis, Eye, EyeOff, FolderOpen, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { Account, Mapping, PlanInfo, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
+import { useElementWidth } from '../lib/use-width'
 import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Select, Switch, cx } from '../components/ui'
@@ -29,6 +30,10 @@ export function AccountsPage(): React.JSX.Element {
   const list = accounts.payload?.accounts ?? []
   const active = list.find((a) => a.active)
   const plans = accounts.plans ?? {}
+  // A table needs a table's worth of room. Below that the same account reads better as a
+  // card, which is also the only way to stop the page scrolling sideways.
+  const [listRef, listWidth] = useElementWidth()
+  const compact = listWidth > 0 && listWidth < 780
 
   const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: { message: string }; value?: unknown }>, okMsg?: (v: unknown) => string): Promise<boolean> => {
     setBusy(key)
@@ -173,9 +178,9 @@ export function AccountsPage(): React.JSX.Element {
           />
         )}
         {list.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-scroller">
-            <div className="min-w-min" data-testid="accounts-table">
-            <div className={cx('grid items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3', cols)}>
+          <div ref={listRef} className={cx('rounded-lg border border-border bg-surface shadow-card', !compact && 'overflow-x-auto')} data-testid="accounts-scroller">
+            <div className={cx(!compact && 'min-w-min')} data-testid="accounts-table" data-compact={compact || undefined}>
+            <div className={cx('grid items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3', cols, compact && 'hidden')}>
               <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
@@ -184,7 +189,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} cols={cols} mask={mask} rings={rings} pace={pace} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
+              <AccountRow key={a.number} a={a} now={now} cols={cols} compact={compact} mask={mask} rings={rings} pace={pace} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
               ))}
             </div>
           </div>
@@ -252,10 +257,126 @@ function WindowCell({ w, now, label, name, showChip = true, ring = false, pace =
   )
 }
 
-function AccountRow({ a, now, cols, mask, rings, pace, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; mask: boolean; rings: boolean; pace: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
+function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; compact: boolean; mask: boolean; rings: boolean; pace: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
+
+  const name = (
+    <div className="min-w-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="truncate text-[13px] font-medium text-fg" title={mask ? undefined : a.email} data-testid={a.alias ? `alias-${a.number}` : undefined}>
+          {a.alias || maskEmail(a.email, mask)}
+        </span>
+        {plan && (
+          <Chip tone="muted" title={a.active ? `Subscription: ${plan.label}${plan.tier ? ` (${plan.tier})` : ''}` : `Subscription when this account was last active, ${clockOf(plan.seenAt)}`}>
+            {plan.label}
+          </Chip>
+        )}
+        {a.active && <Chip tone="accent">active</Chip>}
+        {a.disabled && (
+          <Chip tone="muted" title="Held out of rotation">
+            disabled
+          </Chip>
+        )}
+      </div>
+      <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-fg-3">
+        {a.alias && (
+          <span className="truncate" title={mask ? undefined : a.email}>
+            {maskEmail(a.email, mask)}
+          </span>
+        )}
+        {a.alias && <span>·</span>}
+        <span className="truncate">{orgTag(a, mask)}</span>
+      </div>
+    </div>
+  )
+
+  const five = <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} pace={pace} name={compact ? '5-hour' : undefined} />
+  const weekly = (
+    <>
+      {rings ? (
+        <WindowCell w={usage?.sevenDay} now={now} label="7d" ring pace={pace} name={compact ? '7-day' : undefined} />
+      ) : (
+        // an equal flex child, or the full-width 7-day track pushes the model one
+        // out of the cell entirely once they sit in a row
+        <div className="min-w-0 flex-1">
+          <WindowCell w={usage?.sevenDay} now={now} label="7d" pace={pace} name={compact ? '7-day' : undefined} />
+        </div>
+      )}
+      {usage?.scoped?.map((s) =>
+        rings ? (
+          <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring pace={pace} />
+        ) : (
+          <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
+            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} pace={pace} />
+          </div>
+        )
+      )}
+    </>
+  )
+
+  const status = (
+    <>
+      <Chip tone={sTone} title={a.usageStatus} className="max-w-full">
+        <span className="truncate">{statusLabel(a.usageStatus)}</span>
+      </Chip>
+      {stale && (
+        <span className="text-[11px] text-fg-3" title="Last successful usage measurement">
+          last good {ageSeconds(a.lastGoodAgeSeconds)}
+        </span>
+      )}
+      {!stale && a.usageAgeSeconds !== undefined && a.usageAgeSeconds >= 60 && <span className="text-[11px] text-fg-3">{ageSeconds(a.usageAgeSeconds)}</span>}
+    </>
+  )
+
+  const actions = (
+    <>
+      <Button size="sm" variant={a.active ? 'ghost' : 'default'} disabled={a.active} loading={busy === `switch-${a.number}`} onClick={onSwitch} data-testid={`switch-${a.number}`} className={a.active ? 'invisible' : ''}>
+        Switch
+      </Button>
+      <Menu
+        width={280}
+        trigger={() => <Button size="sm" variant="ghost" className="!px-1.5" aria-label={`Actions for account ${a.number}`} data-testid={`row-menu-${a.number}`} icon={<Ellipsis size={15} />} />}
+        items={[
+          { label: a.alias ? 'Change alias' : 'Set alias', icon: <Tag size={14} />, onSelect: () => onAction({ kind: 'alias', a }) },
+          { label: 'Move to slot', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
+          { label: a.disabled ? 'Enable (back in rotation)' : 'Disable (hold out of rotation)', icon: a.disabled ? <Eye size={14} /> : <EyeOff size={14} />, onSelect: onToggleDisabled },
+          { separator: true, label: '' },
+          { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: () => onAction({ kind: 'run', a }) },
+          { label: 'Export this account', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
+          { label: 'Re-add from the current login', hint: `slot ${a.number}`, icon: <Pencil size={14} />, onSelect: () => onAction({ kind: 'add' }) },
+          { separator: true, label: '' },
+          { label: 'Remove account', icon: <Trash2 size={14} />, danger: true, onSelect: () => onAction({ kind: 'remove', a }) }
+        ]}
+      />
+    </>
+  )
+
+  if (compact) {
+    return (
+      <div
+        className={cx('flex flex-col gap-3 border-b border-border p-3 last:border-b-0', a.active && 'bg-accent-soft/40', a.disabled && 'opacity-70')}
+        data-testid={`account-row-${a.number}`}
+        data-active={a.active || undefined}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="mono mt-[2px] flex h-[18px] shrink-0 items-center gap-1.5 text-fg-3">
+            <span className={cx('h-[6px] w-[6px] rounded-full', a.active ? 'bg-accent' : 'bg-transparent')} aria-label={a.active ? 'active' : undefined} />
+            {a.number}
+          </span>
+          {name}
+          <div className="ml-auto flex shrink-0 items-center gap-1">{actions}</div>
+        </div>
+        <div className={cx('flex flex-col gap-2.5', rings && 'flex-row flex-wrap items-center gap-x-4 gap-y-2')}>
+          {five}
+          {weekly}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">{status}</div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={cx('group grid items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', cols, a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
@@ -266,102 +387,20 @@ function AccountRow({ a, now, cols, mask, rings, pace, plan, busy, onSwitch, onA
         <span className={cx('h-[6px] w-[6px] rounded-full', a.active ? 'bg-accent' : 'bg-transparent')} aria-label={a.active ? 'active' : undefined} />
         <span className="mono text-fg-3">{a.number}</span>
       </div>
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-fg" title={mask ? undefined : a.email} data-testid={a.alias ? `alias-${a.number}` : undefined}>
-            {a.alias || maskEmail(a.email, mask)}
-          </span>
-          {plan && (
-            <Chip
-              tone="muted"
-              title={a.active ? `Subscription: ${plan.label}${plan.tier ? ` (${plan.tier})` : ''}` : `Subscription when this account was last active, ${clockOf(plan.seenAt)}`}
-            >
-              {plan.label}
-            </Chip>
-          )}
-          {a.active && <Chip tone="accent">active</Chip>}
-          {a.disabled && (
-            <Chip tone="muted" title="Held out of rotation">
-              disabled
-            </Chip>
-          )}
+      {name}
+      {five}
+      {rings ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">{weekly}</div>
+      ) : (
+        <div className="@container min-w-0">
+          {/* Bars go beside the 7-day one once this cell is wide enough for two readable
+              tracks, and under it when it is not. A container query, not a window
+              breakpoint: what decides is the width of this cell. */}
+          <div className="flex flex-col gap-2 @[330px]:flex-row @[330px]:items-start @[330px]:gap-4">{weekly}</div>
         </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-fg-3">
-          {a.alias && (
-            <span className="truncate" title={mask ? undefined : a.email}>
-              {maskEmail(a.email, mask)}
-            </span>
-          )}
-          {a.alias && <span>·</span>}
-          <span className="truncate">{orgTag(a, mask)}</span>
-        </div>
-      </div>
-      <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} pace={pace} />
-      {(() => {
-        const windows = (
-          <>
-            {rings ? (
-              <WindowCell w={usage?.sevenDay} now={now} label="7d" ring pace={pace} />
-            ) : (
-              // an equal flex child, or the full-width 7-day track pushes the model one
-              // out of the cell entirely once they sit in a row
-              <div className="min-w-0 flex-1">
-                <WindowCell w={usage?.sevenDay} now={now} label="7d" pace={pace} />
-              </div>
-            )}
-            {usage?.scoped?.map((s) =>
-              rings ? (
-                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring pace={pace} />
-              ) : (
-                <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
-                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} pace={pace} />
-                </div>
-              )
-            )}
-          </>
-        )
-        // Bars go beside the 7-day one once this cell is wide enough for two readable
-        // tracks, and under it when it is not. A container query, not a window
-        // breakpoint: what decides is the width of this cell.
-        return rings ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">{windows}</div>
-        ) : (
-          <div className="@container min-w-0">
-            <div className="flex flex-col gap-2 @[330px]:flex-row @[330px]:items-start @[330px]:gap-4">{windows}</div>
-          </div>
-        )
-      })()}
-      <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
-        <Chip tone={sTone} title={a.usageStatus} className="max-w-full">
-          <span className="truncate">{statusLabel(a.usageStatus)}</span>
-        </Chip>
-        {stale && (
-          <span className="text-[11px] text-fg-3" title="Last successful usage measurement">
-            last good {ageSeconds(a.lastGoodAgeSeconds)}
-          </span>
-        )}
-        {!stale && a.usageAgeSeconds !== undefined && a.usageAgeSeconds >= 60 && <span className="text-[11px] text-fg-3">{ageSeconds(a.usageAgeSeconds)}</span>}
-      </div>
-      <div className="flex min-w-0 min-h-[19px] items-center justify-end gap-1 self-stretch">
-        <Button size="sm" variant={a.active ? 'ghost' : 'default'} disabled={a.active} loading={busy === `switch-${a.number}`} onClick={onSwitch} data-testid={`switch-${a.number}`} className={a.active ? 'invisible' : ''}>
-          Switch
-        </Button>
-        <Menu
-          width={280}
-          trigger={() => <Button size="sm" variant="ghost" className="!px-1.5" aria-label={`Actions for account ${a.number}`} data-testid={`row-menu-${a.number}`} icon={<Ellipsis size={15} />} />}
-          items={[
-            { label: a.alias ? 'Change alias' : 'Set alias', icon: <Tag size={14} />, onSelect: () => onAction({ kind: 'alias', a }) },
-            { label: 'Move to slot', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
-            { label: a.disabled ? 'Enable (back in rotation)' : 'Disable (hold out of rotation)', icon: a.disabled ? <Eye size={14} /> : <EyeOff size={14} />, onSelect: onToggleDisabled },
-            { separator: true, label: '' },
-            { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: () => onAction({ kind: 'run', a }) },
-            { label: 'Export this account', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
-            { label: 'Re-add from the current login', hint: `slot ${a.number}`, icon: <Pencil size={14} />, onSelect: () => onAction({ kind: 'add' }) },
-            { separator: true, label: '' },
-            { label: 'Remove account', icon: <Trash2 size={14} />, danger: true, onSelect: () => onAction({ kind: 'remove', a }) }
-          ]}
-        />
-      </div>
+      )}
+      <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">{status}</div>
+      <div className="flex min-w-0 min-h-[19px] items-center justify-end gap-1 self-stretch">{actions}</div>
     </div>
   )
 }

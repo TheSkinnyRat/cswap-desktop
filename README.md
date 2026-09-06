@@ -17,6 +17,7 @@ A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap
 - **Updates** — the Windows and Linux builds check GitHub releases at start and every six hours, download in the background and install on quit (or on request). macOS is unsigned, so there it is a link to the release.
 - **Log** — every cswap call the app made: arguments, exit code, duration, output.
 - Not in the UI on purpose: `cswap purge` (deletes every account) — use the CLI if you really mean it.
+- **Responsive** — below a table's worth of room each account becomes a card, so nothing ever scrolls sideways; the sidebar collapses to icons on a narrow window, or on demand.
 - Light theme by default (tinted, not plain white), dark theme, or follow the system.
 
 <p>

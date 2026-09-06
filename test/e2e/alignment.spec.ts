@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { launch, shot } from './helpers'
 
 // Mixed status labels are the case that broke alignment: every row is its own grid,
@@ -38,17 +40,6 @@ test('columns line up at every width, whatever the status labels say', async () 
   }
 
   await shot(page, 'align-wide')
-  // a narrow window scrolls the table instead of squeezing it
-  await page.setViewportSize({ width: 760, height: 620 })
-  await page.waitForTimeout(150)
-  const scroll = await page.evaluate(() => {
-    const el = document.querySelector('[data-testid="accounts-scroller"]') as HTMLElement
-    el.scrollLeft = 9999
-    return { canScroll: el.scrollWidth > el.clientWidth + 4, scrolled: el.scrollLeft > 0 }
-  })
-  expect(scroll.canScroll).toBe(true)
-  expect(scroll.scrolled).toBe(true)
-  await shot(page, 'align-narrow-scrolled')
   await app.close()
 })
 
@@ -81,7 +72,8 @@ test('a per-model window sits beside the 7-day one when there is room, under it 
 })
 
 async function checkWidths(page: import('@playwright/test').Page, view: string): Promise<void> {
-  for (const width of [900, 1024, 1327, 1600, 1920]) {
+  // below ~1040 the list is narrower than a table needs and becomes cards instead
+  for (const width of [1100, 1327, 1600, 1920]) {
     await page.setViewportSize({ width, height: 620 })
     await page.waitForTimeout(150)
     const cols = await page.evaluate(() => {
@@ -94,3 +86,47 @@ async function checkWidths(page: import('@playwright/test').Page, view: string):
     for (const [i, row] of rows.entries()) expect(row, `${view} at ${width}px, row ${i + 1}`).toEqual(header)
   }
 }
+
+
+test('a narrow window changes the shape instead of scrolling sideways', async () => {
+  const { app, page, userData } = await launch({ seedState: seed })
+  await page.waitForSelector('[data-testid="accounts-table"]')
+
+  await page.setViewportSize({ width: 1240, height: 720 })
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('accounts-table')).not.toHaveAttribute('data-compact', 'true')
+
+  for (const width of [560, 700, 900]) {
+    await page.setViewportSize({ width, height: 720 })
+    await page.waitForTimeout(300)
+    await expect(page.getByTestId('accounts-table'), `${width}px: cards`).toHaveAttribute('data-compact', 'true')
+    // nothing scrolls sideways: not the page, not the list
+    const over = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="accounts-scroller"]') as HTMLElement
+      const main = document.querySelector('main') as HTMLElement
+      return {
+        list: el.scrollWidth - el.clientWidth,
+        main: main.scrollWidth - main.clientWidth,
+        body: document.documentElement.scrollWidth - document.documentElement.clientWidth
+      }
+    })
+    expect(over, `${width}px: ${JSON.stringify(over)}`).toEqual({ list: 0, main: 0, body: 0 })
+    // every window still reads, with its own name now that the header is gone
+    await expect(page.getByTestId('account-row-3').getByTestId('window-7d')).toContainText('7-day')
+  }
+  await shot(page, 'compact-cards')
+
+  // the sidebar collapses on its own when narrow, and by hand when it is not
+  await page.setViewportSize({ width: 560, height: 720 })
+  await page.waitForTimeout(300)
+  await expect(page.locator('nav[aria-label="Main"]')).toHaveAttribute('data-compact', 'true')
+  await expect(page.getByTestId('sidebar-toggle')).toHaveCount(0) // forced: nothing to choose
+  await page.setViewportSize({ width: 1240, height: 720 })
+  await page.waitForTimeout(300)
+  await expect(page.locator('nav[aria-label="Main"]')).not.toHaveAttribute('data-compact', 'true')
+  await page.getByTestId('sidebar-toggle').click()
+  await expect(page.locator('nav[aria-label="Main"]')).toHaveAttribute('data-compact', 'true')
+  await expect(page.getByTestId('accounts-table')).not.toHaveAttribute('data-compact', 'true') // more room, still a table
+  await app.close()
+  expect(JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).sidebarCollapsed).toBe(true)
+})
