@@ -11,6 +11,7 @@ test('renders every page in light and dark and lists the fake accounts', async (
   await page.getByTestId('mask-toggle').click()
   await expect(page.getByTestId('account-row-2')).toContainText('wor•••')
   await expect(page.getByTestId('account-row-2')).not.toContainText('work@company.com')
+  await expect(page.getByTestId('account-row-2')).not.toContainText('Company Inc') // the org names an employer as plainly as the address does
   await expect(page.getByTestId('active-pill')).toContainText('main')
   await shot(page, 'accounts-masked')
   await page.getByTestId('mask-toggle').click()

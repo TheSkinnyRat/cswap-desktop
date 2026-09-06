@@ -50,7 +50,7 @@ export function AccountsPage(): React.JSX.Element {
           active ? (
             <>
               Active: <span className="font-medium text-fg">{active.alias || maskEmail(active.email, mask)}</span>
-              {active.isOrganization && <span className="text-fg-3"> · {orgTag(active)}</span>}
+              {active.isOrganization && <span className="text-fg-3"> · {orgTag(active, mask)}</span>}
             </>
           ) : list.length ? (
             'No active managed account'
@@ -143,8 +143,8 @@ export function AccountsPage(): React.JSX.Element {
         )}
         {list.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-scroller">
-            <div className="min-w-[880px]" data-testid="accounts-table">
-            <div className="grid grid-cols-[28px_minmax(190px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_160px_112px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
+            <div className="min-w-[820px]" data-testid="accounts-table">
+            <div className="grid grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
               <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
@@ -180,7 +180,7 @@ export function AccountsPage(): React.JSX.Element {
   )
 }
 
-function WindowCell({ w, now, label, name }: { w: UsageWindow | undefined; now: number; label: string; name?: string }): React.JSX.Element {
+function WindowCell({ w, now, label, name, showPace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showPace?: boolean }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
   return (
@@ -191,7 +191,7 @@ function WindowCell({ w, now, label, name }: { w: UsageWindow | undefined; now: 
           <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
         </span>
         <span className="flex min-w-0 items-center gap-1 text-fg-3">
-          {w.aheadOfPace && (
+          {showPace && w.aheadOfPace && (
             <Chip tone="warn" title={`Ahead of pace — spread evenly you would be at ~${pct(w.expectedPct)} by now`}>
               ahead
             </Chip>
@@ -214,7 +214,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
   const sTone = statusTone(a.usageStatus)
   return (
     <div
-      className={cx('group grid grid-cols-[28px_minmax(190px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_160px_112px] items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
+      className={cx('group grid grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px] items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
       data-testid={`account-row-${a.number}`}
       data-active={a.active || undefined}
     >
@@ -241,7 +241,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
             </span>
           )}
           {a.alias && <span>·</span>}
-          <span className="truncate">{orgTag(a)}</span>
+          <span className="truncate">{orgTag(a, mask)}</span>
         </div>
       </div>
       <WindowCell w={usage?.fiveHour} now={now} label="5h" />
@@ -249,7 +249,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
         <WindowCell w={usage?.sevenDay} now={now} label="7d" />
         {usage?.scoped?.map((s) => (
           <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
-            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} />
+            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
           </div>
         ))}
       </div>

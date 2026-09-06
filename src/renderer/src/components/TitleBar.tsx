@@ -13,7 +13,7 @@ export function TitleBar({ onPalette }: { onPalette: () => void }): React.JSX.El
     <header className={cx('drag flex h-[38px] shrink-0 items-center gap-3 border-b border-border bg-surface/70 pr-[140px]', mac ? 'pl-[76px]' : 'pl-3')} data-testid="titlebar">
       <div className="flex items-center gap-2 text-[12.5px] font-semibold tracking-tight text-fg">
         <span className="inline-block h-[14px] w-[14px] rounded-[4px] bg-accent" />
-        cswap
+        Claude Swap
       </div>
       <div className="flex-1" />
       <button

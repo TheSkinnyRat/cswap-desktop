@@ -75,12 +75,13 @@ export function displayName(a: Account): string {
   return a.alias || a.email
 }
 
-export function orgTag(a: Account): string {
+export function orgTag(a: Account, mask = false): string {
   if (!a.isOrganization) return 'personal'
   const name = a.organizationName || ''
   // Anthropic names a personal workspace "<email>'s Organization" — that is not a team.
   if (!name || /'s Organization$/.test(name)) return 'personal'
-  return name
+  // An organisation name identifies the company as plainly as the address does.
+  return mask ? `${name.slice(0, 3)}${'•'.repeat(Math.max(3, Math.min(8, name.length - 3)))}` : name
 }
 
 // Which window binds (highest utilization) — same idea cswap uses for "binding".

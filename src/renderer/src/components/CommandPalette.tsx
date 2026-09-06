@@ -32,6 +32,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
   }, [open])
   useEffect(() => setI(0), [q])
+  // Escape lived on the input's keydown, so it did nothing once focus moved elsewhere.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
 
   const run = async (idx: number): Promise<void> => {
     const r = rows[idx]

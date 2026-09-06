@@ -1,5 +1,5 @@
 appId: id.my.reinahatsuki.cswap-desktop
-productName: cswap
+productName: Claude Swap
 copyright: Copyright © 2026 Purwa Sabrang Ramadhan
 directories:
   buildResources: resources
@@ -9,10 +9,10 @@ files:
   - package.json
   - '!**/*.map'
 extraResources:
-  - from: resources/tray.png
-    to: tray.png
-  - from: resources/trayTemplate.png
-    to: trayTemplate.png
+  - from: resources/
+    to: .
+    filter:
+      - 'tray*.png'
 asar: true
 npmRebuild: false
 publish:
@@ -26,15 +26,15 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-  artifactName: ${productName}-desktop-${version}-win-${arch}.${ext}
+  artifactName: claude-swap-desktop-${version}-win-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  shortcutName: cswap
-  artifactName: ${productName}-desktop-${version}-win-${arch}-setup.${ext}
+  shortcutName: Claude Swap
+  artifactName: claude-swap-desktop-${version}-win-${arch}-setup.${ext}
 portable:
-  artifactName: ${productName}-desktop-${version}-win-${arch}-portable.${ext}
+  artifactName: claude-swap-desktop-${version}-win-${arch}-portable.${ext}
 linux:
   icon: resources/icon.png
   category: Utility
@@ -45,12 +45,12 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  artifactName: ${productName}-desktop-${version}-linux-${arch}.${ext}
+  artifactName: claude-swap-desktop-${version}-linux-${arch}.${ext}
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
   target:
     - target: dmg
       arch: [x64, arm64]
-  artifactName: ${productName}-desktop-${version}-mac-${arch}.${ext}
+  artifactName: claude-swap-desktop-${version}-mac-${arch}.${ext}
   identity: null

@@ -1,4 +1,4 @@
-# cswap desktop
+# Claude Swap
 
 A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap`) — manage and switch your Claude Code accounts without the terminal. Windows first; Linux and macOS builds come out of the same CI.
 
@@ -70,7 +70,9 @@ Useful environment variables while developing or testing:
 
 Keyboard: <kbd>Ctrl</kbd>+<kbd>K</kbd> switch account · <kbd>Ctrl</kbd>+<kbd>R</kbd> refresh usage · <kbd>Ctrl</kbd>+<kbd>,</kbd> settings.
 
-Releases: tag `vX.Y.Z` and push the tag — the Release workflow builds Windows, Linux and macOS packages and attaches them to a GitHub release.
+Releases: tag `vX.Y.Z` and push the tag — the Release workflow builds Windows, Linux and macOS packages and attaches them to a GitHub release (as a draft; publish it to make the updater see it).
+
+README images are generated, not hand-taken: `DOCS=1 npx playwright test test/e2e/docs.spec.ts` renders them against a fake cswap copied to a neutral path, so no one's directory layout ends up in the repository.
 
 ## License
 

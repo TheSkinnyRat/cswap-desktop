@@ -11,12 +11,15 @@ function label(a: Account): string {
 }
 
 export function createTray(core: AppCore, getWindow: () => BrowserWindow | null, show: () => void, quit: () => void): Tray | null {
-  let icon = nativeImage.createFromPath(join(__dirname, '../../resources/tray.png'))
-  if (icon.isEmpty()) icon = nativeImage.createFromPath(join(process.resourcesPath ?? '', 'tray.png'))
+  // macOS wants a template (black on transparent, tinted by the OS); Windows and Linux
+  // get the white glyph with a dark outline, which survives a light *and* a dark tray.
+  const file = process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png'
+  let icon = nativeImage.createFromPath(join(__dirname, '../../resources', file))
+  if (icon.isEmpty()) icon = nativeImage.createFromPath(join(process.resourcesPath ?? '', file))
   if (icon.isEmpty()) return null
   if (process.platform === 'darwin') icon.setTemplateImage(true)
-  const tray = new Tray(icon.resize({ width: 16, height: 16 }))
-  tray.setToolTip('cswap')
+  const tray = new Tray(icon)
+  tray.setToolTip('Claude Swap')
 
   const rebuild = (): void => {
     const state = core.getAccounts()
@@ -25,12 +28,12 @@ export function createTray(core: AppCore, getWindow: () => BrowserWindow | null,
     const auto = core.auto.getStatus()
     tray.setToolTip(
       active
-        ? `cswap — Account-${active.number} ${active.alias || active.email}` +
+        ? `Claude Swap — Account-${active.number} ${active.alias || active.email}` +
             (active.usage?.fiveHour ? `\n5h ${Math.round(active.usage.fiveHour.pct)}% · 7d ${Math.round(active.usage.sevenDay?.pct ?? 0)}%` : '')
-        : 'cswap — no active account'
+        : 'Claude Swap — no active account'
     )
     const menu = Menu.buildFromTemplate([
-      { label: 'Open cswap desktop', click: show },
+      { label: 'Open Claude Swap', click: show },
       { type: 'separator' },
       ...accounts.map((a) => ({
         label: label(a),

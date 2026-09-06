@@ -217,7 +217,7 @@ export function SettingsPage(): React.JSX.Element {
         <Card title="About">
           <div className="space-y-2 px-4 py-3 text-[12.5px] text-fg-2">
             <div>
-              <span className="font-medium text-fg">cswap desktop</span> {info?.version}
+              <span className="font-medium text-fg">Claude Swap</span> {info?.version}
               {info?.electron && <span className="text-fg-3"> · Electron {info.electron}</span>}
             </div>
             <p>A desktop front-end for claude-swap. It drives the CLI you already have installed; nothing here talks to Anthropic directly.</p>
@@ -285,7 +285,7 @@ export function SettingsPage(): React.JSX.Element {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal('https://github.com/TheSkinnyRat/cswap-desktop')}>
-                cswap-desktop on GitHub
+                Claude Swap on GitHub
               </Button>
               <Button size="sm" variant="ghost" icon={<ExternalLink size={13} />} onClick={() => void api.openExternal('https://github.com/realiti4/claude-swap')}>
                 claude-swap (upstream)

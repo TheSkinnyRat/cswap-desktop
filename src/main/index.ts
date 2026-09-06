@@ -7,6 +7,9 @@ import { IPC } from '@shared/types'
 
 // Tests point these at a scratch directory + a fake cswap.
 if (process.env.CSWAP_DESKTOP_USERDATA) app.setPath('userData', process.env.CSWAP_DESKTOP_USERDATA)
+// Pin the settings folder to the package name: renaming the product (Electron derives
+// the app name from productName) would otherwise silently orphan everyone's settings.
+else app.setPath('userData', join(app.getPath('appData'), 'cswap-desktop'))
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -23,7 +26,7 @@ function createWindow(): BrowserWindow {
     minWidth: 760,
     minHeight: 520,
     show: false,
-    title: 'cswap',
+    title: 'Claude Swap',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#151517' : '#f4f4f6',
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
