@@ -8,6 +8,24 @@ export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', 
 export const FAKE = process.platform === 'win32' ? join(ROOT, 'test', 'fake-cswap', 'fake-cswap.cmd') : join(ROOT, 'test', 'fake-cswap', 'fake-cswap.mjs')
 export const SHOTS = join(ROOT, 'test-results', 'shots')
 
+// Mirrors the fake CLI's own seed; a test that needs one field different can spread it.
+export const FAKE_SEED = {
+  version: '0.25.0',
+  activeAccountNumber: 1,
+  accounts: {
+    1: { email: 'you@example.com', organizationName: "you@example.com's Organization", organizationUuid: 'org-1111', alias: 'main', usage: { five_hour: 45, seven_day: 12, scoped: [{ name: 'Fable', pct: 17 }] } },
+    2: { email: 'work@company.com', organizationName: 'Company Inc', organizationUuid: 'org-2222', usage: { five_hour: 100, seven_day: 61, scoped: [{ name: 'Fable', pct: 100 }] }, resetsIn5h: 1800 },
+    3: { email: 'spare@example.com', organizationName: '', organizationUuid: '', disabled: true, usage: { five_hour: 3, seven_day: 40 } },
+    4: { email: 'api-key-4@token.local', organizationName: '', organizationUuid: '', usageStatus: 'api_key' }
+  },
+  sequence: [1, 2, 3, 4],
+  mappings: { '/home/you/work/client-app': { email: 'work@company.com', organizationUuid: 'org-2222' } },
+  settings: {},
+  unclaimed: {},
+  liveIdentity: 'you@example.com',
+  log: [] as string[][]
+}
+
 export interface FakeState {
   activeAccountNumber: number
   accounts: Record<string, Record<string, unknown>>
@@ -48,6 +66,7 @@ export async function launch(opts: { seedState?: object; settings?: object; env?
     CLAUDE_CONFIG_DIR: claudeHome,
     FAKE_CSWAP_STATE: statePath,
     ELECTRON_ENABLE_LOGGING: '0',
+    CSWAP_DESKTOP_TEST_NO_SPAWN: '1', // a test must never open a terminal on the machine running it
     ...opts.env
   }
   if (opts.bin === '') delete env.CSWAP_DESKTOP_BIN

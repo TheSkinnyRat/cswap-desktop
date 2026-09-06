@@ -146,7 +146,7 @@ export function createMockApi(): CswapApi {
     purgeUnclaimed: async () => okOut(),
     upgradeCswap: async () => okOut('claude-swap is already at the latest version'),
     tokenStatus: async () => okOut('Account-1: you@example.com\n  token: valid (expires in 6h) source=keychain\nAccount-2: work@company.com\n  token: expired'),
-    launchSession: async (t) => ({ ok: true, value: { command: `cswap run ${t}` } }),
+    launchSession: async (t, cwd) => ({ ok: true, value: { command: `cswap run ${t}`, cwd: cwd ?? '/home/you' } }),
     updaterState: async () => ({ status: 'disabled', current: '0.0.0-browser' }),
     updaterCheck: async () => ({ status: 'disabled', current: '0.0.0-browser' }),
     updaterInstall: async () => {},

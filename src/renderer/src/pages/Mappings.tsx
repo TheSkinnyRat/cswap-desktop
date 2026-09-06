@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FolderOpen, FolderTree, Plus, Trash2 } from 'lucide-react'
+import { FolderOpen, FolderTree, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import type { Mapping } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
@@ -24,6 +24,13 @@ export function MappingsPage(): React.JSX.Element {
   }
   useEffect(() => void load(), [accounts.fetchedAt])
 
+  const open = async (m: Mapping): Promise<void> => {
+    if (!m.account) return notify('error', 'No account for this directory', `${m.email} is no longer managed by cswap.`)
+    const r = await api.launchSession(String(m.account.number), m.path)
+    if (r.ok) notify('ok', `Opened ${r.value.command}`, r.value.cwd)
+    else notify('error', 'Could not open a terminal', r.error.message)
+  }
+
   const remove = async (m: Mapping): Promise<void> => {
     const r = await api.unmapDirectory(m.path)
     if (r.ok) notify('ok', `Unmapped ${m.path}`)
@@ -37,7 +44,7 @@ export function MappingsPage(): React.JSX.Element {
         title="Directory mappings"
         subtitle={
           <>
-            <span className="mono">cswap run</span> with no account launches the account mapped to the current directory — session mode, this terminal only.
+            <span className="mono">cswap run</span> with no account launches the account mapped to the current directory — session mode, this terminal only. Open one straight from a row.
           </>
         }
         actions={
@@ -65,6 +72,17 @@ export function MappingsPage(): React.JSX.Element {
                     {!m.account && <Chip tone="warn">account removed</Chip>}
                   </div>
                 </div>
+                <Button
+                  size="sm"
+                  variant="default"
+                  icon={<TerminalSquare size={13} />}
+                  disabled={!m.account}
+                  title={m.account ? `cswap run ${m.account.number} in ${m.path}` : 'The mapped account is no longer managed'}
+                  onClick={() => void open(m)}
+                  data-testid="map-run"
+                >
+                  Open terminal
+                </Button>
                 <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} onClick={() => void remove(m)} aria-label={`Unmap ${m.path}`} data-testid="unmap">
                   Unmap
                 </Button>

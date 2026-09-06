@@ -100,7 +100,7 @@ export function registerIpc(core: AppCore, getWindow: () => BrowserWindow | null
   })
 
   ipcMain.handle(IPC.tokenStatus, () => d.tokenStatus())
-  ipcMain.handle(IPC.launchSession, (_e, t: string) => launchSession(d.getBinary(), t))
+  ipcMain.handle(IPC.launchSession, (_e, t: string, cwd?: string) => launchSession(d.getBinary(), t, cwd))
   ipcMain.handle(IPC.checkForUpdate, () => checkForUpdate(appInfo().version))
   ipcMain.handle(IPC.updaterState, () => core.updater.getState())
   ipcMain.handle(IPC.updaterCheck, () => core.updater.check())

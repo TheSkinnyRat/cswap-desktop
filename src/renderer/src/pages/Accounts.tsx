@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
-import { ArrowRightLeft, ChevronDown, Download, Ellipsis, Eye, EyeOff, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
-import type { Account, PlanInfo, UsageWindow } from '@shared/types'
+import { AlignLeft, ArrowRightLeft, ChevronDown, CircleDashed, Download, Ellipsis, Eye, EyeOff, FolderOpen, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
+import type { Account, Mapping, PlanInfo, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
-import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Switch, cx } from '../components/ui'
+import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Select, Switch, cx } from '../components/ui'
+import { UsageRing } from '../components/UsageRing'
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
-type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
+type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'run'; a: Account } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
 export function AccountsPage(): React.JSX.Element {
   const { accounts, now, settings, updateSettings } = useStore()
   const { notify } = useToast()
   const [dlg, setDlg] = useState<DialogKind>(null)
   const mask = settings.maskEmails
+  const rings = settings.usageView === 'rings'
   const [busy, setBusy] = useState<string | null>(null)
   const list = accounts.payload?.accounts ?? []
   const active = list.find((a) => a.active)
@@ -59,6 +61,16 @@ export function AccountsPage(): React.JSX.Element {
         }
         actions={
           <>
+            <Button
+              variant="ghost"
+              className="!px-2"
+              aria-label={rings ? 'Show usage as bars' : 'Show usage as rings'}
+              aria-pressed={rings}
+              title={rings ? 'Show usage as bars' : 'Show usage as rings'}
+              data-testid="view-toggle"
+              icon={rings ? <AlignLeft size={15} /> : <CircleDashed size={15} />}
+              onClick={() => void updateSettings({ usageView: rings ? 'bars' : 'rings' })}
+            />
             <Button
               variant="ghost"
               className="!px-2"
@@ -154,7 +166,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} mask={mask} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} onLaunch={() => void act(`run-${a.number}`, () => api.launchSession(String(a.number)), (v) => `Opened a terminal running ${(v as { command: string }).command}`)} />
+              <AccountRow key={a.number} a={a} now={now} mask={mask} rings={rings} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
               ))}
             </div>
           </div>
@@ -177,13 +189,23 @@ export function AccountsPage(): React.JSX.Element {
       {dlg?.kind === 'export' && <ExportDialog a={dlg.a} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'import' && <ImportDialog onClose={() => setDlg(null)} />}
       {dlg?.kind === 'diag' && <DiagDialog onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'run' && <RunDialog a={dlg.a} onClose={() => setDlg(null)} />}
     </div>
   )
 }
 
-function WindowCell({ w, now, label, name, showPace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showPace?: boolean }): React.JSX.Element {
+function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showPace?: boolean; ring?: boolean }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
+  if (ring) {
+    const nice = name ?? (label === '5h' ? '5h' : label === '7d' ? '7d' : label)
+    const detail = [w.resetsAt ? `resets ${clockOf(w.resetsAt)} · ${resetText(w.resetsAt, now)}` : null, showPace && w.aheadOfPace ? `ahead of pace — even use would be ~${pct(w.expectedPct)} by now` : null].filter(Boolean).join('\n')
+    return (
+      <div className="min-w-0" data-testid={`window-${label}`}>
+        <UsageRing pct={w.pct} label={nice} tooltip={`${nice} · ${pct(w.pct)}${detail ? `\n${detail}` : ''}`} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} />
+      </div>
+    )
+  }
   return (
     <div className="min-w-0" data-testid={`window-${label}`}>
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
@@ -209,7 +231,7 @@ function WindowCell({ w, now, label, name, showPace = true }: { w: UsageWindow |
   )
 }
 
-function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisabled, onLaunch }: { a: Account; now: number; mask: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void; onLaunch: () => void }): React.JSX.Element {
+function AccountRow({ a, now, mask, rings, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; mask: boolean; rings: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
@@ -228,7 +250,6 @@ function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisa
           <span className="truncate text-[13px] font-medium text-fg" title={mask ? undefined : a.email} data-testid={a.alias ? `alias-${a.number}` : undefined}>
             {a.alias || maskEmail(a.email, mask)}
           </span>
-          {a.active && <Chip tone="accent">active</Chip>}
           {plan && (
             <Chip
               tone="muted"
@@ -237,6 +258,7 @@ function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisa
               {plan.label}
             </Chip>
           )}
+          {a.active && <Chip tone="accent">active</Chip>}
           {a.disabled && (
             <Chip tone="muted" title="Held out of rotation">
               disabled
@@ -253,12 +275,12 @@ function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisa
           <span className="truncate">{orgTag(a, mask)}</span>
         </div>
       </div>
-      <WindowCell w={usage?.fiveHour} now={now} label="5h" />
+      <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} />
       <div className="min-w-0">
-        <WindowCell w={usage?.sevenDay} now={now} label="7d" />
+        <WindowCell w={usage?.sevenDay} now={now} label="7d" ring={rings} />
         {usage?.scoped?.map((s) => (
           <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
-            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
+            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring={rings} />
           </div>
         ))}
       </div>
@@ -285,7 +307,7 @@ function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisa
             { label: 'Move to slot', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
             { label: a.disabled ? 'Enable (back in rotation)' : 'Disable (hold out of rotation)', icon: a.disabled ? <Eye size={14} /> : <EyeOff size={14} />, onSelect: onToggleDisabled },
             { separator: true, label: '' },
-            { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: onLaunch },
+            { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: () => onAction({ kind: 'run', a }) },
             { label: 'Export this account', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
             { label: 'Re-add from the current login', hint: `slot ${a.number}`, icon: <Pencil size={14} />, onSelect: () => onAction({ kind: 'add' }) },
             { separator: true, label: '' },
@@ -671,6 +693,95 @@ function DiagDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
       {err && <div className="text-[12px] text-danger">{err}</div>}
       {!text && !err && <div className="text-[12px] text-fg-3">Running…</div>}
       {text && <pre className="selectable mono max-h-[46vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-bg px-3 py-2 text-fg-2" data-testid="diag-output">{text.trim()}</pre>}
+    </Dialog>
+  )
+}
+
+function RunDialog({ a, onClose }: { a: Account; onClose: () => void }): React.JSX.Element {
+  const { notify } = useToast()
+  const [dir, setDir] = useState('')
+  const [mappings, setMappings] = useState<Mapping[]>([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void api.listMappings().then((r) => {
+      if (!r.ok) return
+      setMappings(r.value)
+      // A directory already mapped to this account is the one you almost always mean.
+      const mine = r.value.find((m) => m.account?.number === a.number)
+      if (mine) setDir(mine.path)
+    })
+  }, [a.number])
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      width={520}
+      title={`Open a terminal as Account-${a.number}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={busy}
+            icon={<TerminalSquare size={14} />}
+            data-testid="run-submit"
+            onClick={async () => {
+              setBusy(true)
+              const r = await api.launchSession(String(a.number), dir.trim() || undefined)
+              setBusy(false)
+              if (!r.ok) return notify('error', 'Could not open a terminal', r.error.message)
+              notify('ok', `Opened ${r.value.command}`, r.value.cwd)
+              onClose()
+            }}
+          >
+            Open terminal
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-4 text-[12.5px] text-fg-2">
+        Session mode: Claude Code runs as <span className="font-medium text-fg">{a.alias || a.email}</span> in that terminal only. Your default login and every other terminal are untouched.
+      </p>
+      <Field label="Start in" hint="Leave empty for your home directory.">
+        <div className="flex gap-2">
+          <Input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="~" className="mono" data-testid="run-dir" />
+          <Button
+            onClick={async () => {
+              const p = await api.pickDirectory()
+              if (p) setDir(p)
+            }}
+            icon={<FolderOpen size={14} />}
+          >
+            Browse
+          </Button>
+        </div>
+      </Field>
+      {mappings.length > 0 && (
+        <div className="mt-3">
+          <Field label="Or pick a mapped directory" hint="Directories you have mapped with cswap map.">
+            <Select
+              value={mappings.some((m) => m.path === dir) ? dir : ''}
+              onChange={(e) => setDir(e.target.value)}
+              aria-label="Mapped directory"
+              data-testid="run-mapped"
+            >
+              <option value="">—</option>
+              {mappings.map((m) => (
+                <option key={m.path} value={m.path}>
+                  {m.path}
+                  {m.account ? ` — ${m.account.alias || m.account.email}` : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      )}
+      <div className="mono mt-4 rounded-md border border-border bg-bg px-3 py-2 text-[12px] text-fg-2">
+        <span className="text-fg-3">{dir.trim() || '~'}$ </span>
+        cswap run {a.number}
+      </div>
     </Dialog>
   )
 }

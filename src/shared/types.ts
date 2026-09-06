@@ -205,6 +205,7 @@ export interface AppSettings {
   autoUpdate: boolean
   maskEmails: boolean
   refreshOnFocus: boolean
+  usageView: 'bars' | 'rings'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -219,7 +220,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoDryRun: false,
   autoUpdate: true,
   maskEmails: false,
-  refreshOnFocus: true
+  refreshOnFocus: true,
+  usageView: 'bars'
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: CswapError }
@@ -301,7 +303,7 @@ export interface CswapApi {
   purgeUnclaimed(id: string): Promise<Result<PlainOutput>>
   upgradeCswap(): Promise<Result<PlainOutput>>
   tokenStatus(): Promise<Result<PlainOutput>>
-  launchSession(target: string): Promise<Result<{ command: string }>>
+  launchSession(target: string, cwd?: string): Promise<Result<{ command: string; cwd: string }>>
   checkForUpdate(): Promise<UpdateInfo>
   updaterState(): Promise<UpdaterState>
   updaterCheck(): Promise<UpdaterState>

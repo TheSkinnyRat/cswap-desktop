@@ -6,10 +6,10 @@ A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap
 
 ## What it does
 
-- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, subscription (Pro / Max 5x / Max 20x) and status (token expired, API key, …). Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
+- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, subscription (Pro / Max 5x / Max 20x) and status (token expired, API key, …), as bars or as rings. Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
 - **Add / remove** — from the current Claude Code login, or from a setup-token / API key (handed to cswap over stdin, never on the command line). Aliases, slot moves and swaps, disable / enable (hold an account out of rotation).
 - **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches. **Check now** runs a single `cswap auto --once` tick.
-- **Session mode** — open a terminal running `cswap run <slot>` from an account's menu (that terminal only; the default login is untouched).
+- **Session mode** — open a terminal running `cswap run <slot>` from an account's menu or straight from a mapped directory, choosing where it starts (that terminal only; the default login is untouched).
 - **Token diagnostics** — `cswap list --token-status` in a dialog when a token misbehaves.
 - **Directory mappings** — see and edit the `cswap map` table for session mode (`cswap run`).
 - **Export / import** — `.cswap` backups, single account or all, `--full` and `--force` as switches.

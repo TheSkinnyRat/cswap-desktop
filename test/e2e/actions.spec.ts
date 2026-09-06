@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { launch, shot } from './helpers'
+import { FAKE_SEED, launch, shot } from './helpers'
 
 test.describe('accounts', () => {
   test('switch, rotate and the command palette change the active account through the CLI', async () => {
@@ -155,6 +156,46 @@ test.describe('extras', () => {
     await expect(page.getByRole('status')).toContainText('Nothing to do')
     await expect(page.getByTestId('auto-feed')).toContainText('below-threshold')
     expect(state().log).toContainEqual(['auto', '--once', '--json'])
+    await app.close()
+  })
+})
+
+test.describe('views and session mode', () => {
+  test('the usage view switches to rings and is remembered', async () => {
+    const { app, page, userData } = await launch()
+    await expect(page.getByTestId('usage-ring')).toHaveCount(0) // lucide icons draw circles too — count the rings, not every <circle>
+    await page.getByTestId('view-toggle').click()
+    await expect(page.getByTestId('account-row-1').getByTestId('usage-ring').first()).toBeVisible()
+    await expect(page.getByTestId('window-5h').first()).toContainText('5h 45%')
+    await shot(page, 'rings')
+    await app.close()
+    expect(JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).usageView).toBe('rings')
+    const l2 = await launch({ settings: JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')) })
+    await expect(l2.page.getByTestId('account-row-1').getByTestId('usage-ring').first()).toBeVisible()
+    await l2.app.close()
+  })
+
+  test('open terminal asks where to start and passes that directory', async () => {
+    const { app, page } = await launch()
+    await page.getByTestId('row-menu-2').click()
+    await page.getByRole('menuitem', { name: /Open terminal/ }).click()
+    // a directory already mapped to this account is filled in for you
+    await expect(page.getByTestId('run-dir')).toHaveValue('/home/you/work/client-app')
+    await page.getByTestId('run-dir').fill('/tmp')
+    await page.getByTestId('run-submit').click()
+    await expect(page.getByRole('status')).toContainText('cswap run 2')
+    await expect(page.getByRole('status')).toContainText('/tmp')
+    await app.close()
+  })
+
+  test('a mapping row opens a terminal in its own directory', async () => {
+    // a real directory: the app refuses to open a terminal somewhere that is not there
+    const mapped = mkdtempSync(join(tmpdir(), 'cswap-mapped-'))
+    const { app, page } = await launch({ seedState: { ...FAKE_SEED, mappings: { [mapped]: { email: 'work@company.com', organizationUuid: 'org-2222' } } } })
+    await page.getByTestId('nav-mappings').click()
+    await page.getByTestId('map-run').first().click()
+    await expect(page.getByRole('status')).toContainText('cswap run 2')
+    await expect(page.getByRole('status')).toContainText(mapped)
     await app.close()
   })
 })
