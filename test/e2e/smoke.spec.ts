@@ -21,6 +21,7 @@ test('renders every page in light and dark and lists the fake accounts', async (
   await expect(page.getByTestId('account-row-2')).not.toContainText('Max 5x')
   // per-model window sits under the 7-day column
   await expect(page.getByTestId('account-row-1').getByTestId('scoped-Fable')).toContainText('Fable 17%')
+  await expect(page.getByTestId('account-row-1')).not.toContainText('left') // a duration, not a sentence
   for (const p of ['auto', 'mappings', 'log', 'settings'] as const) {
     await page.getByTestId(`nav-${p}`).click()
     await expect(page.getByTestId(`page-${p}`)).toBeVisible()

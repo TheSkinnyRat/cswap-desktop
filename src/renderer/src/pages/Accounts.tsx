@@ -223,8 +223,8 @@ function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w:
     )
   }
   return (
-    <Tooltip label={tip} focusable={false} className="min-w-0 flex-col" >
-      <div className="min-w-0 flex-1" data-testid={`window-${label}`}>
+    <Tooltip label={tip} focusable={false} className="w-full min-w-0 flex-col">
+      <div className="w-full min-w-0" data-testid={`window-${label}`}>
         <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
           <span className="truncate">
             {name && <span className="text-fg-3">{name} </span>}

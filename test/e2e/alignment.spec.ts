@@ -26,6 +26,19 @@ test('columns line up at every width, whatever the status labels say', async () 
   }
   await page.getByTestId('view-toggle').click()
   await page.setViewportSize({ width: 1327, height: 620 })
+
+  // Every bar is a full-width track. The tooltip wrapper is inline-flex, and inside the
+  // 7-day cell — which is a block, not the grid item itself — it shrank to its content,
+  // so that bar came out shorter than the 5-hour one.
+  const track = async (cell: string): Promise<number> => {
+    // row 3 is the one carrying a per-model window in this seed
+    const box = await page.getByTestId('account-row-3').getByTestId(cell).locator('[role="progressbar"]').first().boundingBox()
+    return box!.width
+  }
+  const [five, seven, fable] = [await track('window-5h'), await track('window-7d'), await track('window-model-Fable')]
+  expect(Math.abs(five - seven), `5h ${five}px vs 7d ${seven}px`).toBeLessThan(2)
+  expect(Math.abs(seven - fable), `7d ${seven}px vs Fable ${fable}px`).toBeLessThan(2)
+
   await shot(page, 'align-wide')
   // a narrow window scrolls the table instead of squeezing it
   await page.setViewportSize({ width: 760, height: 620 })

@@ -30,7 +30,9 @@ export function resetText(iso: string | undefined, now = Date.now()): string {
   const t = new Date(iso).getTime()
   if (Number.isNaN(t)) return ''
   if (t <= now) return 'reset passed'
-  return `${relTime(iso, now).replace(/^in /, '')} left`
+  // Just the duration: the column already says it is a window, and the tooltip spells
+  // out "resets <clock>" for anyone who wants the word.
+  return relTime(iso, now).replace(/^in /, '')
 }
 
 export function clockOf(iso: string | undefined): string {
