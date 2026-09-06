@@ -42,6 +42,17 @@ describe('labelFor', () => {
     expect(labelFor('default_claude_ai', undefined)).toBeNull()
     expect(labelFor(undefined, undefined)).toBeNull()
   })
+  it('shows both when the seat runs at a different tier than the subscription names', () => {
+    expect(labelFor('default_claude_max_20x', 'team')).toBe('Team · Max 20x')
+    expect(labelFor('default_claude_max_5x', 'team')).toBe('Team · Max 5x')
+    expect(labelFor('default_claude_pro', 'team')).toBe('Team · Pro')
+    expect(labelFor('default_claude_max_20x', 'enterprise')).toBe('Enterprise · Max 20x')
+    // nothing to add: the tier names no plan, or names the same one
+    expect(labelFor('default_claude_ai', 'team')).toBe('Team')
+    expect(labelFor('default_claude_pro', 'pro')).toBe('Pro')
+    expect(labelFor('default_claude_team', 'team')).toBe('Team')
+  })
+
   it('titles an unfamiliar subscription rather than dropping it', () => {
     expect(labelFor(undefined, 'startup')).toBe('Startup')
     expect(labelFor(undefined, 'MAX')).toBe('Max')

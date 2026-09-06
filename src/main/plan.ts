@@ -43,25 +43,38 @@ function titled(v: string): string {
  * The plan as a badge.
  *
  * `subscriptionType` is the field that answers the question — free / pro / max / team.
- * `rateLimitTier` is an internal string, and the multiplier is the only part of it worth
- * reading: taking the whole tier as the label was generalised from a single sample
- * (`default_claude_max_5x`, my own account) and turned a Pro account's badge into "Ai".
- * So the tier is consulted only to tell one Max apart from another.
+ * `rateLimitTier` is an internal string, and reading the whole of it as the label was
+ * generalised from a single sample (`default_claude_max_5x`, my own account), which
+ * badged a Pro account "Ai". So the tier is only ever read for what it can be trusted to
+ * say: which plan it names, and the multiplier.
+ *
+ * A seat can be both — a Team subscription whose seat runs at Max 20x — so when the tier
+ * names a different plan than the subscription does, both are shown. No Team account has
+ * been seen from here, so that half is inferred from the shape of the other tiers; the
+ * badge degrades to the subscription alone rather than guessing.
  */
+function tierPlan(tier: string | undefined): string | null {
+  if (!tier) return null
+  const plan = tier.match(/(free|pro|max|team|enterprise)/i)?.[1]?.toLowerCase()
+  if (!plan) return null
+  const base = SUBSCRIPTION_LABELS[plan]
+  if (plan !== 'max') return base
+  const multiplier = tier.match(/(\d+)\s*x/i)
+  return multiplier ? `Max ${multiplier[1]}x` : base
+}
+
 export function labelFor(tier: string | undefined, subscription: string | undefined): string | null {
   const sub = subscription?.trim().toLowerCase()
-  if (sub) {
-    const base = SUBSCRIPTION_LABELS[sub] ?? titled(sub)
-    if (sub !== 'max') return base
+  const fromTier = tierPlan(tier)
+  if (!sub) return fromTier
+  const base = SUBSCRIPTION_LABELS[sub] ?? titled(sub)
+  if (sub === 'max') {
     const multiplier = tier?.match(/(\d+)\s*x/i)
     return multiplier ? `Max ${multiplier[1]}x` : base
   }
-  // No subscription field at all: say something only if the tier names a plan we know.
-  const known = tier?.match(/(free|pro|max|team|enterprise)/i)?.[1]?.toLowerCase()
-  if (!known) return null
-  if (known !== 'max') return SUBSCRIPTION_LABELS[known]
-  const multiplier = tier?.match(/(\d+)\s*x/i)
-  return multiplier ? `Max ${multiplier[1]}x` : 'Max'
+  // The tier says something the subscription does not — a Team seat running at Max 20x.
+  if (fromTier && fromTier !== base && !fromTier.startsWith(base)) return `${base} · ${fromTier}`
+  return base
 }
 
 export function readActivePlan(): { tier?: string; subscription?: string; label: string } | null {
