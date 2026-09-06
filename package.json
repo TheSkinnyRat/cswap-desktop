@@ -1,6 +1,6 @@
 {
   "name": "cswap-desktop",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Desktop app for claude-swap (cswap): manage and switch Claude Code accounts without the terminal.",
   "main": "./out/main/index.js",
   "author": "Purwa Sabrang Ramadhan",

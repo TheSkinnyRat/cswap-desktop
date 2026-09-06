@@ -23,7 +23,7 @@ export function Sidebar(): React.JSX.Element {
   return (
     <nav className={cx('flex shrink-0 flex-col gap-[2px] border-r border-border bg-surface/40 py-3 transition-[width] duration-150', narrow ? 'w-[56px] items-center px-2' : 'w-[204px] px-3')} aria-label="Main" data-compact={narrow || undefined}>
       {items.map((it) => (
-        <Tooltip key={it.id} label={narrow ? it.label : ''} focusable={false} className={narrow ? '' : 'w-full'}>
+        <Tooltip key={it.id} label={narrow ? it.label : ''} side="right" focusable={false} className={narrow ? '' : 'w-full'}>
           <button
             onClick={() => setPage(it.id)}
             aria-current={page === it.id ? 'page' : undefined}
@@ -49,7 +49,7 @@ export function Sidebar(): React.JSX.Element {
       ))}
       <div className="flex-1" />
       {!forced && (
-        <Tooltip label={narrow ? 'Expand the sidebar' : 'Collapse the sidebar'} focusable={false} className={narrow ? 'mb-1' : 'mb-1 w-full'}>
+        <Tooltip label={narrow ? 'Expand the sidebar' : 'Collapse the sidebar'} side="right" focusable={false} className={narrow ? 'mb-1' : 'mb-1 w-full'}>
           <button
             onClick={() => void updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed })}
             aria-label={narrow ? 'Expand the sidebar' : 'Collapse the sidebar'}
@@ -65,7 +65,7 @@ export function Sidebar(): React.JSX.Element {
           </button>
         </Tooltip>
       )}
-      <Tooltip label={narrow ? (binary?.version ? `cswap ${binary.version}` : 'cswap not found') : ''} focusable={false}>
+      <Tooltip label={narrow ? (binary?.version ? `cswap ${binary.version}` : 'cswap not found') : ''} side="right" focusable={false}>
         <div className={cx('pb-1 text-[11px] text-fg-3', narrow ? 'px-0' : 'px-2.5')} data-testid="sidebar-status">
           {binary === null ? (
             narrow ? <span className="block h-[6px] w-[6px] rounded-full bg-border-strong" /> : 'detecting cswap…'

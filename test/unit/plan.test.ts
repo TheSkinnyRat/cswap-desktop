@@ -19,20 +19,32 @@ function withCredentials(oauth: unknown): string {
 }
 
 describe('labelFor', () => {
-  it('names the known tiers', () => {
+  it('names the plan from the subscription, not from the tier string', () => {
+    // the tier for a Pro account is not "default_claude_pro"; reading it as the label
+    // is what put "Ai" on Purwa's badge
+    expect(labelFor('default_claude_ai', 'pro')).toBe('Pro')
+    expect(labelFor('some_internal_name', 'pro')).toBe('Pro')
+    expect(labelFor(undefined, 'pro')).toBe('Pro')
+    expect(labelFor('anything', 'free')).toBe('Free')
+    expect(labelFor('anything', 'team')).toBe('Team')
+    expect(labelFor('anything', 'enterprise')).toBe('Enterprise')
+  })
+  it('reads the multiplier out of the tier, but only for Max', () => {
     expect(labelFor('default_claude_max_5x', 'max')).toBe('Max 5x')
     expect(labelFor('default_claude_max_20x', 'max')).toBe('Max 20x')
-    expect(labelFor('default_claude_pro', 'pro')).toBe('Pro')
-    expect(labelFor('default_claude_free', 'free')).toBe('Free')
+    expect(labelFor('default_claude_max_50x', 'max')).toBe('Max 50x') // a tier that does not exist yet
+    expect(labelFor('something_else', 'max')).toBe('Max') // unknown shape: still honest
+    expect(labelFor('default_claude_ai_5x', 'pro')).toBe('Pro') // a multiplier on a Pro tier is not a Max
   })
-  it('makes an unknown tier readable instead of dropping it', () => {
-    expect(labelFor('default_claude_max_50x', 'max')).toBe('Max 50x')
-    expect(labelFor('some_new_tier', undefined)).toBe('Some New Tier')
-  })
-  it('falls back to the subscription, then to nothing', () => {
-    expect(labelFor(undefined, 'max')).toBe('Max')
-    expect(labelFor(undefined, 'startup')).toBe('Startup')
+  it('falls back to the tier only when it names a plan, and to nothing otherwise', () => {
+    expect(labelFor('default_claude_max_20x', undefined)).toBe('Max 20x')
+    expect(labelFor('default_claude_pro', undefined)).toBe('Pro')
+    expect(labelFor('default_claude_ai', undefined)).toBeNull()
     expect(labelFor(undefined, undefined)).toBeNull()
+  })
+  it('titles an unfamiliar subscription rather than dropping it', () => {
+    expect(labelFor(undefined, 'startup')).toBe('Startup')
+    expect(labelFor(undefined, 'MAX')).toBe('Max')
   })
 })
 

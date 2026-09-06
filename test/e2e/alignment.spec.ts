@@ -130,3 +130,22 @@ test('a narrow window changes the shape instead of scrolling sideways', async ()
   await app.close()
   expect(JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).sidebarCollapsed).toBe(true)
 })
+
+
+test('a collapsed sidebar explains itself beside the icon, not above it', async () => {
+  const { app, page } = await launch({ seedState: seed })
+  await page.setViewportSize({ width: 620, height: 720 })
+  await page.waitForSelector('[data-testid="accounts-table"]')
+  await page.waitForTimeout(300)
+  const nav = (await page.locator('nav[aria-label="Main"]').boundingBox())!
+  for (const item of ['nav-accounts', 'nav-settings']) {
+    await page.getByTestId(item).hover()
+    const tip = (await page.getByRole('tooltip').boundingBox())!
+    expect(tip.x, `${item}: beside the sidebar`).toBeGreaterThanOrEqual(nav.x + nav.width)
+    // the top item's card used to open upward and get cut off by the window
+    expect(tip.y, `${item}: inside the window`).toBeGreaterThanOrEqual(0)
+    expect(tip.y + tip.height).toBeLessThanOrEqual(720)
+  }
+  await shot(page, 'sidebar-tooltip')
+  await app.close()
+})
