@@ -179,6 +179,7 @@ export interface UpdaterState {
   error?: string
   checkedAt?: string
   releaseUrl?: string
+  logPath?: string
 }
 
 export interface CswapBinaryInfo {

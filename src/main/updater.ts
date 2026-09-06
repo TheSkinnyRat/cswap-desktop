@@ -1,5 +1,8 @@
 import { app } from 'electron'
 import { EventEmitter } from 'node:events'
+import { appendFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import pkg from '../../package.json'
 import type { UpdaterState } from '@shared/types'
 
@@ -31,12 +34,24 @@ export class Updater extends EventEmitter {
       this.set({ status: 'disabled' })
       return false
     }
-    const { autoUpdater } = await import('electron-updater')
+    // CJS require through asar is the well-trodden path; ESM import() of a dependency
+    // inside app.asar is not.
+    const { autoUpdater } = createRequire(import.meta.url)('electron-updater') as typeof import('electron-updater')
     this.auto = autoUpdater
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.allowPrerelease = false
-    autoUpdater.logger = null
+    // A plain text log in userData so an update that misbehaves can be read after the fact.
+    const logFile = join(app.getPath('userData'), 'updater.log')
+    const write = (level: string) => (msg: unknown) => {
+      try {
+        appendFileSync(logFile, `${new Date().toISOString()} [${level}] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}\n`)
+      } catch {
+        /* logging must never break the updater */
+      }
+    }
+    autoUpdater.logger = { info: write('info'), warn: write('warn'), error: write('error'), debug: write('debug') }
+    this.set({ logPath: logFile })
     // Builds are unsigned, so the NSIS signature check has nothing to compare against.
     ;(autoUpdater as unknown as { verifyUpdateCodeSignature: () => Promise<null> }).verifyUpdateCodeSignature = async () => null
     autoUpdater.on('checking-for-update', () => this.set({ status: 'checking', error: undefined }))
@@ -49,7 +64,13 @@ export class Updater extends EventEmitter {
   }
 
   async check(): Promise<UpdaterState> {
-    if (!(await this.init()) || !this.auto) return this.getState()
+    try {
+      if (!(await this.init()) || !this.auto) return this.getState()
+    } catch (e) {
+      // an init failure must surface in the UI, not vanish in a rejected promise
+      this.set({ status: 'error', error: `updater init failed: ${(e as Error).message}` })
+      return this.getState()
+    }
     if (this.state.status === 'downloading' || this.state.status === 'downloaded') return this.getState()
     try {
       await this.auto.checkForUpdates()
