@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlignLeft, ArrowRightLeft, ChevronDown, CircleDashed, Download, Ellipsis, Eye, EyeOff, FolderOpen, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
+import { AlignLeft, ArrowRightLeft, Gauge, GaugeCircle, ChevronDown, CircleDashed, Download, Ellipsis, Eye, EyeOff, FolderOpen, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { Account, Mapping, PlanInfo, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
@@ -21,6 +21,7 @@ export function AccountsPage(): React.JSX.Element {
   const [dlg, setDlg] = useState<DialogKind>(null)
   const mask = settings.maskEmails
   const rings = settings.usageView === 'rings'
+  const pace = settings.showPace
   // One template, shared by the header and every row: a per-row grid is how the columns
   // drifted apart before, and the ring view needs a wider 7-day column than the bars do.
   const cols = rings ? RING_COLS : BAR_COLS
@@ -77,6 +78,16 @@ export function AccountsPage(): React.JSX.Element {
               data-testid="view-toggle"
               icon={rings ? <AlignLeft size={15} /> : <CircleDashed size={15} />}
               onClick={() => void updateSettings({ usageView: rings ? 'bars' : 'rings' })}
+            />
+            <Button
+              variant="ghost"
+              className="!px-2"
+              aria-label={pace ? 'Hide the pace marker' : 'Show the pace marker'}
+              aria-pressed={pace}
+              title={pace ? 'Hide the pace marker' : 'Show where an evenly-spread week would be'}
+              data-testid="pace-toggle"
+              icon={pace ? <Gauge size={15} /> : <GaugeCircle size={15} />}
+              onClick={() => void updateSettings({ showPace: !pace })}
             />
             <Button
               variant="ghost"
@@ -173,7 +184,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} cols={cols} mask={mask} rings={rings} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
+              <AccountRow key={a.number} a={a} now={now} cols={cols} mask={mask} rings={rings} pace={pace} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
               ))}
             </div>
           </div>
@@ -209,7 +220,7 @@ function windowTooltip(w: UsageWindow, name: string, now: number): string {
   return lines.join('\n')
 }
 
-function WindowCell({ w, now, label, name, showChip = true, ring = false }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showChip?: boolean; ring?: boolean }): React.JSX.Element {
+function WindowCell({ w, now, label, name, showChip = true, ring = false, pace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showChip?: boolean; ring?: boolean; pace?: boolean }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
   // The header already says 5-hour and 7-day; only a per-model window needs naming.
@@ -218,7 +229,7 @@ function WindowCell({ w, now, label, name, showChip = true, ring = false }: { w:
   if (ring) {
     return (
       <div className="min-w-0" data-testid={`window-${label}`}>
-        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={w.expectedPct} />
+        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={pace ? w.expectedPct : undefined} />
       </div>
     )
   }
@@ -235,13 +246,13 @@ function WindowCell({ w, now, label, name, showChip = true, ring = false }: { w:
             {w.resetsAt && <span className="truncate tabular-nums">{resetText(w.resetsAt, now)}</span>}
           </span>
         </div>
-        <Bar pct={w.pct} tone={t} pace={w.expectedPct} />
+        <Bar pct={w.pct} tone={t} pace={pace ? w.expectedPct : undefined} />
       </div>
     </Tooltip>
   )
 }
 
-function AccountRow({ a, now, cols, mask, rings, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; mask: boolean; rings: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
+function AccountRow({ a, now, cols, mask, rings, pace, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; mask: boolean; rings: boolean; pace: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
@@ -285,25 +296,25 @@ function AccountRow({ a, now, cols, mask, rings, plan, busy, onSwitch, onAction,
           <span className="truncate">{orgTag(a, mask)}</span>
         </div>
       </div>
-      <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} />
+      <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} pace={pace} />
       {(() => {
         const windows = (
           <>
             {rings ? (
-              <WindowCell w={usage?.sevenDay} now={now} label="7d" ring />
+              <WindowCell w={usage?.sevenDay} now={now} label="7d" ring pace={pace} />
             ) : (
               // an equal flex child, or the full-width 7-day track pushes the model one
               // out of the cell entirely once they sit in a row
               <div className="min-w-0 flex-1">
-                <WindowCell w={usage?.sevenDay} now={now} label="7d" />
+                <WindowCell w={usage?.sevenDay} now={now} label="7d" pace={pace} />
               </div>
             )}
             {usage?.scoped?.map((s) =>
               rings ? (
-                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring />
+                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring pace={pace} />
               ) : (
                 <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
-                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} />
+                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} pace={pace} />
                 </div>
               )
             )}

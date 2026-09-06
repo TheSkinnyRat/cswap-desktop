@@ -210,6 +210,39 @@ test.describe('views and session mode', () => {
     await app.close()
   })
 
+  test('the ring notch points at the pace angle, not a quarter turn early', async () => {
+    const { app, page } = await launch()
+    await page.getByTestId('view-toggle').click()
+    const ring = page.getByTestId('account-row-1').getByTestId('window-7d').getByTestId('usage-ring')
+    await expect(ring).toBeVisible()
+    const angle = await ring.evaluate((svg) => {
+      const line = svg.querySelector('line') as SVGLineElement
+      const box = line.getBoundingClientRect()
+      const r = svg.getBoundingClientRect()
+      const cx = r.x + r.width / 2
+      const cy = r.y + r.height / 2
+      const dx = box.x + box.width / 2 - cx
+      const dy = box.y + box.height / 2 - cy
+      // clockwise from twelve o'clock, like the fill reads
+      return (((Math.atan2(dx, -dy) * 180) / Math.PI) + 360) % 360
+    })
+    // the fake reports expectedPct 50 → half a turn, pointing straight down
+    expect(angle, `notch at ${angle.toFixed(1)}° from twelve, expected 180°`).toBeGreaterThan(170)
+    expect(angle).toBeLessThan(190)
+    await app.close()
+  })
+
+  test('the pace marker can be switched off, and stays off', async () => {
+    const { app, page, userData } = await launch()
+    await expect(page.getByTestId('pace-mark').first()).toBeVisible()
+    await page.getByTestId('pace-toggle').click()
+    await expect(page.getByTestId('pace-mark')).toHaveCount(0)
+    await page.getByTestId('view-toggle').click()
+    await expect(page.getByTestId('account-row-1').getByTestId('usage-ring').first().locator('line')).toHaveCount(0)
+    await app.close()
+    expect(JSON.parse(readFileSync(join(userData, 'settings.json'), 'utf8')).showPace).toBe(false)
+  })
+
   test('open terminal asks where to start and passes that directory', async () => {
     const { app, page } = await launch()
     await page.getByTestId('row-menu-2').click()

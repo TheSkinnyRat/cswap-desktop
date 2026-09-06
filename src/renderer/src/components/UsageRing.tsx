@@ -31,7 +31,10 @@ export function UsageRing({ pct, label, tooltip, sub, pace }: { pct: number | un
             strokeWidth="2"
             strokeLinecap="round"
             className="stroke-fg-2"
-            transform={`rotate(${(mark / 100) * 360} ${SIZE / 2} ${SIZE / 2})`}
+            // +90: the arc starts at the local 3 o'clock (where a dasharray begins) while
+            // this line is drawn at the local 12, and the whole svg is turned -90 so the
+            // fill reads from the top. Without it every notch sat a quarter turn early.
+            transform={`rotate(${(mark / 100) * 360 + 90} ${SIZE / 2} ${SIZE / 2})`}
           />
         )}
         <circle
