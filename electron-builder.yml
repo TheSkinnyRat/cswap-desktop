@@ -26,15 +26,15 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-  artifactName: claude-swap-desktop-${version}-win-${arch}.${ext}
+  artifactName: claude-swap-desktop-win-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   shortcutName: Claude Swap
-  artifactName: claude-swap-desktop-${version}-win-${arch}-setup.${ext}
+  artifactName: claude-swap-desktop-win-${arch}-setup.${ext}
 portable:
-  artifactName: claude-swap-desktop-${version}-win-${arch}-portable.${ext}
+  artifactName: claude-swap-desktop-win-${arch}-portable.${ext}
 linux:
   icon: resources/icon.png
   category: Utility
@@ -45,12 +45,12 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  artifactName: claude-swap-desktop-${version}-linux-${arch}.${ext}
+  artifactName: claude-swap-desktop-linux-${arch}.${ext}
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
   target:
     - target: dmg
       arch: [x64, arm64]
-  artifactName: claude-swap-desktop-${version}-mac-${arch}.${ext}
+  artifactName: claude-swap-desktop-mac-${arch}.${ext}
   identity: null
