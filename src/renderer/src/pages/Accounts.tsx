@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { Bar, Button, Chip, Dialog, Empty, Field, Input, Menu, Switch, cx } from '../components/ui'
 import { PageHeader } from '../components/PageHeader'
-import { ageSeconds, clockOf, maskEmail, orgTag, pct, relTime, resetText, statusLabel, statusTone, tone } from '../lib/format'
+import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
@@ -142,8 +142,9 @@ export function AccountsPage(): React.JSX.Element {
           />
         )}
         {list.length > 0 && (
-          <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-table">
-            <div className="grid grid-cols-[28px_minmax(200px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(96px,auto)_112px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-scroller">
+            <div className="min-w-[880px]" data-testid="accounts-table">
+            <div className="grid grid-cols-[28px_minmax(190px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_160px_112px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
               <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
@@ -153,7 +154,8 @@ export function AccountsPage(): React.JSX.Element {
             </div>
             {list.map((a) => (
               <AccountRow key={a.number} a={a} now={now} mask={mask} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} onLaunch={() => void act(`run-${a.number}`, () => api.launchSession(String(a.number)), (v) => `Opened a terminal running ${(v as { command: string }).command}`)} />
-            ))}
+              ))}
+            </div>
           </div>
         )}
         {accounts.fetchedAt && list.length > 0 && (
@@ -178,13 +180,16 @@ export function AccountsPage(): React.JSX.Element {
   )
 }
 
-function WindowCell({ w, now, label }: { w: UsageWindow | undefined; now: number; label: string }): React.JSX.Element {
+function WindowCell({ w, now, label, name }: { w: UsageWindow | undefined; now: number; label: string; name?: string }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
   return (
     <div className="min-w-0" data-testid={`window-${label}`}>
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
-        <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
+        <span className="truncate">
+          {name && <span className="text-fg-3">{name} </span>}
+          <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
+        </span>
         <span className="flex min-w-0 items-center gap-1 text-fg-3">
           {w.aheadOfPace && (
             <Chip tone="warn" title={`Ahead of pace — spread evenly you would be at ~${pct(w.expectedPct)} by now`}>
@@ -209,11 +214,11 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
   const sTone = statusTone(a.usageStatus)
   return (
     <div
-      className={cx('group grid grid-cols-[28px_minmax(200px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(96px,auto)_112px] items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
+      className={cx('group grid grid-cols-[28px_minmax(190px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_160px_112px] items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
       data-testid={`account-row-${a.number}`}
       data-active={a.active || undefined}
     >
-      <div className="flex h-full min-h-[19px] items-center gap-1.5 self-stretch">
+      <div className="flex h-full min-w-0 min-h-[19px] items-center gap-1.5 self-stretch">
         <span className={cx('h-[6px] w-[6px] rounded-full', a.active ? 'bg-accent' : 'bg-transparent')} aria-label={a.active ? 'active' : undefined} />
         <span className="mono text-fg-3">{a.number}</span>
       </div>
@@ -243,20 +248,14 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
       <div className="min-w-0">
         <WindowCell w={usage?.sevenDay} now={now} label="7d" />
         {usage?.scoped?.map((s) => (
-          <div key={s.name} className="mt-1.5" data-testid={`scoped-${s.name}`} title={`${s.name} weekly limit${s.resetsAt ? ` · resets ${relTime(s.resetsAt, now)}` : ''}`}>
-            <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[11px]">
-              <span className="truncate text-fg-3">
-                {s.name} <span className={cx('font-medium tabular-nums', tone(s.pct) === 'danger' ? 'text-danger' : tone(s.pct) === 'warn' ? 'text-warn' : 'text-fg-2')}>{pct(s.pct)}</span>
-              </span>
-              {s.resetsAt && <span className="truncate tabular-nums text-fg-3">{resetText(s.resetsAt, now)}</span>}
-            </div>
-            <Bar pct={s.pct} tone={tone(s.pct)} className="!h-[3px] opacity-80" />
+          <div key={s.name} className="mt-2" data-testid={`scoped-${s.name}`}>
+            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} />
           </div>
         ))}
       </div>
-      <div className="flex min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
-        <Chip tone={sTone} title={a.usageStatus}>
-          {statusLabel(a.usageStatus)}
+      <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
+        <Chip tone={sTone} title={a.usageStatus} className="max-w-full">
+          <span className="truncate">{statusLabel(a.usageStatus)}</span>
         </Chip>
         {stale && (
           <span className="text-[11px] text-fg-3" title="Last successful usage measurement">
@@ -265,7 +264,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
         )}
         {!stale && a.usageAgeSeconds !== undefined && a.usageAgeSeconds >= 60 && <span className="text-[11px] text-fg-3">{ageSeconds(a.usageAgeSeconds)}</span>}
       </div>
-      <div className="flex min-h-[19px] items-center justify-end gap-1 self-stretch">
+      <div className="flex min-w-0 min-h-[19px] items-center justify-end gap-1 self-stretch">
         <Button size="sm" variant={a.active ? 'ghost' : 'default'} disabled={a.active} loading={busy === `switch-${a.number}`} onClick={onSwitch} data-testid={`switch-${a.number}`} className={a.active ? 'invisible' : ''}>
           Switch
         </Button>
