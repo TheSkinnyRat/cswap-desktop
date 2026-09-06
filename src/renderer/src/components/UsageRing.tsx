@@ -3,21 +3,37 @@ import { cx } from './ui'
 import { pct as fmtPct } from '../lib/format'
 import { useGrow } from '../lib/use-grow'
 
-const SIZE = 26
+const SIZE = 30
 const STROKE = 3.5
-const R = (SIZE - STROKE) / 2
+// Room is left between the stroke and the edge of the box so the pace notch can sit
+// OUTSIDE the ring: drawn across the track, a full arc simply covers it.
+const R = (SIZE - STROKE) / 2 - 2.5
 const C = 2 * Math.PI * R
 
 // Same thresholds as the bars, so one glance means the same thing in both views.
 const ringTone = (p: number): string => (p >= 100 ? 'stroke-danger' : p >= 80 ? 'stroke-warn' : 'stroke-accent')
 
-export function UsageRing({ pct, label, tooltip, sub }: { pct: number | undefined; label?: string; tooltip: string; sub?: string }): React.JSX.Element {
+export function UsageRing({ pct, label, tooltip, sub, pace }: { pct: number | undefined; label?: string; tooltip: string; sub?: string; pace?: number }): React.JSX.Element {
   const value = pct === undefined ? 0 : Math.max(0, Math.min(pct, 100))
   const filled = useGrow(value)
+  // Where an evenly-spread week would be, as a notch on the track.
+  const mark = pace === undefined ? null : Math.max(0, Math.min(100, pace))
   return (
     <Tooltip label={tooltip} focusable={false} className="min-w-[92px] items-center gap-2 rounded-md px-1 py-0.5 transition-colors duration-150 hover:bg-surface-2">
       <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="shrink-0 -rotate-90" data-testid="usage-ring" aria-hidden>
         <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" strokeWidth={STROKE} className="stroke-border-strong opacity-40" />
+        {mark !== null && (
+          <line
+            x1={SIZE / 2}
+            y1={0.6}
+            x2={SIZE / 2}
+            y2={SIZE / 2 - R - STROKE / 2 - 0.4}
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="stroke-fg-2"
+            transform={`rotate(${(mark / 100) * 360} ${SIZE / 2} ${SIZE / 2})`}
+          />
+        )}
         <circle
           cx={SIZE / 2}
           cy={SIZE / 2}

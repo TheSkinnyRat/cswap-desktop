@@ -120,13 +120,34 @@ export function Field({ label, hint, children, inline }: { label: string; hint?:
 }
 
 // ---- Usage bar -------------------------------------------------------------------
-export function Bar({ pct, tone, className }: { pct: number | undefined; tone: 'ok' | 'warn' | 'danger' | 'muted'; className?: string }): React.JSX.Element {
+export function Bar({
+  pct,
+  tone,
+  className,
+  pace
+}: {
+  pct: number | undefined
+  tone: 'ok' | 'warn' | 'danger' | 'muted'
+  className?: string
+  /** Where an evenly-spread week would be by now, 0–100. Weekly windows only. */
+  pace?: number
+}): React.JSX.Element {
   const fill = { ok: 'bg-accent', warn: 'bg-warn', danger: 'bg-danger', muted: 'bg-border-strong' }[tone]
   // Grown into rather than drawn at, like the ring: a transition needs a change.
   const w = useGrow(pct === undefined ? 0 : Math.max(0, Math.min(100, pct)))
+  const mark = pace === undefined ? null : Math.max(0, Math.min(100, pace))
   return (
-    <div className={cx('h-[5px] w-full overflow-hidden rounded-full bg-surface-3', className)} role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
-      <div className={cx('h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none', fill)} style={{ width: `${w}%` }} />
+    // The padding is negative-margined away: the marker stands proud of the track, and
+    // a row's height should not change because a window happens to report a pace.
+    <div className={cx('relative', mark !== null && 'py-[4px] -my-[4px]')}>
+      <div className={cx('relative h-[5px] w-full rounded-full bg-surface-3', className)} role="progressbar" aria-valuenow={pct ?? undefined} aria-valuemin={0} aria-valuemax={100}>
+        {/* Only the fill is clipped — clipping the track is what stopped the marker
+            standing outside it. */}
+        <div className={cx('relative h-full max-w-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none', fill)} style={{ width: `${w}%` }} />
+        {mark !== null && (
+          <div className="absolute inset-y-[-4px] w-[2px] -translate-x-1/2 rounded-full bg-fg-2" style={{ left: `${mark}%` }} data-testid="pace-mark" aria-hidden />
+        )}
+      </div>
     </div>
   )
 }

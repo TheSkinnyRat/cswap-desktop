@@ -204,7 +204,7 @@ export function AccountsPage(): React.JSX.Element {
 function windowTooltip(w: UsageWindow, name: string, now: number, showPace: boolean): string {
   const lines = [`${name} · ${pct(w.pct)} used`]
   if (w.resetsAt) lines.push(`resets ${clockOf(w.resetsAt)} · ${resetText(w.resetsAt, now)}`)
-  if (showPace && w.expectedPct !== undefined) lines.push(`${w.aheadOfPace ? 'ahead of pace' : 'on pace'} — even use would be ~${pct(w.expectedPct)} by now`)
+  if (showPace && w.expectedPct !== undefined) lines.push(`${w.aheadOfPace ? 'ahead of pace' : 'on pace'} — spread evenly you'd be at ~${pct(w.expectedPct)} by now`)
   if (w.willLastToReset === false) lines.push('at this rate it runs out before the reset')
   return lines.join('\n')
 }
@@ -218,7 +218,7 @@ function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w:
   if (ring) {
     return (
       <div className="min-w-0" data-testid={`window-${label}`}>
-        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} />
+        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={showPace ? w.expectedPct : undefined} />
       </div>
     )
   }
@@ -235,7 +235,7 @@ function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w:
             {w.resetsAt && <span className="truncate tabular-nums">{resetText(w.resetsAt, now)}</span>}
           </span>
         </div>
-        <Bar pct={w.pct} tone={t} />
+        <Bar pct={w.pct} tone={t} pace={showPace ? w.expectedPct : undefined} />
       </div>
     </Tooltip>
   )

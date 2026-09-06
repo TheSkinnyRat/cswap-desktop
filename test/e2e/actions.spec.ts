@@ -192,6 +192,23 @@ test.describe('views and session mode', () => {
     await app.close()
   })
 
+  test('the pace marker sits where an even week would be, and only on weekly windows', async () => {
+    const { app, page } = await launch()
+    const cell = page.getByTestId('account-row-1').getByTestId('window-7d')
+    const track = await cell.locator('[role="progressbar"]').boundingBox()
+    const mark = await cell.getByTestId('pace-mark').boundingBox()
+    // the fake reports expectedPct 50 for weekly windows
+    const at = (mark!.x + mark!.width / 2 - track!.x) / track!.width
+    expect(at, `marker at ${(at * 100).toFixed(1)}% of the track`).toBeGreaterThan(0.48)
+    expect(at).toBeLessThan(0.52)
+    // the 5-hour window has no pace to speak of
+    await expect(page.getByTestId('account-row-1').getByTestId('window-5h').getByTestId('pace-mark')).toHaveCount(0)
+    // and it says so in words
+    await page.getByTestId('window-7d').first().hover()
+    await expect(page.getByRole('tooltip')).toContainText("spread evenly you'd be at ~50% by now")
+    await app.close()
+  })
+
   test('open terminal asks where to start and passes that directory', async () => {
     const { app, page } = await launch()
     await page.getByTestId('row-menu-2').click()
