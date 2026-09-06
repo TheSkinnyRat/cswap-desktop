@@ -37,8 +37,8 @@
   --text: hsl(240 12% 93%);
   --text-2: hsl(240 7% 66%);
   --text-3: hsl(240 6% 48%);
-  --accent: hsl(235 62% 62%);
-  --accent-hover: hsl(235 62% 67%);
+  --accent: hsl(235 58% 57%);
+  --accent-hover: hsl(235 62% 64%);
   --accent-soft: hsl(235 70% 70% / 0.18);
   --accent-fg: #ffffff;
   --ok: hsl(152 48% 52%);
@@ -81,57 +81,62 @@
   --radius-lg: 10px;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.45;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv11', 'ss01', 'tnum';
-  overflow: hidden;
-  user-select: none;
-}
-::selection {
-  background: var(--accent-soft);
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-input,
-textarea {
-  user-select: text;
-}
-*:focus {
-  outline: none;
-}
-*:focus-visible {
-  box-shadow: var(--focus);
-  border-radius: var(--radius-sm);
-}
-.drag {
-  -webkit-app-region: drag;
-}
-.no-drag {
-  -webkit-app-region: no-drag;
-}
-.mono {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-.selectable {
-  user-select: text;
+/* Base styles must live in a layer: unlayered rules beat @layer utilities
+   whatever the specificity, and `button { color: inherit }` was quietly
+   defeating every text-* utility on every button. */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
+    overflow: hidden;
+    user-select: none;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  input,
+  textarea {
+    user-select: text;
+  }
+  *:focus {
+    outline: none;
+  }
+  *:focus-visible {
+    box-shadow: var(--focus);
+    border-radius: var(--radius-sm);
+  }
+  .drag {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .selectable {
+    user-select: text;
+  }
 }
 
 /* Scrollbars: thin, quiet */

@@ -18,7 +18,7 @@ export function TitleBar({ onPalette }: { onPalette: () => void }): React.JSX.El
       <div className="flex-1" />
       <button
         onClick={onPalette}
-        className="no-drag inline-flex h-[26px] items-center gap-2 rounded-md border border-border bg-bg px-2 text-[12px] text-fg-3 hover:border-border-strong hover:text-fg-2"
+        className="no-drag inline-flex h-[26px] items-center gap-2 rounded-md border border-border bg-bg px-2 text-[12px] text-fg-2 hover:border-border-strong hover:text-fg"
         data-testid="palette-trigger"
       >
         <Search size={13} />

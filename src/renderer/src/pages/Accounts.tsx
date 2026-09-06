@@ -97,10 +97,10 @@ export function AccountsPage(): React.JSX.Element {
               width={260}
               trigger={() => <Button variant="ghost" className="!px-2" aria-label="More" data-testid="more-menu" icon={<Ellipsis size={16} />} />}
               items={[
-                { label: 'Export all accounts…', icon: <Download size={14} />, onSelect: () => setDlg({ kind: 'export' }) },
-                { label: 'Import accounts…', icon: <Upload size={14} />, onSelect: () => setDlg({ kind: 'import' }) },
+                { label: 'Export all accounts', icon: <Download size={14} />, onSelect: () => setDlg({ kind: 'export' }) },
+                { label: 'Import accounts', icon: <Upload size={14} />, onSelect: () => setDlg({ kind: 'import' }) },
                 { separator: true, label: '' },
-                { label: 'Token diagnostics…', hint: '--token-status', icon: <Stethoscope size={14} />, onSelect: () => setDlg({ kind: 'diag' }) }
+                { label: 'Token diagnostics', hint: '--token-status', icon: <Stethoscope size={14} />, onSelect: () => setDlg({ kind: 'diag' }) }
               ]}
             />
           </>
@@ -144,7 +144,7 @@ export function AccountsPage(): React.JSX.Element {
         {list.length > 0 && (
           <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-table">
             <div className="grid grid-cols-[28px_minmax(200px,2fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(96px,auto)_112px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
-              <span>#</span>
+              <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
               <span>7-day window</span>
@@ -213,7 +213,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
       data-testid={`account-row-${a.number}`}
       data-active={a.active || undefined}
     >
-      <div className="flex h-[19px] items-center gap-1.5">
+      <div className="flex h-full min-h-[19px] items-center gap-1.5 self-stretch">
         <span className={cx('h-[6px] w-[6px] rounded-full', a.active ? 'bg-accent' : 'bg-transparent')} aria-label={a.active ? 'active' : undefined} />
         <span className="mono text-fg-3">{a.number}</span>
       </div>
@@ -254,7 +254,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
           </div>
         ))}
       </div>
-      <div className="flex min-h-[19px] flex-col items-start justify-center gap-1">
+      <div className="flex min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">
         <Chip tone={sTone} title={a.usageStatus}>
           {statusLabel(a.usageStatus)}
         </Chip>
@@ -265,7 +265,7 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
         )}
         {!stale && a.usageAgeSeconds !== undefined && a.usageAgeSeconds >= 60 && <span className="text-[11px] text-fg-3">{ageSeconds(a.usageAgeSeconds)}</span>}
       </div>
-      <div className="flex h-[19px] items-center justify-end gap-1">
+      <div className="flex min-h-[19px] items-center justify-end gap-1 self-stretch">
         <Button size="sm" variant={a.active ? 'ghost' : 'default'} disabled={a.active} loading={busy === `switch-${a.number}`} onClick={onSwitch} data-testid={`switch-${a.number}`} className={a.active ? 'invisible' : ''}>
           Switch
         </Button>
@@ -273,15 +273,15 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
           width={280}
           trigger={() => <Button size="sm" variant="ghost" className="!px-1.5" aria-label={`Actions for account ${a.number}`} data-testid={`row-menu-${a.number}`} icon={<Ellipsis size={15} />} />}
           items={[
-            { label: a.alias ? 'Change alias…' : 'Set alias…', icon: <Tag size={14} />, onSelect: () => onAction({ kind: 'alias', a }) },
-            { label: 'Move to slot…', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
+            { label: a.alias ? 'Change alias' : 'Set alias', icon: <Tag size={14} />, onSelect: () => onAction({ kind: 'alias', a }) },
+            { label: 'Move to slot', icon: <MoveVertical size={14} />, onSelect: () => onAction({ kind: 'move', a }) },
             { label: a.disabled ? 'Enable (back in rotation)' : 'Disable (hold out of rotation)', icon: a.disabled ? <Eye size={14} /> : <EyeOff size={14} />, onSelect: onToggleDisabled },
             { separator: true, label: '' },
             { label: 'Open terminal as this account', hint: `cswap run ${a.number}`, icon: <TerminalSquare size={14} />, onSelect: onLaunch },
-            { label: 'Export this account…', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
+            { label: 'Export this account', icon: <Download size={14} />, onSelect: () => onAction({ kind: 'export', a }) },
             { label: 'Re-add from the current login', hint: `slot ${a.number}`, icon: <Pencil size={14} />, onSelect: () => onAction({ kind: 'add' }) },
             { separator: true, label: '' },
-            { label: 'Remove account…', icon: <Trash2 size={14} />, danger: true, onSelect: () => onAction({ kind: 'remove', a }) }
+            { label: 'Remove account', icon: <Trash2 size={14} />, danger: true, onSelect: () => onAction({ kind: 'remove', a }) }
           ]}
         />
       </div>
@@ -564,7 +564,7 @@ function ExportDialog({ a, onClose }: { a?: Account; onClose: () => void }): Rea
               }
             }}
           >
-            Choose file & export…
+            Choose file & export
           </Button>
         </>
       }
@@ -612,7 +612,7 @@ function ImportDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
               }
             }}
           >
-            Choose file & import…
+            Choose file & import
           </Button>
         </>
       }

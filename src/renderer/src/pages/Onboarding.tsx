@@ -58,7 +58,7 @@ export function Onboarding(): React.JSX.Element {
               if (p) await updateSettings({ cswapPath: p })
             }}
           >
-            Locate cswap{platform === 'win32' ? '.exe' : ''}…
+            Locate cswap{platform === 'win32' ? '.exe' : ''}
           </Button>
           <Button variant="ghost" icon={<Settings size={14} />} onClick={() => setPage('settings')} className="ml-auto">
             Settings
