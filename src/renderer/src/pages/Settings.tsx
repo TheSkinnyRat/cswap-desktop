@@ -219,7 +219,7 @@ export function SettingsPage(): React.JSX.Element {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[12.5px] font-medium text-fg">
-                    {updater.status === 'disabled' && (info?.electron ? 'Automatic updates are off in this build' : 'Automatic updates need the packaged app')}
+                    {updater.status === 'disabled' && (platform === 'darwin' ? 'Automatic updates are off on macOS' : 'Automatic updates need the installed app')}
                     {updater.status === 'idle' && 'Automatic updates on'}
                     {updater.status === 'checking' && 'Checking for updates…'}
                     {updater.status === 'not-available' && 'You are on the latest version'}
@@ -229,7 +229,7 @@ export function SettingsPage(): React.JSX.Element {
                     {updater.status === 'error' && 'Update check failed'}
                   </div>
                   <div className="text-[11.5px] text-fg-3">
-                    {updater.status === 'error' ? updater.error : updater.status === 'disabled' && platform !== 'win32' ? 'macOS builds are unsigned, so updates there are manual.' : updater.checkedAt ? `Checked ${new Date(updater.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · installs on quit or on request` : 'Checks at start and every 6 hours; installs on quit or on request.'}
+                    {updater.status === 'error' ? updater.error : updater.status === 'disabled' ? (platform === 'darwin' ? 'macOS builds are unsigned, so updates there are manual.' : 'Running from source or a dev build — use the release page.') : updater.checkedAt ? `Checked ${new Date(updater.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · installs on quit or on request` : 'Checks at start and every 6 hours; installs on quit or on request.'}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
