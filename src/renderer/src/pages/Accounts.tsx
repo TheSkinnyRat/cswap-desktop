@@ -201,24 +201,24 @@ export function AccountsPage(): React.JSX.Element {
   )
 }
 
-function windowTooltip(w: UsageWindow, name: string, now: number, showPace: boolean): string {
+function windowTooltip(w: UsageWindow, name: string, now: number): string {
   const lines = [`${name} · ${pct(w.pct)} used`]
   if (w.resetsAt) lines.push(`resets ${clockOf(w.resetsAt)} · ${resetText(w.resetsAt, now)}`)
-  if (showPace && w.expectedPct !== undefined) lines.push(`${w.aheadOfPace ? 'ahead of pace' : 'on pace'} — spread evenly you'd be at ~${pct(w.expectedPct)} by now`)
+  if (w.expectedPct !== undefined) lines.push(`${w.aheadOfPace ? 'ahead of pace' : 'on pace'} — spread evenly you'd be at ~${pct(w.expectedPct)} by now`)
   if (w.willLastToReset === false) lines.push('at this rate it runs out before the reset')
   return lines.join('\n')
 }
 
-function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showPace?: boolean; ring?: boolean }): React.JSX.Element {
+function WindowCell({ w, now, label, name, showChip = true, ring = false }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showChip?: boolean; ring?: boolean }): React.JSX.Element {
   if (!w) return <span className="text-[12px] text-fg-3">—</span>
   const t = tone(w.pct)
   // The header already says 5-hour and 7-day; only a per-model window needs naming.
   const full = name ?? (label === '5h' ? '5-hour window' : label === '7d' ? '7-day window' : label)
-  const tip = windowTooltip(w, full, now, showPace)
+  const tip = windowTooltip(w, full, now)
   if (ring) {
     return (
       <div className="min-w-0" data-testid={`window-${label}`}>
-        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={showPace ? w.expectedPct : undefined} />
+        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={w.expectedPct} />
       </div>
     )
   }
@@ -231,11 +231,11 @@ function WindowCell({ w, now, label, name, showPace = true, ring = false }: { w:
             <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
           </span>
           <span className="flex min-w-0 items-center gap-1 text-fg-3">
-            {showPace && w.aheadOfPace && <Chip tone="warn">ahead</Chip>}
+            {showChip && w.aheadOfPace && <Chip tone="warn">ahead</Chip>}
             {w.resetsAt && <span className="truncate tabular-nums">{resetText(w.resetsAt, now)}</span>}
           </span>
         </div>
-        <Bar pct={w.pct} tone={t} pace={showPace ? w.expectedPct : undefined} />
+        <Bar pct={w.pct} tone={t} pace={w.expectedPct} />
       </div>
     </Tooltip>
   )
@@ -300,10 +300,10 @@ function AccountRow({ a, now, cols, mask, rings, plan, busy, onSwitch, onAction,
             )}
             {usage?.scoped?.map((s) =>
               rings ? (
-                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} ring />
+                <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring />
               ) : (
                 <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
-                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showPace={false} />
+                  <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} />
                 </div>
               )
             )}

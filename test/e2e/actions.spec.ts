@@ -201,8 +201,9 @@ test.describe('views and session mode', () => {
     const at = (mark!.x + mark!.width / 2 - track!.x) / track!.width
     expect(at, `marker at ${(at * 100).toFixed(1)}% of the track`).toBeGreaterThan(0.48)
     expect(at).toBeLessThan(0.52)
-    // the 5-hour window has no pace to speak of
+    // the 5-hour window has no pace to speak of; a per-model week does
     await expect(page.getByTestId('account-row-1').getByTestId('window-5h').getByTestId('pace-mark')).toHaveCount(0)
+    await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable').getByTestId('pace-mark')).toHaveCount(1)
     // and it says so in words
     await page.getByTestId('window-7d').first().hover()
     await expect(page.getByRole('tooltip')).toContainText("spread evenly you'd be at ~50% by now")
