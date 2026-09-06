@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowRightLeft, ChevronDown, Download, Ellipsis, Eye, EyeOff, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
-import type { Account, UsageWindow } from '@shared/types'
+import type { Account, PlanInfo, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
 import { api } from '../lib/api'
 import { useToast } from '../lib/toast'
@@ -18,6 +18,7 @@ export function AccountsPage(): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const list = accounts.payload?.accounts ?? []
   const active = list.find((a) => a.active)
+  const plans = accounts.plans ?? {}
 
   const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: { message: string }; value?: unknown }>, okMsg?: (v: unknown) => string): Promise<boolean> => {
     setBusy(key)
@@ -143,7 +144,7 @@ export function AccountsPage(): React.JSX.Element {
         )}
         {list.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-card" data-testid="accounts-scroller">
-            <div className="min-w-[820px]" data-testid="accounts-table">
+            <div className="min-w-min" data-testid="accounts-table">
             <div className="grid grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1fr)_148px_104px] items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3">
               <span className="pl-[13px]">#</span>
               <span>Account</span>
@@ -153,7 +154,7 @@ export function AccountsPage(): React.JSX.Element {
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} mask={mask} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} onLaunch={() => void act(`run-${a.number}`, () => api.launchSession(String(a.number)), (v) => `Opened a terminal running ${(v as { command: string }).command}`)} />
+              <AccountRow key={a.number} a={a} now={now} mask={mask} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} onLaunch={() => void act(`run-${a.number}`, () => api.launchSession(String(a.number)), (v) => `Opened a terminal running ${(v as { command: string }).command}`)} />
               ))}
             </div>
           </div>
@@ -208,7 +209,7 @@ function WindowCell({ w, now, label, name, showPace = true }: { w: UsageWindow |
   )
 }
 
-function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, onLaunch }: { a: Account; now: number; mask: boolean; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void; onLaunch: () => void }): React.JSX.Element {
+function AccountRow({ a, now, mask, plan, busy, onSwitch, onAction, onToggleDisabled, onLaunch }: { a: Account; now: number; mask: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void; onLaunch: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
@@ -228,6 +229,14 @@ function AccountRow({ a, now, mask, busy, onSwitch, onAction, onToggleDisabled, 
             {a.alias || maskEmail(a.email, mask)}
           </span>
           {a.active && <Chip tone="accent">active</Chip>}
+          {plan && (
+            <Chip
+              tone="muted"
+              title={a.active ? `Subscription: ${plan.label}${plan.tier ? ` (${plan.tier})` : ''}` : `Subscription when this account was last active, ${clockOf(plan.seenAt)}`}
+            >
+              {plan.label}
+            </Chip>
+          )}
           {a.disabled && (
             <Chip tone="muted" title="Held out of rotation">
               disabled
@@ -347,8 +356,26 @@ function AddAccountDialog({ open, onClose, taken }: { open: boolean; onClose: ()
         </>
       }
     >
-      <p className="mb-4 text-[12.5px] text-fg-2">
-        cswap reads the account Claude Code is logged into right now and stores its login. If that account is already managed, its stored credentials are refreshed instead of creating a duplicate. Do not run <span className="mono">/logout</span> first — Claude Code may revoke the token you are leaving.
+      <ol className="mb-4 space-y-2.5 text-[12.5px] text-fg-2">
+        <li className="flex gap-2.5">
+          <span className="mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] font-medium text-fg-2">1</span>
+          <span>
+            Open a terminal anywhere and start Claude Code: <span className="mono selectable rounded bg-surface-2 px-1 py-[1px] text-fg">claude</span>
+          </span>
+        </li>
+        <li className="flex gap-2.5">
+          <span className="mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] font-medium text-fg-2">2</span>
+          <span>
+            Run <span className="mono selectable rounded bg-surface-2 px-1 py-[1px] text-fg">/login</span> and finish the sign-in in the browser. Do <strong className="font-medium text-fg">not</strong> run <span className="mono">/logout</span> on the account you are leaving — Claude Code may revoke the token cswap stored for it.
+          </span>
+        </li>
+        <li className="flex gap-2.5">
+          <span className="mt-[1px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] font-medium text-fg-2">3</span>
+          <span>Come back here and add it. cswap stores that login so you can switch back to it later.</span>
+        </li>
+      </ol>
+      <p className="mb-4 text-[12.5px] text-fg-3">
+        Adding an account that is already managed refreshes its stored credentials instead of creating a duplicate.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Slot" hint="Optional. Empty = next free.">

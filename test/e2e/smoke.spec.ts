@@ -16,6 +16,9 @@ test('renders every page in light and dark and lists the fake accounts', async (
   await shot(page, 'accounts-masked')
   await page.getByTestId('mask-toggle').click()
   await expect(page.getByTestId('account-row-2')).toContainText('work@company.com')
+  // the subscription is read from the live credential file and labelled on the active row
+  await expect(page.getByTestId('account-row-1')).toContainText('Max 5x')
+  await expect(page.getByTestId('account-row-2')).not.toContainText('Max 5x')
   // per-model window sits under the 7-day column
   await expect(page.getByTestId('account-row-1').getByTestId('scoped-Fable')).toContainText('Fable 17%')
   for (const p of ['auto', 'mappings', 'log', 'settings'] as const) {

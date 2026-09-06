@@ -224,11 +224,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: CswapError }
 
+export interface PlanInfo {
+  label: string
+  tier?: string
+  subscription?: string
+  seenAt: string
+}
+
 export interface AccountsState {
   payload: ListPayload | null
   fetchedAt: string | null
   refreshing: boolean
   error: CswapError | null
+  /** Subscription label per account email — read from the live credential file while
+   *  that account was active, so a switched-away account keeps its last known plan. */
+  plans?: Record<string, PlanInfo>
 }
 
 export interface ExportOptions {

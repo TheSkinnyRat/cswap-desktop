@@ -32,11 +32,20 @@ export async function launch(opts: { seedState?: object; settings?: object; env?
   if (opts.seedState) writeFileSync(statePath, JSON.stringify(opts.seedState, null, 2))
   const userData = join(dir, 'userData')
   mkdirSync(userData, { recursive: true })
+  // Point Claude's config dir at scratch: the app reads the subscription fields from
+  // .credentials.json, and a test must never read the machine's real one.
+  const claudeHome = join(dir, 'claude')
+  mkdirSync(claudeHome, { recursive: true })
+  writeFileSync(
+    join(claudeHome, '.credentials.json'),
+    JSON.stringify({ claudeAiOauth: { accessToken: 'test-not-a-token', refreshToken: 'test-not-a-token', expiresAt: Date.now() + 3600_000, scopes: ['user:inference'], subscriptionType: 'max', rateLimitTier: 'default_claude_max_5x' } })
+  )
   if (opts.settings) writeFileSync(join(userData, 'settings.json'), JSON.stringify(opts.settings))
   mkdirSync(SHOTS, { recursive: true })
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     CSWAP_DESKTOP_USERDATA: userData,
+    CLAUDE_CONFIG_DIR: claudeHome,
     FAKE_CSWAP_STATE: statePath,
     ELECTRON_ENABLE_LOGGING: '0',
     ...opts.env

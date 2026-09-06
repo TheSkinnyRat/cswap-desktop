@@ -6,6 +6,7 @@ import { CswapDriver, parseMappings, parseUnclaimed } from './cswap/driver'
 import { AutoSwitchRunner } from './cswap/auto'
 import { findUv, resolveCswap } from './cswap/resolve'
 import { SettingsStore } from './settings'
+import { PlanStore } from './plan'
 import { Updater } from './updater'
 import { VaultWatcher, defaultVaultPath, readMappingsFile, vaultFromSettingsPath } from './vault'
 import type {
@@ -24,10 +25,11 @@ export class AppCore extends EventEmitter {
   readonly driver = new CswapDriver()
   readonly auto = new AutoSwitchRunner()
   readonly settings: SettingsStore
+  readonly plans: PlanStore
   readonly vault = new VaultWatcher()
   readonly updater = new Updater()
   private binary: CswapBinaryInfo | null = null
-  private accounts: AccountsState = { payload: null, fetchedAt: null, refreshing: false, error: null }
+  private accounts: AccountsState = { payload: null, fetchedAt: null, refreshing: false, error: null, plans: {} }
   private refreshTimer: NodeJS.Timeout | null = null
   private inflight: Promise<AccountsState> | null = null
   private vaultPath: string | null = null
@@ -35,6 +37,7 @@ export class AppCore extends EventEmitter {
   constructor(userData: string) {
     super()
     this.settings = new SettingsStore(userData)
+    this.plans = new PlanStore(userData)
     this.driver.on('log', (e) => this.emit('log', e))
     this.auto.on('event', (ev: AutoEvent) => this.onAutoEvent(ev))
     this.auto.on('status', (st) => this.emit('autoStatus', st))
@@ -109,9 +112,10 @@ export class AppCore extends EventEmitter {
     this.emit('accounts', this.accounts)
     this.inflight = (async () => {
       const r = await this.driver.list()
+      if (r.ok) this.plans.observe(r.value.accounts.find((a) => a.active)?.email)
       this.accounts = r.ok
-        ? { payload: r.value, fetchedAt: new Date().toISOString(), refreshing: false, error: null }
-        : { ...this.accounts, refreshing: false, error: r.error }
+        ? { payload: r.value, fetchedAt: new Date().toISOString(), refreshing: false, error: null, plans: this.plans.all() }
+        : { ...this.accounts, refreshing: false, error: r.error, plans: this.plans.all() }
       this.inflight = null
       this.emit('accounts', this.accounts)
       return this.accounts

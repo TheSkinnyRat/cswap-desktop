@@ -6,7 +6,7 @@ A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap
 
 ## What it does
 
-- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, and status (token expired, API key, …). Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
+- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, pace markers, subscription (Pro / Max 5x / Max 20x) and status (token expired, API key, …). Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
 - **Add / remove** — from the current Claude Code login, or from a setup-token / API key (handed to cswap over stdin, never on the command line). Aliases, slot moves and swaps, disable / enable (hold an account out of rotation).
 - **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches. **Check now** runs a single `cswap auto --once` tick.
 - **Session mode** — open a terminal running `cswap run <slot>` from an account's menu (that terminal only; the default login is untouched).
@@ -35,7 +35,7 @@ A desktop app for [claude-swap](https://github.com/realiti4/claude-swap) (`cswap
 
 ## How it works
 
-The app never touches your credentials itself. **Every read and write goes through the cswap CLI** — `cswap list --json`, `cswap switch 2 --json`, `cswap auto --json`, and so on — so the vault stays consistent with the terminal, the TUI and the macOS menu bar, and cswap's own locks and OAuth handling keep working. The only direct reads are `mappings.json` (for the mappings page) and a file watcher on the vault root, so changes made from a terminal show up in the window within a second.
+The app never writes credentials and never talks to Anthropic. **Every read and write goes through the cswap CLI** — `cswap list --json`, `cswap switch 2 --json`, `cswap auto --json`, and so on — so the vault stays consistent with the terminal, the TUI and the macOS menu bar, and cswap's own locks and OAuth handling keep working. The only direct reads are `mappings.json` (for the mappings page), a file watcher on the vault root so changes made from a terminal show up within a second, and two non-secret strings — `subscriptionType` and `rateLimitTier` — from Claude Code's own `.credentials.json`, which is the only place the subscription is written down; cswap does not expose it. Nothing else is read from that file, and only for the account that is live right now. What each account showed while it was active is remembered by email, so the labels survive a switch (on macOS the credentials live in the Keychain, so no label is shown).
 
 Python and claude-swap are deliberately **not** bundled: two cswap versions writing the same vault is how accounts go missing.
 

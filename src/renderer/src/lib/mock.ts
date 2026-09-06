@@ -36,7 +36,8 @@ export function createMockApi(): CswapApi {
     ;(listeners[ch] ??= new Set()).add(cb as (v: unknown) => void)
     return () => listeners[ch]?.delete(cb as (v: unknown) => void)
   }
-  const state = (): AccountsState => ({ payload, fetchedAt: new Date().toISOString(), refreshing: false, error: null })
+  const plans = { 'you@example.com': { label: 'Max 5x', tier: 'default_claude_max_5x', subscription: 'max', seenAt: new Date().toISOString() }, 'work@example.com': { label: 'Pro', tier: 'default_claude_pro', subscription: 'pro', seenAt: new Date(Date.now() - 864e5).toISOString() } }
+  const state = (): AccountsState => ({ payload, fetchedAt: new Date().toISOString(), refreshing: false, error: null, plans })
   const okOut = (stdout = 'ok'): Result<{ stdout: string; stderr: string; exitCode: number }> => ({ ok: true, value: { stdout, stderr: '', exitCode: 0 } })
   const record = (args: string[]) => {
     const e: CommandLogEntry = { id: log.length + 1, at: new Date().toISOString(), args, exitCode: 0, durationMs: 120, ok: true, stdout: 'ok', stderr: '' }
