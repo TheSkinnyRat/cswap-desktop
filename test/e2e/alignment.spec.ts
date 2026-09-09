@@ -31,8 +31,8 @@ test('columns line up at every width, whatever the status labels say', async () 
 
   // Every bar fills its own cell. The tooltip wrapper is inline-flex, and inside a cell
   // that is not itself the grid item it shrank to its content, taking the track with it —
-  // so compare each track against the cell around it, not against the other columns
-  // (5-hour and 7-day are deliberately different widths).
+  // so compare each track against the cell around it: equal columns are the next test's
+  // job, and a track that fills nothing would pass that one by matching its neighbours.
   for (const cell of ['window-5h', 'window-7d', 'window-model-Fable']) {
     const outer = await page.getByTestId('account-row-3').getByTestId(cell).boundingBox()
     const track = await page.getByTestId('account-row-3').getByTestId(cell).locator('[role="progressbar"]').first().boundingBox()
@@ -43,37 +43,42 @@ test('columns line up at every width, whatever the status labels say', async () 
   await app.close()
 })
 
-test('a per-model window sits beside the 7-day one when there is room, under it when there is not', async () => {
+test('a per-model window is a column of the table, the same width as the other two', async () => {
   const { app, page } = await launch({ seedState: seed })
   await page.waitForSelector('[data-testid="accounts-table"]')
-  const box = async (cell: string) => (await page.getByTestId('account-row-3').getByTestId(cell).boundingBox())!
+  const box = async (row: number, cell: string) => (await page.getByTestId(`account-row-${row}`).getByTestId(cell).boundingBox())!
 
-  await page.setViewportSize({ width: 1700, height: 620 })
-  await page.waitForTimeout(250)
-  let seven = await box('window-7d')
-  let fable = await box('scoped-Fable')
-  expect(fable.x, 'wide: beside').toBeGreaterThan(seven.x + seven.width - 1)
-  expect(Math.abs(fable.y - seven.y), 'wide: same line').toBeLessThan(6)
+  for (const width of [1240, 1440, 1700]) {
+    await page.setViewportSize({ width, height: 620 })
+    await page.waitForTimeout(250)
+    // Only account 3 has a Fable window, and it is the point of the column: the three
+    // windows have to measure the same, which is what the old 1.7fr 7-day cell broke.
+    const five = await box(3, 'window-5h')
+    const seven = await box(3, 'window-7d')
+    const fable = await box(3, 'window-model-Fable')
+    expect(fable.x, `${width}px: beside`).toBeGreaterThan(seven.x + seven.width - 1)
+    expect(Math.abs(fable.y - seven.y), `${width}px: same line`).toBeLessThan(6)
+    for (const [name, w] of [['7-day', seven.width], ['model', fable.width]] as const)
+      expect(Math.abs(w - five.width), `${width}px: ${name} ${Math.round(w)}px vs 5-hour ${Math.round(five.width)}px`).toBeLessThan(2)
+  }
 
-  await page.setViewportSize({ width: 1000, height: 620 })
-  await page.waitForTimeout(250)
-  seven = await box('window-7d')
-  fable = await box('scoped-Fable')
-  expect(fable.y, 'narrow: below').toBeGreaterThan(seven.y + seven.height - 1)
+  // An account without that model keeps the cell, empty: otherwise its status and actions
+  // would sit one column left of every other row's.
+  await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable')).toHaveText('—')
+  expect(Math.abs((await box(1, 'window-model-Fable')).x - (await box(3, 'window-model-Fable')).x), 'empty cell holds the column').toBeLessThan(2)
 
   // Rings keep a fixed pitch, so a row whose window has no reset line does not shift
   // the per-model ring left of the row above it.
-  await page.setViewportSize({ width: 1700, height: 620 })
   await page.getByTestId('view-toggle').click()
   await page.waitForTimeout(300)
-  const ringX = async (row: number): Promise<number> => (await page.getByTestId(`account-row-${row}`).getByTestId('window-7d').boundingBox())!.x
+  const ringX = async (row: number): Promise<number> => (await box(row, 'window-7d')).x
   expect(Math.abs((await ringX(3)) - (await ringX(1))), 'rings share a column').toBeLessThan(2)
   await app.close()
 })
 
 async function checkWidths(page: import('@playwright/test').Page, view: string): Promise<void> {
-  // below ~1040 the list is narrower than a table needs and becomes cards instead
-  for (const width of [1100, 1327, 1600, 1920]) {
+  // below ~1240 the list is narrower than a table needs and becomes cards instead
+  for (const width of [1240, 1327, 1600, 1920]) {
     await page.setViewportSize({ width, height: 620 })
     await page.waitForTimeout(150)
     const cols = await page.evaluate(() => {
@@ -113,6 +118,9 @@ test('a narrow window changes the shape instead of scrolling sideways', async ()
     expect(over, `${width}px: ${JSON.stringify(over)}`).toEqual({ list: 0, main: 0, body: 0 })
     // every window still reads, with its own name now that the header is gone
     await expect(page.getByTestId('account-row-3').getByTestId('window-7d')).toContainText('7-day')
+    await expect(page.getByTestId('account-row-3').getByTestId('window-model-Fable')).toContainText('Fable')
+    // and a card drops a window the account has not got, rather than showing it as a dash
+    await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable')).toHaveCount(0)
   }
   await shot(page, 'compact-cards')
 

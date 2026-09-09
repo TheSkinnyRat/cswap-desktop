@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlignLeft, ArrowRightLeft, Gauge, GaugeCircle, ChevronDown, CircleDashed, Download, Ellipsis, Eye, EyeOff, FolderOpen, KeyRound, MoveVertical, Pencil, Plus, Shuffle, Sparkles, Stethoscope, Tag, TerminalSquare, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { Account, Mapping, PlanInfo, UsageWindow } from '@shared/types'
 import { useStore } from '../lib/store'
@@ -11,8 +11,18 @@ import { Tooltip } from '../components/Tooltip'
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
-const BAR_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(148px,1fr)_minmax(148px,1.7fr)_148px_104px]'
-const RING_COLS = 'grid-cols-[28px_minmax(160px,2fr)_minmax(116px,1fr)_minmax(232px,1.7fr)_148px_104px]'
+const T = { num: 28, account: 160, win: 132, ring: 116, status: 148, actions: 104, gap: 16, pad: 24 }
+
+// Columns are generated, not spelled out: a per-model window is a column of its own, and
+// which models exist comes from the accounts. The same numbers give the card threshold —
+// so `pad`/`gap` must match the row's px-3/gap-4, or a table renders wider than it fits.
+function gridLayout(models: number, rings: boolean): { template: string; minWidth: number } {
+  const win = rings ? T.ring : T.win
+  const windows = 2 + models
+  const tracks = [`${T.num}px`, `minmax(${T.account}px,2fr)`, ...Array<string>(windows).fill(`minmax(${win}px,1fr)`), `${T.status}px`, `${T.actions}px`]
+  const fixed = T.num + T.account + win * windows + T.status + T.actions
+  return { template: tracks.join(' '), minWidth: fixed + (tracks.length - 1) * T.gap + T.pad }
+}
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'run'; a: Account } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
 
@@ -23,17 +33,23 @@ export function AccountsPage(): React.JSX.Element {
   const mask = settings.maskEmails
   const rings = settings.usageView === 'rings'
   const pace = settings.showPace
-  // One template, shared by the header and every row: a per-row grid is how the columns
-  // drifted apart before, and the ring view needs a wider 7-day column than the bars do.
-  const cols = rings ? RING_COLS : BAR_COLS
   const [busy, setBusy] = useState<string | null>(null)
   const list = accounts.payload?.accounts ?? []
+  // Every per-model window in the list, first-seen order. The columns belong to the table
+  // and not to a row: an account without Fable needs an empty cell, or its status and
+  // actions slide one column left of everyone else's.
+  const models = useMemo(() => {
+    const seen: string[] = []
+    for (const a of list) for (const s of (a.usage ?? a.lastGoodUsage)?.scoped ?? []) if (!seen.includes(s.name)) seen.push(s.name)
+    return seen
+  }, [list])
   const active = list.find((a) => a.active)
   const plans = accounts.plans ?? {}
   // A table needs a table's worth of room. Below that the same account reads better as a
   // card, which is also the only way to stop the page scrolling sideways.
+  const { template, minWidth } = gridLayout(models.length, rings)
   const [listRef, listWidth] = useElementWidth()
-  const compact = listWidth > 0 && listWidth < 780
+  const compact = listWidth > 0 && listWidth < minWidth
 
   const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: { message: string }; value?: unknown }>, okMsg?: (v: unknown) => string): Promise<boolean> => {
     setBusy(key)
@@ -180,16 +196,21 @@ export function AccountsPage(): React.JSX.Element {
         {list.length > 0 && (
           <div ref={listRef} className={cx('rounded-lg border border-border bg-surface shadow-card', !compact && 'overflow-x-auto')} data-testid="accounts-scroller">
             <div className={cx(!compact && 'min-w-min')} data-testid="accounts-table" data-compact={compact || undefined}>
-            <div className={cx('grid items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3', cols, compact && 'hidden')}>
+            <div className={cx('grid items-center gap-4 border-b border-border bg-bg/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-3', compact && 'hidden')} style={{ gridTemplateColumns: template }}>
               <span className="pl-[13px]">#</span>
               <span>Account</span>
               <span>5-hour window</span>
               <span>7-day window</span>
+              {models.map((m) => (
+                <span key={m} className="truncate" title={`${m} window`}>
+                  {m}
+                </span>
+              ))}
               <span>Status</span>
               <span />
             </div>
             {list.map((a) => (
-              <AccountRow key={a.number} a={a} now={now} cols={cols} compact={compact} mask={mask} rings={rings} pace={pace} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
+              <AccountRow key={a.number} a={a} now={now} template={template} models={models} compact={compact} mask={mask} rings={rings} pace={pace} plan={plans[a.email]} busy={busy} onSwitch={() => void switchTo(a)} onAction={(k) => setDlg(k)} onToggleDisabled={() => void act(`dis-${a.number}`, () => api.setDisabled(String(a.number), !a.disabled), () => (a.disabled ? `Account-${a.number} back in rotation` : `Account-${a.number} held out of rotation`))} />
               ))}
             </div>
           </div>
@@ -225,16 +246,19 @@ function windowTooltip(w: UsageWindow, name: string, now: number): string {
   return lines.join('\n')
 }
 
-function WindowCell({ w, now, label, name, showChip = true, ring = false, pace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showChip?: boolean; ring?: boolean; pace?: boolean }): React.JSX.Element {
-  if (!w) return <span className="text-[12px] text-fg-3">—</span>
+function WindowCell({ w, now, label, name, showName = true, showChip = true, ring = false, pace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showName?: boolean; showChip?: boolean; ring?: boolean; pace?: boolean }): React.JSX.Element {
+  // Carries the same testid as a filled cell: an account with no such window still owns
+  // the column, and a test has to be able to point at the cell that stays empty.
+  if (!w) return <span className="text-[12px] text-fg-3" data-testid={`window-${label}`}>—</span>
   const t = tone(w.pct)
-  // The header already says 5-hour and 7-day; only a per-model window needs naming.
+  // The tooltip always names its window; the label inside the cell is redundant wherever
+  // a column header says the same word, so `showName` and `name` are separate answers.
   const full = name ?? (label === '5h' ? '5-hour window' : label === '7d' ? '7-day window' : label)
   const tip = windowTooltip(w, full, now)
   if (ring) {
     return (
       <div className="min-w-0" data-testid={`window-${label}`}>
-        <UsageRing pct={w.pct} label={name} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={pace ? w.expectedPct : undefined} />
+        <UsageRing pct={w.pct} label={showName ? name : undefined} tooltip={tip} sub={w.resetsAt ? resetText(w.resetsAt, now) : undefined} pace={pace ? w.expectedPct : undefined} />
       </div>
     )
   }
@@ -243,7 +267,7 @@ function WindowCell({ w, now, label, name, showChip = true, ring = false, pace =
       <div className="w-full min-w-0" data-testid={`window-${label}`}>
         <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
           <span className="truncate">
-            {name && <span className="text-fg-3">{name} </span>}
+            {name && showName && <span className="text-fg-3">{name} </span>}
             <span className={cx('font-medium tabular-nums', t === 'danger' ? 'text-danger' : t === 'warn' ? 'text-warn' : 'text-fg')}>{pct(w.pct)}</span>
           </span>
           <span className="flex min-w-0 items-center gap-1 text-fg-3">
@@ -257,7 +281,7 @@ function WindowCell({ w, now, label, name, showChip = true, ring = false, pace =
   )
 }
 
-function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; cols: string; compact: boolean; mask: boolean; rings: boolean; pace: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
+function AccountRow({ a, now, template, models, compact, mask, rings, pace, plan, busy, onSwitch, onAction, onToggleDisabled }: { a: Account; now: number; template: string; models: string[]; compact: boolean; mask: boolean; rings: boolean; pace: boolean; plan?: PlanInfo; busy: string | null; onSwitch: () => void; onAction: (k: DialogKind) => void; onToggleDisabled: () => void }): React.JSX.Element {
   const usage = a.usage ?? a.lastGoodUsage ?? null
   const stale = !a.usage && !!a.lastGoodUsage
   const sTone = statusTone(a.usageStatus)
@@ -293,28 +317,14 @@ function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSw
   )
 
   const five = <WindowCell w={usage?.fiveHour} now={now} label="5h" ring={rings} pace={pace} name={compact ? '5-hour' : undefined} />
-  const weekly = (
-    <>
-      {rings ? (
-        <WindowCell w={usage?.sevenDay} now={now} label="7d" ring pace={pace} name={compact ? '7-day' : undefined} />
-      ) : (
-        // an equal flex child, or the full-width 7-day track pushes the model one
-        // out of the cell entirely once they sit in a row
-        <div className="min-w-0 flex-1">
-          <WindowCell w={usage?.sevenDay} now={now} label="7d" pace={pace} name={compact ? '7-day' : undefined} />
-        </div>
-      )}
-      {usage?.scoped?.map((s) =>
-        rings ? (
-          <WindowCell key={s.name} w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} ring pace={pace} />
-        ) : (
-          <div key={s.name} className="min-w-0 flex-1" data-testid={`scoped-${s.name}`}>
-            <WindowCell w={s} now={now} label={`model-${s.name}`} name={s.name} showChip={false} pace={pace} />
-          </div>
-        )
-      )}
-    </>
-  )
+  const weekly = <WindowCell w={usage?.sevenDay} now={now} label="7d" ring={rings} pace={pace} name={compact ? '7-day' : undefined} />
+  // One cell per model the TABLE knows about, not per model this account has: a missing
+  // one has to render as an empty cell so the columns after it stay put. A card has no
+  // columns to hold and no header naming them, so there it is simply absent instead.
+  const perModel = (compact ? models.filter((m) => usage?.scoped?.some((s) => s.name === m)) : models).map((m) => {
+    const w = usage?.scoped?.find((s) => s.name === m)
+    return <WindowCell key={m} w={w} now={now} label={`model-${m}`} name={m} showName={compact} showChip={false} ring={rings} pace={pace} />
+  })
 
   const status = (
     <>
@@ -371,6 +381,7 @@ function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSw
         <div className={cx('flex flex-col gap-2.5', rings && 'flex-row flex-wrap items-center gap-x-4 gap-y-2')}>
           {five}
           {weekly}
+          {perModel}
         </div>
         <div className="flex flex-wrap items-center gap-2">{status}</div>
       </div>
@@ -379,7 +390,8 @@ function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSw
 
   return (
     <div
-      className={cx('group grid items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', cols, a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
+      className={cx('group grid items-start gap-4 border-b border-border px-3 py-2.5 last:border-b-0 transition-colors duration-150 hover:bg-surface-2/50', a.active && 'bg-accent-soft/40 hover:bg-accent-soft/50', a.disabled && 'opacity-70')}
+      style={{ gridTemplateColumns: template }}
       data-testid={`account-row-${a.number}`}
       data-active={a.active || undefined}
     >
@@ -389,16 +401,8 @@ function AccountRow({ a, now, cols, compact, mask, rings, pace, plan, busy, onSw
       </div>
       {name}
       {five}
-      {rings ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">{weekly}</div>
-      ) : (
-        <div className="@container min-w-0">
-          {/* Bars go beside the 7-day one once this cell is wide enough for two readable
-              tracks, and under it when it is not. A container query, not a window
-              breakpoint: what decides is the width of this cell. */}
-          <div className="flex flex-col gap-2 @[330px]:flex-row @[330px]:items-start @[330px]:gap-4">{weekly}</div>
-        </div>
-      )}
+      {weekly}
+      {perModel}
       <div className="flex min-w-0 min-h-[19px] flex-col items-start justify-center gap-1 self-stretch">{status}</div>
       <div className="flex min-w-0 min-h-[19px] items-center justify-end gap-1 self-stretch">{actions}</div>
     </div>
