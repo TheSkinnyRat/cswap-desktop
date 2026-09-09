@@ -77,7 +77,9 @@ export async function launch(opts: { seedState?: object; settings?: object; env?
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  await page.setViewportSize({ width: 1120, height: 720 })
+  // Wide enough for the table: with a per-model window holding a column of its own, a
+  // narrower window is cards, and a test that means to read the table would read a card.
+  await page.setViewportSize({ width: 1400, height: 800 })
   return {
     app,
     page,
