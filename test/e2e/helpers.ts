@@ -77,8 +77,8 @@ export async function launch(opts: { seedState?: object; settings?: object; env?
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  // Wide enough for the table: with a per-model window holding a column of its own, a
-  // narrower window is cards, and a test that means to read the table would read a card.
+  // Wide enough that the three window columns are above their minimum and the list is not
+  // scrolling sideways — a squeezed table is a case with its own test, not the default.
   await page.setViewportSize({ width: 1400, height: 800 })
   return {
     app,
