@@ -11,17 +11,18 @@ import { Tooltip } from '../components/Tooltip'
 import { PageHeader } from '../components/PageHeader'
 import { ageSeconds, clockOf, maskEmail, orgTag, pct, resetText, statusLabel, statusTone, tone } from '../lib/format'
 
-const T = { num: 28, account: 160, win: 132, ring: 116, status: 148, actions: 104, gap: 16, pad: 24 }
+const T = { num: 28, account: 160, win: 132, ring: 116, status: 148, actions: 104 }
+
+// Cards below this list width, table above. Deliberately NOT derived from the template
+// (Purwa's call, 10 Sep): three window columns want ~956px, and deriving it turned a
+// usable window into cards — a table that scrolls sideways is the better trade here.
+const CARD_BELOW = 780
 
 // Columns are generated, not spelled out: a per-model window is a column of its own, and
-// which models exist comes from the accounts. The same numbers give the card threshold —
-// so `pad`/`gap` must match the row's px-3/gap-4, or a table renders wider than it fits.
-function gridLayout(models: number, rings: boolean): { template: string; minWidth: number } {
+// which models exist comes from the accounts.
+function gridTemplate(models: number, rings: boolean): string {
   const win = rings ? T.ring : T.win
-  const windows = 2 + models
-  const tracks = [`${T.num}px`, `minmax(${T.account}px,2fr)`, ...Array<string>(windows).fill(`minmax(${win}px,1fr)`), `${T.status}px`, `${T.actions}px`]
-  const fixed = T.num + T.account + win * windows + T.status + T.actions
-  return { template: tracks.join(' '), minWidth: fixed + (tracks.length - 1) * T.gap + T.pad }
+  return [`${T.num}px`, `minmax(${T.account}px,2fr)`, ...Array<string>(2 + models).fill(`minmax(${win}px,1fr)`), `${T.status}px`, `${T.actions}px`].join(' ')
 }
 
 type DialogKind = { kind: 'add' } | { kind: 'token' } | { kind: 'diag' } | { kind: 'run'; a: Account } | { kind: 'alias'; a: Account } | { kind: 'move'; a: Account } | { kind: 'remove'; a: Account } | { kind: 'export'; a?: Account } | { kind: 'import' } | null
@@ -47,9 +48,9 @@ export function AccountsPage(): React.JSX.Element {
   const plans = accounts.plans ?? {}
   // A table needs a table's worth of room. Below that the same account reads better as a
   // card, which is also the only way to stop the page scrolling sideways.
-  const { template, minWidth } = gridLayout(models.length, rings)
+  const template = gridTemplate(models.length, rings)
   const [listRef, listWidth] = useElementWidth()
-  const compact = listWidth > 0 && listWidth < minWidth
+  const compact = listWidth > 0 && listWidth < CARD_BELOW
 
   const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: { message: string }; value?: unknown }>, okMsg?: (v: unknown) => string): Promise<boolean> => {
     setBusy(key)
@@ -248,8 +249,14 @@ function windowTooltip(w: UsageWindow, name: string, now: number): string {
 
 function WindowCell({ w, now, label, name, showName = true, showChip = true, ring = false, pace = true }: { w: UsageWindow | undefined; now: number; label: string; name?: string; showName?: boolean; showChip?: boolean; ring?: boolean; pace?: boolean }): React.JSX.Element {
   // Carries the same testid as a filled cell: an account with no such window still owns
-  // the column, and a test has to be able to point at the cell that stays empty.
-  if (!w) return <span className="text-[12px] text-fg-3" data-testid={`window-${label}`}>—</span>
+  // the column, and a test has to be able to point at the cell that stays empty. Stretched
+  // and centred because the row is `items-start` and a bar is twice a dash's height.
+  if (!w)
+    return (
+      <span className="flex h-full min-h-[19px] items-center self-stretch text-[12px] text-fg-3" data-testid={`window-${label}`}>
+        -
+      </span>
+    )
   const t = tone(w.pct)
   // The tooltip always names its window; the label inside the cell is redundant wherever
   // a column header says the same word, so `showName` and `name` are separate answers.

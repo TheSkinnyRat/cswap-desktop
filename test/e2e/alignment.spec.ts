@@ -64,7 +64,7 @@ test('a per-model window is a column of the table, the same width as the other t
 
   // An account without that model keeps the cell, empty: otherwise its status and actions
   // would sit one column left of every other row's.
-  await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable')).toHaveText('—')
+  await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable')).toHaveText('-')
   expect(Math.abs((await box(1, 'window-model-Fable')).x - (await box(3, 'window-model-Fable')).x), 'empty cell holds the column').toBeLessThan(2)
 
   // Rings keep a fixed pitch, so a row whose window has no reset line does not shift
@@ -77,8 +77,8 @@ test('a per-model window is a column of the table, the same width as the other t
 })
 
 async function checkWidths(page: import('@playwright/test').Page, view: string): Promise<void> {
-  // below ~1240 the list is narrower than a table needs and becomes cards instead
-  for (const width of [1240, 1327, 1600, 1920]) {
+  // below a 780px list the rows become cards instead
+  for (const width of [1100, 1327, 1600, 1920]) {
     await page.setViewportSize({ width, height: 620 })
     await page.waitForTimeout(150)
     const cols = await page.evaluate(() => {
@@ -123,6 +123,19 @@ test('a narrow window changes the shape instead of scrolling sideways', async ()
     await expect(page.getByTestId('account-row-1').getByTestId('window-model-Fable')).toHaveCount(0)
   }
   await shot(page, 'compact-cards')
+
+  // Between the card threshold and what three window columns actually want (~956px) the
+  // table scrolls sideways on purpose — but only the list scrolls, never the page.
+  await page.setViewportSize({ width: 1100, height: 720 })
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('accounts-table')).not.toHaveAttribute('data-compact', 'true')
+  const squeezed = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="accounts-scroller"]') as HTMLElement
+    const main = document.querySelector('main') as HTMLElement
+    return { list: el.scrollWidth - el.clientWidth, main: main.scrollWidth - main.clientWidth, body: document.documentElement.scrollWidth - document.documentElement.clientWidth }
+  })
+  expect(squeezed.list, `the list takes the overflow: ${JSON.stringify(squeezed)}`).toBeGreaterThan(0)
+  expect({ main: squeezed.main, body: squeezed.body }).toEqual({ main: 0, body: 0 })
 
   // the sidebar collapses on its own when narrow, and by hand when it is not
   await page.setViewportSize({ width: 560, height: 720 })
