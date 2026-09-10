@@ -32,6 +32,8 @@ test('README screenshots', async () => {
   chmodSync(bin, 0o755)
 
   const { app, page } = await launch({ seedState: seed, bin })
+  // 1240 is the floor, not a taste: below a 1220 window the three window columns hit their
+  // minimum, the list starts scrolling sideways and the Switch button leaves the frame.
   await page.setViewportSize({ width: 1240, height: 780 })
   await page.waitForSelector('[data-testid="accounts-table"]')
   await page.waitForTimeout(500)

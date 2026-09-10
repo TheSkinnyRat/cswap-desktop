@@ -44,7 +44,7 @@ Every build is unsigned, so Windows SmartScreen and macOS Gatekeeper will want a
 - **Updates** — Windows and Linux check GitHub releases at start and every six hours, download in the background and install on quit or on request.
 - **Log** — every cswap call the app made: arguments, exit code, duration, output.
 - **Privacy** — one button masks every email address and organisation name, for a screenshot or a stream.
-- **Responsive** — below a table's worth of room each account becomes a card, so nothing ever scrolls sideways; the sidebar collapses to icons on a narrow window, or on demand.
+- **Responsive** — below a table's worth of room each account becomes a card; in between, the table scrolls sideways inside its own frame rather than dragging the page with it. The sidebar collapses to icons on a narrow window, or on demand.
 - Light theme by default (tinted, not plain white), dark theme, or follow the system.
 - Not in the UI on purpose: `cswap purge` (deletes every account) — use the CLI if you really mean it.
 
@@ -64,7 +64,7 @@ Every build is unsigned, so Windows SmartScreen and macOS Gatekeeper will want a
     <td><img src="docs/screenshots/mappings.png" alt="Directory mappings"><br><sub><b>Mappings</b> — a project folder to an account, with a terminal a click away.</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/accounts-compact.png" width="52%" alt="A narrow window"><br><sub><b>Narrow window</b> — the table becomes cards and the sidebar becomes icons; nothing scrolls sideways.</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/accounts-compact.png" width="52%" alt="A narrow window"><br><sub><b>Narrow window</b> — the table becomes cards and the sidebar becomes icons; at this width nothing scrolls sideways.</sub></td>
   </tr>
 </table>
 
