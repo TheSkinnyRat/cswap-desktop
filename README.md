@@ -29,6 +29,8 @@ If cswap is missing when the app starts, it offers to run that install for you.
 
 Every build is unsigned, so Windows SmartScreen and macOS Gatekeeper will want a confirmation the first time. Windows and Linux update themselves from here; macOS cannot without a signature, so it checks and links you back to the release.
 
+On macOS the first launch is blocked as coming from an unidentified developer: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Claude Swap. Builds up to v0.1.21 were not signed at all and macOS calls them *damaged*; update, or clear the download flag once with `xattr -cr "/Applications/Claude Swap.app"`.
+
 **3. Add your first account** — log into Claude Code (`claude`, then `/login`), then **Add account → From the current Claude login**. Repeat for each account you want to keep.
 
 ## What it does
