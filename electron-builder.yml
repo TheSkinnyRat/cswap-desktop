@@ -53,4 +53,6 @@ mac:
     - target: dmg
       arch: [x64, arm64]
   artifactName: claude-swap-desktop-mac-${arch}.${ext}
-  identity: null
+  # "-" = ad-hoc: seals the bundle so macOS offers "Open Anyway" instead of
+  # calling an unsigned app "damaged". Not a Developer ID; Gatekeeper still asks once.
+  identity: "-"
