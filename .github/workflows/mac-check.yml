@@ -1,0 +1,109 @@
+name: macOS launch check
+
+# Nobody on the team owns a Mac, so this is the only place the .dmg is ever
+# opened. It checks what Gatekeeper checks — the code signature — on both the
+# published release and a fresh build of this commit, and starts the app to see
+# whether the kernel lets it run. It cannot click Gatekeeper's dialog.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release tag to check (empty = latest)
+        required: false
+  pull_request:
+    paths:
+      - electron-builder.yml
+      - .github/workflows/mac-check.yml
+
+jobs:
+  check:
+    name: ${{ matrix.source }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest]
+        source: [release, build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the published .dmg
+        if: matrix.source == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release }}
+        run: |
+          arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
+          gh release download $TAG --repo "$GITHUB_REPOSITORY" \
+            --pattern "claude-swap-desktop-mac-$arch.dmg" --dir dmg
+          ls -l dmg
+
+      - uses: actions/setup-node@v4
+        if: matrix.source == 'build'
+        with:
+          node-version: 24
+          cache: npm
+      - name: Build the .dmg from this commit
+        if: matrix.source == 'build'
+        run: |
+          npm ci
+          npm run build
+          arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
+          npx electron-builder --mac dmg --$arch --publish never
+          mkdir dmg && cp release/*.dmg dmg/
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # electron-builder skips signing on PR builds; the tag build does
+          # sign, so without this the check would test a different bundle.
+          CSC_FOR_PULL_REQUEST: true
+
+      - name: Install the way a browser download would
+        run: |
+          dmg=$(ls dmg/*.dmg)
+          # Browsers tag downloads with this attribute; it is what makes
+          # Gatekeeper look at the app at all.
+          xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$dmg"
+          hdiutil attach -nobrowse -mountpoint /tmp/dmg "$dmg"
+          ditto /tmp/dmg/"Claude Swap.app" "$RUNNER_TEMP/Claude Swap.app"
+          hdiutil detach /tmp/dmg
+          xattr -p com.apple.quarantine "$RUNNER_TEMP/Claude Swap.app" \
+            || xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$RUNNER_TEMP/Claude Swap.app"
+
+      - name: Signature (an invalid one is what macOS reports as "damaged")
+        id: sig
+        run: |
+          app="$RUNNER_TEMP/Claude Swap.app"
+          codesign -dv "$app" 2>&1 | grep -E 'Identifier|Signature|flags' || true
+          if codesign --verify --deep --strict --verbose=2 "$app"; then
+            echo "valid=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=no" >> "$GITHUB_OUTPUT"
+          fi
+          echo "--- Gatekeeper (an ad-hoc signature is rejected here too; that is the 'Open Anyway' case)"
+          spctl --assess --type execute --verbose=4 "$app" || true
+
+      - name: Launch
+        id: launch
+        run: |
+          app="$RUNNER_TEMP/Claude Swap.app"
+          xattr -dr com.apple.quarantine "$app"
+          set +e
+          "$app/Contents/MacOS/Claude Swap" > launch.log 2>&1 &
+          pid=$!
+          sleep 20
+          if kill -0 $pid 2>/dev/null; then
+            echo "running=yes" >> "$GITHUB_OUTPUT"
+            kill $pid
+          else
+            wait $pid; echo "exit=$?"
+            echo "running=no" >> "$GITHUB_OUTPUT"
+          fi
+          tail -20 launch.log
+
+      - name: Verdict
+        run: |
+          echo "signature valid: ${{ steps.sig.outputs.valid }}, still running after 20s: ${{ steps.launch.outputs.running }}"
+          # A fresh build must be launchable; the published release is only reported.
+          if [ "${{ matrix.source }}" = build ]; then
+            [ "${{ steps.sig.outputs.valid }}" = yes ] && [ "${{ steps.launch.outputs.running }}" = yes ]
+          fi

@@ -53,4 +53,9 @@ mac:
     - target: dmg
       arch: [x64, arm64]
   artifactName: claude-swap-desktop-mac-${arch}.${ext}
-  identity: null
+  # "-" = ad-hoc: seals the bundle so macOS offers "Open Anyway" instead of
+  # calling an unsigned app "damaged". Not a Developer ID; Gatekeeper still asks once.
+  identity: "-"
+  # Hardened runtime only matters for notarization, and with an ad-hoc signature
+  # it can refuse to load the Electron framework at launch.
+  hardenedRuntime: false
