@@ -53,6 +53,9 @@ jobs:
           mkdir dmg && cp release/*.dmg dmg/
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          # electron-builder skips signing on PR builds; the tag build does
+          # sign, so without this the check would test a different bundle.
+          CSC_FOR_PULL_REQUEST: true
 
       - name: Install the way a browser download would
         run: |
