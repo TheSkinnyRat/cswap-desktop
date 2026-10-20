@@ -159,6 +159,13 @@ describe('CswapDriver', () => {
     expect(d.getLog().at(-1)?.args).toEqual(['import', file, '--force'])
   })
 
+  it('an empty argument reaches cswap as an empty argument (the .cmd shim on Windows goes through a shell)', async () => {
+    const d = driver()
+    const r = await d.setConfig('autoswitch.model', '')
+    expect(state().log.at(-1)).toEqual(['config', 'set', 'autoswitch.model', ''])
+    expect(r.ok).toBe(true)
+  })
+
   it('serializes mutations so two concurrent switches never interleave', async () => {
     const d = driver()
     process.env.FAKE_CSWAP_DELAY = '150'

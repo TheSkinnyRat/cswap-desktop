@@ -34,7 +34,8 @@ function killTree(pid: number | undefined, fallback: () => void): void {
 }
 
 function quoteWin(a: string): string {
-  return /[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a
+  // An empty argument has to be quoted too, or the shell drops it and the next one shifts left.
+  return a === '' || /[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a
 }
 
 export class CswapDriver extends EventEmitter {
