@@ -173,11 +173,7 @@ impl StubCswap {
             is_organization: !org.is_empty(),
             active: n == 1,
             usage_status: "ok".into(),
-            usage: p5.map(|p| Usage {
-                five_hour: Some(win(p)),
-                seven_day: p7.map(win),
-                ..Default::default()
-            }),
+            usage: p5.map(|p| Usage { five_hour: Some(win(p)), seven_day: p7.map(win), ..Default::default() }),
             ..Default::default()
         };
         let mut a4 = acc(4, "api-key-4@token.local", None, "", None, None);

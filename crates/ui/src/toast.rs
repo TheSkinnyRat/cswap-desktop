@@ -126,7 +126,11 @@ impl Toasts {
                                             widgets::selectable(ui, d, style::body(12.0), t.text_2);
                                         }
                                     });
-                                    if widgets::Button::icon_only(icon::X, "Dismiss").size(widgets::Size::Sm).show(ui).clicked() {
+                                    if widgets::Button::icon_only(icon::X, "Dismiss")
+                                        .size(widgets::Size::Sm)
+                                        .show(ui)
+                                        .clicked()
+                                    {
                                         dismiss = Some(i);
                                     }
                                 });

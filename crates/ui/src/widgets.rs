@@ -269,7 +269,8 @@ impl<'a> Button<'a> {
         let t = tokens(ui);
         let h = self.size.height();
         let font = style::body_medium(self.size.font());
-        let galley = (!self.text.is_empty()).then(|| ui.painter().layout_job(job(self.text, font, Color32::PLACEHOLDER)));
+        let galley =
+            (!self.text.is_empty()).then(|| ui.painter().layout_job(job(self.text, font, Color32::PLACEHOLDER)));
         let icon_sz = if self.size == Size::Sm { 13.0 } else { 14.0 };
         let has_icon = self.icon.is_some() || self.loading;
         let width = if self.square {
@@ -296,14 +297,22 @@ impl<'a> Button<'a> {
             Variant::Primary => (mix(t.accent, t.accent_hover, ht), t.accent_fg, Color32::TRANSPARENT),
             Variant::Default => (mix(t.surface, t.surface_2, ht), t.text, mix(t.border, t.border_strong, ht)),
             Variant::Subtle => (mix(t.surface_2, t.surface_3, ht), t.text, Color32::TRANSPARENT),
-            Variant::Ghost => (mix(Color32::TRANSPARENT, t.surface_2, ht), mix(t.text_2, t.text, ht), Color32::TRANSPARENT),
+            Variant::Ghost => {
+                (mix(Color32::TRANSPARENT, t.surface_2, ht), mix(t.text_2, t.text, ht), Color32::TRANSPARENT)
+            }
             Variant::Danger => {
                 (mix(t.danger, mix(t.danger, Color32::WHITE, 0.12), ht), Color32::WHITE, Color32::TRANSPARENT)
             }
         };
         let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.5) };
         let painter = ui.painter();
-        painter.rect(rect, CornerRadius::same(RADIUS_MD), fade(fill), Stroke::new(1.0, fade(border)), StrokeKind::Inside);
+        painter.rect(
+            rect,
+            CornerRadius::same(RADIUS_MD),
+            fade(fill),
+            Stroke::new(1.0, fade(border)),
+            StrokeKind::Inside,
+        );
         if self.variant == Variant::Primary {
             // `shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]`: the faint top highlight.
             let top = Rect::from_min_size(rect.min + vec2(3.0, 0.5), vec2(rect.width() - 6.0, 1.0));
@@ -312,10 +321,15 @@ impl<'a> Button<'a> {
         if resp.has_focus() {
             focus_ring(ui, rect, &t);
         }
-        let mut x = if self.square { rect.center().x - icon_sz / 2.0 } else { rect.center().x - (width.min(rect.width()) - self.size.pad() * 2.0) / 2.0 };
+        let mut x = if self.square {
+            rect.center().x - icon_sz / 2.0
+        } else {
+            rect.center().x - (width.min(rect.width()) - self.size.pad() * 2.0) / 2.0
+        };
         if self.min_width > 0.0 && !self.square {
             let text_w = galley.as_ref().map_or(0.0, |g| g.size().x);
-            let content = if has_icon { icon_sz + if galley.is_some() { self.size.gap() } else { 0.0 } } else { 0.0 } + text_w;
+            let content =
+                if has_icon { icon_sz + if galley.is_some() { self.size.gap() } else { 0.0 } } else { 0.0 } + text_w;
             x = rect.center().x - content / 2.0;
         }
         if self.loading {
@@ -335,7 +349,12 @@ impl<'a> Button<'a> {
 
 /// `*:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent) }`.
 pub fn focus_ring(ui: &Ui, rect: Rect, t: &Tokens) {
-    ui.painter().rect_stroke(rect.expand(2.0), CornerRadius::same(RADIUS_MD + 2), Stroke::new(2.0, t.accent), StrokeKind::Outside);
+    ui.painter().rect_stroke(
+        rect.expand(2.0),
+        CornerRadius::same(RADIUS_MD + 2),
+        Stroke::new(2.0, t.accent),
+        StrokeKind::Outside,
+    );
 }
 
 // ---- Chip / Kbd --------------------------------------------------------------------------
@@ -420,7 +439,13 @@ pub fn input(ui: &mut Ui, label: &str, value: &mut String, placeholder: &str, mo
 
 /// `Select`: a framed button with a chevron that opens a list. Returns true when the value
 /// changed. `label` is the accessible name (0.1.23's `aria-label`).
-pub fn select<T: PartialEq + Clone>(ui: &mut Ui, label: &str, value: &mut T, options: &[(T, String)], width: f32) -> bool {
+pub fn select<T: PartialEq + Clone>(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut T,
+    options: &[(T, String)],
+    width: f32,
+) -> bool {
     let t = tokens(ui);
     let current = options.iter().find(|(v, _)| v == value).map(|(_, l)| l.clone()).unwrap_or_default();
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
@@ -447,11 +472,13 @@ pub fn select<T: PartialEq + Clone>(ui: &mut Ui, label: &str, value: &mut T, opt
     egui::Popup::menu(&resp).width(width).frame(popup_frame(&t)).show(|ui| {
         ui.set_min_width(width - 8.0);
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.with_layout(Layout::top_down_justified(Align::Min), |ui| for (v, l) in options {
-            let on = v == value;
-            if menu_item(ui, l, None, on, false, true, None).clicked() && !on {
-                *value = v.clone();
-                changed = true;
+        ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
+            for (v, l) in options {
+                let on = v == value;
+                if menu_item(ui, l, None, on, false, true, None).clicked() && !on {
+                    *value = v.clone();
+                    changed = true;
+                }
             }
         });
     });
@@ -494,7 +521,13 @@ pub fn segmented<T: Copy + PartialEq>(ui: &mut Ui, value: T, options: &[(T, Opti
         .collect();
     let total = widths.iter().sum::<f32>() + 4.0;
     let (outer, _) = ui.allocate_exact_size(vec2(total, 32.0), Sense::hover());
-    ui.painter().rect(outer, CornerRadius::same(RADIUS_MD), t.surface_2, Stroke::new(1.0, t.border), StrokeKind::Inside);
+    ui.painter().rect(
+        outer,
+        CornerRadius::same(RADIUS_MD),
+        t.surface_2,
+        Stroke::new(1.0, t.border),
+        StrokeKind::Inside,
+    );
     let mut x = outer.left() + 2.0;
     let mut picked = None;
     for ((v, ic, l), w) in options.iter().zip(widths) {
@@ -554,10 +587,11 @@ pub fn field<R>(ui: &mut Ui, label: &str, hint: Option<&str>, inline: bool, cont
             out = Some(ctrl.inner);
             let top = ui.max_rect().top() + ((row_h - labels_h) / 2.0).max(0.0);
             let rect = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(rest, labels_h.max(1.0)));
-            let r = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)), |ui| {
-                ui.set_width(rest);
-                labels(ui)
-            });
+            let r =
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)), |ui| {
+                    ui.set_width(rest);
+                    labels(ui)
+                });
             let lh = r.response.rect.height();
             measured = (ctrl_h.max(lh), lh);
         });
@@ -603,7 +637,9 @@ pub fn card<R>(
                 let w = ui.available_width();
                 let (rect, _) = ui.allocate_exact_size(vec2(w, 42.0), Sense::hover());
                 let mut head = ui.new_child(
-                    egui::UiBuilder::new().max_rect(rect.shrink2(vec2(16.0, 0.0))).layout(Layout::left_to_right(Align::Center)),
+                    egui::UiBuilder::new()
+                        .max_rect(rect.shrink2(vec2(16.0, 0.0)))
+                        .layout(Layout::left_to_right(Align::Center)),
                 );
                 text(&mut head, title, style::body_semibold(13.0), t.text);
                 head.with_layout(Layout::right_to_left(Align::Center), |ui| actions(ui));
@@ -839,7 +875,8 @@ pub fn dialog(
     let screen = ctx.content_rect();
     let top = screen.top() + screen.height() * 0.12;
     let width = width.min(screen.width() - 32.0);
-    let area = egui::Modal::default_area(Id::unique(("dialog", id))).anchor(Align2::CENTER_TOP, vec2(0.0, top - screen.top()));
+    let area =
+        egui::Modal::default_area(Id::unique(("dialog", id))).anchor(Align2::CENTER_TOP, vec2(0.0, top - screen.top()));
     let mut close = false;
     let resp = egui::Modal::new(Id::unique(("dialog", id)))
         .area(area)
@@ -917,9 +954,16 @@ pub fn confirm(ctx: &egui::Context, id: &str, title: &str, body: &str, yes: &str
             out = Confirm::No;
         }
     };
-    let closed = dialog(ctx, id, title, 420.0, |ui| {
-        para(ui, body, style::body(13.0), t.text_2);
-    }, Some(&mut footer));
+    let closed = dialog(
+        ctx,
+        id,
+        title,
+        420.0,
+        |ui| {
+            para(ui, body, style::body(13.0), t.text_2);
+        },
+        Some(&mut footer),
+    );
     if closed && out == Confirm::Pending {
         out = Confirm::No;
     }

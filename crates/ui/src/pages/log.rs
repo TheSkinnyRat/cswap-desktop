@@ -82,7 +82,12 @@ impl LogPage {
         }
         Frame::new().inner_margin(Margin { left: 24, right: 24, top: 0, bottom: 32 }).show(ui, |ui| {
             if self.log.is_empty() {
-                widgets::empty(ui, icon::SCROLL_TEXT, "Nothing yet", "Commands will show up here as the app talks to cswap.");
+                widgets::empty(
+                    ui,
+                    icon::SCROLL_TEXT,
+                    "Nothing yet",
+                    "Commands will show up here as the app talks to cswap.",
+                );
                 return;
             }
             Frame::new()
@@ -106,7 +111,6 @@ impl LogPage {
                 });
         });
     }
-
 }
 
 /// One log row (and its output when `open`). Returns true when clicked.
@@ -177,9 +181,13 @@ fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::them
                         let mut j = widgets::job(&name.to_uppercase(), style::body(10.5), t.text_3);
                         j.sections[0].format.extra_letter_spacing = 0.3;
                         ui.add(egui::Label::new(j).selectable(false));
-                        egui::ScrollArea::both().id_salt((e.id, name)).max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
-                            widgets::selectable(ui, text, style::mono(11.5), color);
-                        });
+                        egui::ScrollArea::both()
+                            .id_salt((e.id, name))
+                            .max_height(300.0)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                widgets::selectable(ui, text, style::mono(11.5), color);
+                            });
                     });
                 }
                 if out.is_empty() && err.is_empty() && e.error.is_none() {

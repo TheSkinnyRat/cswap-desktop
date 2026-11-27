@@ -171,7 +171,11 @@ impl CswapApp {
 
         // Shortcuts work wherever focus is; they are consumed so a text field never sees them.
         let (k_palette, k_refresh, k_settings) = ctx.input_mut(|i| {
-            (i.consume_shortcut(&SHORTCUT_PALETTE), i.consume_shortcut(&SHORTCUT_REFRESH), i.consume_shortcut(&SHORTCUT_SETTINGS))
+            (
+                i.consume_shortcut(&SHORTCUT_PALETTE),
+                i.consume_shortcut(&SHORTCUT_REFRESH),
+                i.consume_shortcut(&SHORTCUT_SETTINGS),
+            )
         });
         if k_palette {
             self.palette.toggle();
@@ -187,7 +191,8 @@ impl CswapApp {
         let width = ctx.content_rect().width();
         let (narrow, forced) = shell::sidebar_narrow(width, self.settings.sidebar_collapsed);
         let target = if narrow { shell::SIDEBAR_NARROW } else { shell::SIDEBAR_WIDE };
-        let sidebar_w = ctx.animate_value_with_time(egui::Id::unique("sidebar-w"), target, crate::theme::TRANSITION_SECS);
+        let sidebar_w =
+            ctx.animate_value_with_time(egui::Id::unique("sidebar-w"), target, crate::theme::TRANSITION_SECS);
 
         let mut act = ShellAction::default();
         {
@@ -230,26 +235,23 @@ impl CswapApp {
                 navigate: &mut navigate,
             };
             let page = self.page;
-            egui::ScrollArea::vertical()
-                .id_salt(("main", page))
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    if needs_onboarding {
-                        self.onboarding.ui(ui, &mut cx);
-                        return;
-                    }
-                    match page {
-                        Page::Settings => self.settings_page.ui(ui, &mut cx),
-                        Page::Log => self.log_page.ui(ui, &mut cx),
-                        // ui-accounts' pages (`pages::{accounts, auto, mappings}`) take these
-                        // arms when merged: `self.accounts_page.ui(ui, &mut cx)` and so on.
-                        Page::Accounts => not_yet(ui, "Accounts"),
-                        Page::Auto => not_yet(ui, "Auto-switch"),
-                        Page::Mappings => not_yet(ui, "Mappings"),
-                    }
-                });
+            egui::ScrollArea::vertical().id_salt(("main", page)).auto_shrink([false, false]).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 0.0;
+                if needs_onboarding {
+                    self.onboarding.ui(ui, &mut cx);
+                    return;
+                }
+                match page {
+                    Page::Settings => self.settings_page.ui(ui, &mut cx),
+                    Page::Log => self.log_page.ui(ui, &mut cx),
+                    // ui-accounts' pages (`pages::{accounts, auto, mappings}`) take these
+                    // arms when merged: `self.accounts_page.ui(ui, &mut cx)` and so on.
+                    Page::Accounts => not_yet(ui, "Accounts"),
+                    Page::Auto => not_yet(ui, "Auto-switch"),
+                    Page::Mappings => not_yet(ui, "Mappings"),
+                }
+            });
             self.palette.poll(&mut cx);
             self.palette.show(&ctx, &mut cx);
         });
@@ -259,7 +261,8 @@ impl CswapApp {
         }
         if act.toggle_collapsed {
             let now = self.settings.sidebar_collapsed;
-            self.settings = self.services.cswap.edit_settings(Box::new(move |s: &mut AppSettings| s.sidebar_collapsed = !now));
+            self.settings =
+                self.services.cswap.edit_settings(Box::new(move |s: &mut AppSettings| s.sidebar_collapsed = !now));
         }
         if act.open_palette {
             self.palette.open_fresh();

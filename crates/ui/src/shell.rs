@@ -166,7 +166,8 @@ pub fn sidebar(ui: &mut Ui, view: &ShellView, narrow: bool, forced: bool, act: &
         let (r, resp) = ui.allocate_exact_size(vec2(w, 32.0), Sense::click());
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, label));
         let ht = widgets::hover_t(&ui, resp.id, resp.hovered() && !on);
-        let fill = if on { t.surface_2 } else { Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht) };
+        let fill =
+            if on { t.surface_2 } else { Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht) };
         ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), fill);
         let ic = if narrow { r.center() } else { pos2(r.left() + 10.0 + 7.5, r.center().y) };
         widgets::paint_icon(&ui, glyph, ic, 15.0, if on { t.accent } else { t.text_3 });
@@ -188,7 +189,13 @@ pub fn sidebar(ui: &mut Ui, view: &ShellView, narrow: bool, forced: bool, act: &
             if page == Page::Accounts
                 && let Some(n) = count
             {
-                ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, n.to_string(), style::body(11.0), t.text_3);
+                ui.painter().text(
+                    pos2(r.right() - 10.0, r.center().y),
+                    Align2::RIGHT_CENTER,
+                    n.to_string(),
+                    style::body(11.0),
+                    t.text_3,
+                );
             }
             if let Some(c) = badge_dot {
                 dot(&ui, pos2(r.right() - 13.0, r.center().y), c);
@@ -220,13 +227,23 @@ pub fn sidebar(ui: &mut Ui, view: &ShellView, narrow: bool, forced: bool, act: &
         let (r, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
         let ht = widgets::hover_t(&ui, resp.id, resp.hovered());
-        ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht));
+        ui.painter().rect_filled(
+            r,
+            CornerRadius::same(RADIUS_MD),
+            Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht),
+        );
         let fg = mix(t.text_3, t.text, ht);
         let glyph = if narrow { icon::PANEL_LEFT_OPEN } else { icon::PANEL_LEFT_CLOSE };
         let ic = if narrow { r.center() } else { pos2(r.left() + 10.0 + 7.5, r.center().y) };
         widgets::paint_icon(&ui, glyph, ic, 15.0, fg);
         if !narrow {
-            ui.painter().text(pos2(r.left() + 35.0, r.center().y), Align2::LEFT_CENTER, "Collapse", style::body(12.0), fg);
+            ui.painter().text(
+                pos2(r.left() + 35.0, r.center().y),
+                Align2::LEFT_CENTER,
+                "Collapse",
+                style::body(12.0),
+                fg,
+            );
         }
         widgets::tooltip(&ui, &resp, label, Side::Right);
         if resp.clicked() {

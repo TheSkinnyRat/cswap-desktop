@@ -5,7 +5,9 @@
 //! (or opens the page); the result comes back as a toast.
 
 use cswap_core::{Account, AccountsState, CsResult, Page, Pending, SwitchPayload};
-use egui::{Align, Align2, Color32, CornerRadius, Frame, Key, Layout, Margin, Modifiers, Sense, Stroke, Ui, pos2, vec2};
+use egui::{
+    Align, Align2, Color32, CornerRadius, Frame, Key, Layout, Margin, Modifiers, Sense, Stroke, Ui, pos2, vec2,
+};
 
 use crate::cx::Cx;
 use crate::style;
@@ -97,12 +99,12 @@ impl Palette {
             self.switching = None;
             match r {
                 Ok(v) => {
-                    let text = if v.warnings.is_empty() { v.message.clone() } else { format!("{}\n{}", v.message, v.warnings.join("\n")) };
-                    if v.switched {
-                        cx.toasts.success(text)
+                    let text = if v.warnings.is_empty() {
+                        v.message.clone()
                     } else {
-                        cx.toasts.info(text)
-                    }
+                        format!("{}\n{}", v.message, v.warnings.join("\n"))
+                    };
+                    if v.switched { cx.toasts.success(text) } else { cx.toasts.info(text) }
                 }
                 Err(e) => cx.toasts.error(format!("Switch failed\n{}", e.message)),
             }
@@ -181,7 +183,11 @@ impl Palette {
                     .id(id)
                     .font(style::body(14.0))
                     .text_color(t.text)
-                    .hint_text(widgets::rich("Switch to account… (type an email, alias or slot)", style::body(14.0), t.text_3))
+                    .hint_text(widgets::rich(
+                        "Switch to account… (type an email, alias or slot)",
+                        style::body(14.0),
+                        t.text_3,
+                    ))
                     .frame(Frame::new().inner_margin(Margin::symmetric(16, 13)))
                     .desired_width(width - 32.0);
                 let r = ui.add(edit);
@@ -245,7 +251,9 @@ impl Palette {
         let w = ui.available_width();
         let (rect, resp) = ui.allocate_exact_size(vec2(w, 36.0), Sense::click());
         let label = match row {
-            Row::Account(a) => format!("{} {}", a.alias.as_deref().unwrap_or(""), mask_email(&a.email, mask)).trim().to_owned(),
+            Row::Account(a) => {
+                format!("{} {}", a.alias.as_deref().unwrap_or(""), mask_email(&a.email, mask)).trim().to_owned()
+            }
             Row::Page(p) => format!("Go to {}", page_title(*p)),
         };
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, selected, &label));
@@ -257,12 +265,20 @@ impl Palette {
         if selected {
             ui.painter().rect_filled(rect, CornerRadius::same(crate::theme::RADIUS_MD), t.surface_2);
         }
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(vec2(10.0, 0.0))).layout(Layout::left_to_right(Align::Center)));
+        let mut child = ui.new_child(
+            egui::UiBuilder::new().max_rect(rect.shrink2(vec2(10.0, 0.0))).layout(Layout::left_to_right(Align::Center)),
+        );
         child.spacing_mut().item_spacing.x = 12.0;
         match row {
             Row::Account(a) => {
                 let (r, _) = child.allocate_exact_size(vec2(20.0, 16.0), Sense::hover());
-                child.painter().text(pos2(r.right(), r.center().y), Align2::RIGHT_CENTER, a.number.to_string(), style::mono(12.0), t.text_3);
+                child.painter().text(
+                    pos2(r.right(), r.center().y),
+                    Align2::RIGHT_CENTER,
+                    a.number.to_string(),
+                    style::mono(12.0),
+                    t.text_3,
+                );
                 let (d, _) = child.allocate_exact_size(vec2(6.0, 6.0), Sense::hover());
                 child.painter().circle_filled(d.center(), 3.0, if a.active { t.accent } else { t.border_strong });
                 // right side first so the name truncates, not the figures
@@ -288,7 +304,11 @@ impl Palette {
                             job.append(" ", 0.0, egui::TextFormat::simple(style::body(13.0), t.text));
                         }
                         let email_color = if a.alias.is_some() { t.text_2 } else { t.text };
-                        job.append(&mask_email(&a.email, mask), 0.0, egui::TextFormat::simple(style::body(13.0), email_color));
+                        job.append(
+                            &mask_email(&a.email, mask),
+                            0.0,
+                            egui::TextFormat::simple(style::body(13.0), email_color),
+                        );
                         job.wrap.max_rows = 1;
                         job.wrap.break_anywhere = true;
                         job.wrap.max_width = ui.available_width();
@@ -298,7 +318,13 @@ impl Palette {
             }
             Row::Page(p) => {
                 let (r, _) = child.allocate_exact_size(vec2(20.0, 16.0), Sense::hover());
-                child.painter().text(pos2(r.right(), r.center().y), Align2::RIGHT_CENTER, "→", style::mono(12.0), t.text_3);
+                child.painter().text(
+                    pos2(r.right(), r.center().y),
+                    Align2::RIGHT_CENTER,
+                    "→",
+                    style::mono(12.0),
+                    t.text_3,
+                );
                 widgets::text(&mut child, format!("Go to {}", page_title(*p)), style::body(13.0), t.text);
             }
         }

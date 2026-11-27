@@ -56,7 +56,8 @@ pub fn icon(size: f32) -> FontId {
 fn inter_at(weight: f32) -> FontData {
     // Without the coordinate every Inter face renders at the file's default instance (400),
     // so medium and semibold text would silently look regular.
-    FontData::from_static(INTER).tweak(FontTweak { coords: VariationCoords::new([("wght", weight)]), ..Default::default() })
+    FontData::from_static(INTER)
+        .tweak(FontTweak { coords: VariationCoords::new([("wght", weight)]), ..Default::default() })
 }
 
 pub fn font_definitions() -> FontDefinitions {

@@ -142,7 +142,11 @@ impl OnboardingPage {
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
-            let install = Button::new("Install with uv").primary().icon(icon::DOWNLOAD).loading(self.p_install.is_some()).show(ui);
+            let install = Button::new("Install with uv")
+                .primary()
+                .icon(icon::DOWNLOAD)
+                .loading(self.p_install.is_some())
+                .show(ui);
             if install.clicked() {
                 self.p_install = Some(cx.services.cswap.install_cswap());
             }

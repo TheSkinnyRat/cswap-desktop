@@ -150,16 +150,18 @@ impl SettingsPage {
     fn report_manual_check(&mut self, u: &UpdaterState, cx: &mut Cx) {
         let newer = u.version.as_ref().filter(|v| newer_than(v, &u.current)).cloned();
         match (u.status, newer) {
-            (UpdaterStatus::Error, _) => {
-                cx.toasts.error(format!("Could not check for updates\n{}", u.error.as_deref().unwrap_or("unknown error")))
-            }
+            (UpdaterStatus::Error, _) => cx
+                .toasts
+                .error(format!("Could not check for updates\n{}", u.error.as_deref().unwrap_or("unknown error"))),
             (_, Some(v)) => {
                 cx.toasts.info(format!("Version {v} is available\nOpen the releases page to download it."));
                 self.found = Some(v);
             }
             (UpdaterStatus::NotAvailable, None) => cx.toasts.success("You are on the latest version"),
             (_, None) if u.version.is_some() => cx.toasts.success("You are on the latest version"),
-            _ => cx.toasts.info("Updates are off for this copy\nClaude Swap on GitHub (below) lists the latest release."),
+            _ => {
+                cx.toasts.info("Updates are off for this copy\nClaude Swap on GitHub (below) lists the latest release.")
+            }
         }
     }
 
@@ -249,37 +251,43 @@ impl SettingsPage {
                             );
                         }
                     }
-                    widgets::field(ui, "Custom path", Some("Leave empty to auto-detect (uv / pipx / PATH)."), false, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            let browse_w = 92.0;
-                            let save_w = 56.0;
-                            let w = (ui.available_width() - browse_w - save_w - 16.0).max(120.0);
-                            let placeholder = if cx.services.host.platform() == "windows" {
-                                r"C:\Users\you\.local\bin\cswap.exe"
-                            } else {
-                                "~/.local/bin/cswap"
-                            };
-                            widgets::input(ui, "Custom path", &mut self.path_draft, placeholder, true, w);
-                            if Button::new("Browse").icon(icon::FOLDER_OPEN).show(ui).clicked()
-                                && let Some(p) = cx.services.host.pick_file("Locate cswap", &[])
-                            {
-                                self.path_draft = p.clone();
-                                self.save_path(Some(p), cx);
-                            }
-                            let draft = Some(self.path_draft.clone()).filter(|s| !s.is_empty());
-                            let changed = draft != cx.settings.cswap_path;
-                            let save = Button::new("Save")
-                                .primary()
-                                .loading(self.busy == Some(Busy::Path))
-                                .enabled(changed)
-                                .show(ui);
-                            if save.clicked() {
-                                let p = Some(self.path_draft.trim().to_owned()).filter(|s| !s.is_empty());
-                                self.save_path(p, cx);
-                            }
-                        });
-                    });
+                    widgets::field(
+                        ui,
+                        "Custom path",
+                        Some("Leave empty to auto-detect (uv / pipx / PATH)."),
+                        false,
+                        |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                let browse_w = 92.0;
+                                let save_w = 56.0;
+                                let w = (ui.available_width() - browse_w - save_w - 16.0).max(120.0);
+                                let placeholder = if cx.services.host.platform() == "windows" {
+                                    r"C:\Users\you\.local\bin\cswap.exe"
+                                } else {
+                                    "~/.local/bin/cswap"
+                                };
+                                widgets::input(ui, "Custom path", &mut self.path_draft, placeholder, true, w);
+                                if Button::new("Browse").icon(icon::FOLDER_OPEN).show(ui).clicked()
+                                    && let Some(p) = cx.services.host.pick_file("Locate cswap", &[])
+                                {
+                                    self.path_draft = p.clone();
+                                    self.save_path(Some(p), cx);
+                                }
+                                let draft = Some(self.path_draft.clone()).filter(|s| !s.is_empty());
+                                let changed = draft != cx.settings.cswap_path;
+                                let save = Button::new("Save")
+                                    .primary()
+                                    .loading(self.busy == Some(Busy::Path))
+                                    .enabled(changed)
+                                    .show(ui);
+                                if save.clicked() {
+                                    let p = Some(self.path_draft.trim().to_owned()).filter(|s| !s.is_empty());
+                                    self.save_path(p, cx);
+                                }
+                            });
+                        },
+                    );
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
                         if Button::new("Detect again").small().icon(icon::REFRESH_CW).show(ui).clicked() {
@@ -317,7 +325,12 @@ impl SettingsPage {
                             .response
                             .interact(egui::Sense::click());
                         r.widget_info(|| {
-                            egui::WidgetInfo::selected(egui::Role::Button, true, self.show_locations, "Locations checked")
+                            egui::WidgetInfo::selected(
+                                egui::Role::Button,
+                                true,
+                                self.show_locations,
+                                "Locations checked",
+                            )
                         });
                         if r.clicked() {
                             self.show_locations = !self.show_locations;
@@ -347,91 +360,102 @@ impl SettingsPage {
 
     fn data_card(&mut self, ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
         let t = cx.tokens.clone();
-        let (_, natural) = widgets::card(ui, Some("Data"), |_| {}, min, |ui| {
-            body_frame(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 4.0;
-                caps(ui, "cswap vault (backup root)", &t);
-                ui.horizontal(|ui| {
-                    let vault = self.vault.clone();
-                    let open_w = if vault.is_some() { 72.0 } else { 0.0 };
-                    let text = vault.clone().unwrap_or_else(|| "unknown".into());
-                    let r = ui
-                        .allocate_ui_with_layout(vec2((ui.available_width() - open_w).max(60.0), 28.0), Layout::left_to_right(Align::Center), |ui| {
-                            let mut job = widgets::job(&text, style::mono(12.0), t.text);
-                            job.wrap.max_rows = 1;
-                            job.wrap.break_anywhere = true;
-                            job.wrap.max_width = ui.available_width();
-                            ui.add(egui::Label::new(job).selectable(true).truncate())
-                        })
-                        .inner;
-                    widgets::tooltip(ui, &r, &text, widgets::Side::Top);
-                    if let Some(v) = vault
-                        && Button::new("Open").small().ghost().icon(icon::FOLDER_OPEN).show(ui).clicked()
-                    {
-                        cx.services.host.open_path(&v);
-                    }
-                });
-                widgets::para(
-                    ui,
-                    "Read for mappings and change detection only. Every write goes through the cswap CLI so the vault stays consistent with the terminal and the TUI.",
-                    style::body(11.5),
-                    t.text_3,
-                );
-                ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    caps(ui, "Unclaimed credential entries", &t);
-                    if let Some(u) = self.unclaimed.as_ref().filter(|u| !u.is_empty()) {
-                        widgets::chip(ui, &u.len().to_string(), Tone::Warn);
-                    }
-                });
-                match &self.unclaimed {
-                    None => {
-                        widgets::text(ui, "Loading…", style::body(12.5), t.text_3);
-                    }
-                    Some(u) if u.is_empty() => {
-                        widgets::para(
-                            ui,
-                            "None — nothing stashed that cswap could not attribute to a slot.",
-                            style::body(12.5),
-                            t.text_3,
-                        );
-                    }
-                    Some(list) => {
-                        let list = list.clone();
-                        for u in list {
-                            Frame::new()
-                                .stroke(Stroke::new(1.0, t.border))
-                                .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
-                                .inner_margin(Margin::symmetric(8, 4))
-                                .show(ui, |ui| {
-                                    ui.set_width(ui.available_width());
-                                    ui.horizontal(|ui| {
-                                        widgets::text(ui, &u.id, style::mono(12.0), t.text);
-                                        widgets::text(ui, format!("slot {}", u.slot), style::body(12.5), t.text_3);
-                                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                            let purge = Button::new("Purge")
-                                                .small()
-                                                .ghost()
-                                                .icon(icon::TRASH_2)
-                                                .loading(self.p_purge.as_ref().is_some_and(|(id, _)| *id == u.id))
-                                                .show(ui);
-                                            if purge.clicked() {
-                                                self.p_purge = Some((u.id.clone(), cx.services.cswap.purge_unclaimed(&u.id)));
-                                            }
-                                            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                                                let mut j = widgets::job(&u.reason, style::body(12.5), t.text_3);
-                                                j.wrap.max_rows = 1;
-                                                j.wrap.max_width = ui.available_width();
-                                                ui.add(egui::Label::new(j).selectable(false).truncate());
+        let (_, natural) = widgets::card(
+            ui,
+            Some("Data"),
+            |_| {},
+            min,
+            |ui| {
+                body_frame(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 4.0;
+                    caps(ui, "cswap vault (backup root)", &t);
+                    ui.horizontal(|ui| {
+                        let vault = self.vault.clone();
+                        let open_w = if vault.is_some() { 72.0 } else { 0.0 };
+                        let text = vault.clone().unwrap_or_else(|| "unknown".into());
+                        let r = ui
+                            .allocate_ui_with_layout(
+                                vec2((ui.available_width() - open_w).max(60.0), 28.0),
+                                Layout::left_to_right(Align::Center),
+                                |ui| {
+                                    let mut job = widgets::job(&text, style::mono(12.0), t.text);
+                                    job.wrap.max_rows = 1;
+                                    job.wrap.break_anywhere = true;
+                                    job.wrap.max_width = ui.available_width();
+                                    ui.add(egui::Label::new(job).selectable(true).truncate())
+                                },
+                            )
+                            .inner;
+                        widgets::tooltip(ui, &r, &text, widgets::Side::Top);
+                        if let Some(v) = vault
+                            && Button::new("Open").small().ghost().icon(icon::FOLDER_OPEN).show(ui).clicked()
+                        {
+                            cx.services.host.open_path(&v);
+                        }
+                    });
+                    widgets::para(
+                        ui,
+                        "Read for mappings and change detection only. Every write goes through the cswap CLI so the vault stays consistent with the terminal and the TUI.",
+                        style::body(11.5),
+                        t.text_3,
+                    );
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        caps(ui, "Unclaimed credential entries", &t);
+                        if let Some(u) = self.unclaimed.as_ref().filter(|u| !u.is_empty()) {
+                            widgets::chip(ui, &u.len().to_string(), Tone::Warn);
+                        }
+                    });
+                    match &self.unclaimed {
+                        None => {
+                            widgets::text(ui, "Loading…", style::body(12.5), t.text_3);
+                        }
+                        Some(u) if u.is_empty() => {
+                            widgets::para(
+                                ui,
+                                "None — nothing stashed that cswap could not attribute to a slot.",
+                                style::body(12.5),
+                                t.text_3,
+                            );
+                        }
+                        Some(list) => {
+                            let list = list.clone();
+                            for u in list {
+                                Frame::new()
+                                    .stroke(Stroke::new(1.0, t.border))
+                                    .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
+                                    .inner_margin(Margin::symmetric(8, 4))
+                                    .show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.horizontal(|ui| {
+                                            widgets::text(ui, &u.id, style::mono(12.0), t.text);
+                                            widgets::text(ui, format!("slot {}", u.slot), style::body(12.5), t.text_3);
+                                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                                let purge = Button::new("Purge")
+                                                    .small()
+                                                    .ghost()
+                                                    .icon(icon::TRASH_2)
+                                                    .loading(self.p_purge.as_ref().is_some_and(|(id, _)| *id == u.id))
+                                                    .show(ui);
+                                                if purge.clicked() {
+                                                    self.p_purge =
+                                                        Some((u.id.clone(), cx.services.cswap.purge_unclaimed(&u.id)));
+                                                }
+                                                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                                    let mut j = widgets::job(&u.reason, style::body(12.5), t.text_3);
+                                                    j.wrap.max_rows = 1;
+                                                    j.wrap.max_width = ui.available_width();
+                                                    ui.add(egui::Label::new(j).selectable(false).truncate());
+                                                });
                                             });
                                         });
                                     });
-                                });
+                            }
                         }
                     }
-                }
-            });
-        });
+                });
+            },
+        );
         natural
     }
 
@@ -439,30 +463,52 @@ impl SettingsPage {
 
     fn about_card(&mut self, ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
         let t = cx.tokens.clone();
-        let (_, natural) = widgets::card(ui, Some("About"), |_| {}, min, |ui| {
-            body_frame(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 8.0;
-                let mut job = LayoutJob::default();
-                job.append("Claude Swap ", 0.0, egui::TextFormat::simple(style::body_medium(12.5), t.text));
-                job.append(&cx.services.host.app_version(), 0.0, egui::TextFormat::simple(style::body(12.5), t.text_2));
-                ui.add(egui::Label::new(job).selectable(true));
-                widgets::para(
-                    ui,
-                    "A desktop front-end for claude-swap. It drives the CLI you already have installed; nothing here talks to Anthropic directly.",
-                    style::body(12.5),
-                    t.text_2,
-                );
-                self.updater_box(ui, cx);
-                ui.horizontal_wrapped(|ui| {
-                    if Button::new("Claude Swap on GitHub").small().ghost().icon(icon::EXTERNAL_LINK).show(ui).clicked() {
-                        cx.services.host.open_external(GITHUB);
-                    }
-                    if Button::new("claude-swap (upstream)").small().ghost().icon(icon::EXTERNAL_LINK).show(ui).clicked() {
-                        cx.services.host.open_external(UPSTREAM);
-                    }
+        let (_, natural) = widgets::card(
+            ui,
+            Some("About"),
+            |_| {},
+            min,
+            |ui| {
+                body_frame(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 8.0;
+                    let mut job = LayoutJob::default();
+                    job.append("Claude Swap ", 0.0, egui::TextFormat::simple(style::body_medium(12.5), t.text));
+                    job.append(
+                        &cx.services.host.app_version(),
+                        0.0,
+                        egui::TextFormat::simple(style::body(12.5), t.text_2),
+                    );
+                    ui.add(egui::Label::new(job).selectable(true));
+                    widgets::para(
+                        ui,
+                        "A desktop front-end for claude-swap. It drives the CLI you already have installed; nothing here talks to Anthropic directly.",
+                        style::body(12.5),
+                        t.text_2,
+                    );
+                    self.updater_box(ui, cx);
+                    ui.horizontal_wrapped(|ui| {
+                        if Button::new("Claude Swap on GitHub")
+                            .small()
+                            .ghost()
+                            .icon(icon::EXTERNAL_LINK)
+                            .show(ui)
+                            .clicked()
+                        {
+                            cx.services.host.open_external(GITHUB);
+                        }
+                        if Button::new("claude-swap (upstream)")
+                            .small()
+                            .ghost()
+                            .icon(icon::EXTERNAL_LINK)
+                            .show(ui)
+                            .clicked()
+                        {
+                            cx.services.host.open_external(UPSTREAM);
+                        }
+                    });
                 });
-            });
-        });
+            },
+        );
         natural
     }
 
@@ -486,13 +532,24 @@ impl SettingsPage {
                         let buttons = ui
                             .horizontal(|ui| {
                                 if let (Some(v), Some(url)) = (&self.found, &u.release_url)
-                                    && Button::new(&format!("Get {v}")).small().primary().icon(icon::EXTERNAL_LINK).show(ui).clicked()
+                                    && Button::new(&format!("Get {v}"))
+                                        .small()
+                                        .primary()
+                                        .icon(icon::EXTERNAL_LINK)
+                                        .show(ui)
+                                        .clicked()
                                 {
                                     cx.services.host.open_external(url);
                                 }
                                 match u.status {
                                     UpdaterStatus::Downloaded => {
-                                        if Button::new("Restart & install").small().primary().icon(icon::CIRCLE_ARROW_UP).show(ui).clicked() {
+                                        if Button::new("Restart & install")
+                                            .small()
+                                            .primary()
+                                            .icon(icon::CIRCLE_ARROW_UP)
+                                            .show(ui)
+                                            .clicked()
+                                        {
                                             cx.services.updates.install();
                                         }
                                     }
@@ -510,9 +567,17 @@ impl SettingsPage {
                                     s => {
                                         let working = matches!(
                                             s,
-                                            UpdaterStatus::Checking | UpdaterStatus::Downloading | UpdaterStatus::Available
+                                            UpdaterStatus::Checking
+                                                | UpdaterStatus::Downloading
+                                                | UpdaterStatus::Available
                                         ) || self.p_update.is_some();
-                                        if Button::new("Check now").small().icon(icon::REFRESH_CW).loading(working).show(ui).clicked() {
+                                        if Button::new("Check now")
+                                            .small()
+                                            .icon(icon::REFRESH_CW)
+                                            .loading(working)
+                                            .show(ui)
+                                            .clicked()
+                                        {
                                             self.p_update = Some(cx.services.updates.check());
                                         }
                                     }
@@ -569,9 +634,10 @@ fn updater_text(u: &UpdaterState) -> (String, String) {
     };
     let sub = match u.status {
         UpdaterStatus::Error => u.error.clone().unwrap_or_default(),
-        UpdaterStatus::Disabled => {
-            u.disabled_reason.clone().unwrap_or_else(|| "Running from source or a dev build — use the release page.".into())
-        }
+        UpdaterStatus::Disabled => u
+            .disabled_reason
+            .clone()
+            .unwrap_or_else(|| "Running from source or a dev build — use the release page.".into()),
         _ => match u.checked_at.as_deref().and_then(local_hm) {
             Some(hm) => format!("Checked {hm} · installs on quit or on request"),
             None => "Checks at start and every 6 hours; installs on quit or on request.".into(),
@@ -632,78 +698,91 @@ fn appearance_card(ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
     let edit = move |f: Box<dyn FnOnce(&mut AppSettings) + Send>| {
         cswap.edit_settings(f);
     };
-    let (_, natural) = widgets::card(ui, Some("Appearance & behaviour"), |_| {}, min, |ui| {
-        body_frame(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 16.0;
-            widgets::field(ui, "Theme", None, true, |ui| {
-                let opts = [
-                    (ThemeSetting::Light, Some(icon::SUN), "Light"),
-                    (ThemeSetting::Dark, Some(icon::MOON), "Dark"),
-                    (ThemeSetting::System, Some(icon::MONITOR), "System"),
-                ];
-                if let Some(v) = widgets::segmented(ui, s.theme, &opts) {
-                    edit(Box::new(move |s| s.theme = v));
-                }
-            });
-            widgets::field(
-                ui,
-                "Refresh usage every",
-                Some("cswap itself throttles calls to Anthropic; this only decides how often the list is re-read."),
-                true,
-                |ui| {
-                    let opts: Vec<(u32, String)> = [30u32, 60, 120, 300, 600, 0]
-                        .into_iter()
-                        .map(|v| {
-                            let l = match v {
-                                0 => "Never".to_owned(),
-                                v if v < 60 => format!("{v}s"),
-                                v => format!("{} min", v / 60),
-                            };
-                            (v, l)
-                        })
-                        .collect();
-                    let mut v = s.refresh_seconds;
-                    if widgets::select(ui, "Refresh interval", &mut v, &opts, 120.0) {
-                        edit(Box::new(move |s| s.refresh_seconds = v));
-                    }
-                },
-            );
-            type Flag = fn(&mut AppSettings) -> &mut bool;
-            let toggles: [(&str, Option<&str>, bool, Flag); 7] = [
-                (
-                    "Refresh when the window opens or gets focus",
-                    Some("At most once every 10 seconds."),
-                    s.refresh_on_focus,
-                    |s| &mut s.refresh_on_focus,
-                ),
-                (
-                    "Hide email addresses",
-                    Some("Keeps the first three characters — for screenshots and streams."),
-                    s.mask_emails,
-                    |s| &mut s.mask_emails,
-                ),
-                ("Close to tray", Some("Closing the window keeps the app running in the tray."), s.close_to_tray, |s| {
-                    &mut s.close_to_tray
-                }),
-                ("Start minimized", Some("Start hidden in the tray."), s.start_minimized, |s| &mut s.start_minimized),
-                ("Launch at login", None, s.launch_at_login, |s| &mut s.launch_at_login),
-                (
-                    "Notify on auto-switch",
-                    Some("Desktop notification whenever the auto-switcher changes account."),
-                    s.notify_on_auto_switch,
-                    |s| &mut s.notify_on_auto_switch,
-                ),
-                ("Start auto-switch with the app", None, s.auto_start_auto_switch, |s| &mut s.auto_start_auto_switch),
-            ];
-            for (label, hint, on, flag) in toggles {
-                widgets::field(ui, label, hint, true, |ui| {
-                    if widgets::switch(ui, label, on, true).clicked() {
-                        edit(Box::new(move |s| *flag(s) = !on));
+    let (_, natural) = widgets::card(
+        ui,
+        Some("Appearance & behaviour"),
+        |_| {},
+        min,
+        |ui| {
+            body_frame(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 16.0;
+                widgets::field(ui, "Theme", None, true, |ui| {
+                    let opts = [
+                        (ThemeSetting::Light, Some(icon::SUN), "Light"),
+                        (ThemeSetting::Dark, Some(icon::MOON), "Dark"),
+                        (ThemeSetting::System, Some(icon::MONITOR), "System"),
+                    ];
+                    if let Some(v) = widgets::segmented(ui, s.theme, &opts) {
+                        edit(Box::new(move |s| s.theme = v));
                     }
                 });
-            }
-        });
-    });
+                widgets::field(
+                    ui,
+                    "Refresh usage every",
+                    Some("cswap itself throttles calls to Anthropic; this only decides how often the list is re-read."),
+                    true,
+                    |ui| {
+                        let opts: Vec<(u32, String)> = [30u32, 60, 120, 300, 600, 0]
+                            .into_iter()
+                            .map(|v| {
+                                let l = match v {
+                                    0 => "Never".to_owned(),
+                                    v if v < 60 => format!("{v}s"),
+                                    v => format!("{} min", v / 60),
+                                };
+                                (v, l)
+                            })
+                            .collect();
+                        let mut v = s.refresh_seconds;
+                        if widgets::select(ui, "Refresh interval", &mut v, &opts, 120.0) {
+                            edit(Box::new(move |s| s.refresh_seconds = v));
+                        }
+                    },
+                );
+                type Flag = fn(&mut AppSettings) -> &mut bool;
+                let toggles: [(&str, Option<&str>, bool, Flag); 7] = [
+                    (
+                        "Refresh when the window opens or gets focus",
+                        Some("At most once every 10 seconds."),
+                        s.refresh_on_focus,
+                        |s| &mut s.refresh_on_focus,
+                    ),
+                    (
+                        "Hide email addresses",
+                        Some("Keeps the first three characters — for screenshots and streams."),
+                        s.mask_emails,
+                        |s| &mut s.mask_emails,
+                    ),
+                    (
+                        "Close to tray",
+                        Some("Closing the window keeps the app running in the tray."),
+                        s.close_to_tray,
+                        |s| &mut s.close_to_tray,
+                    ),
+                    ("Start minimized", Some("Start hidden in the tray."), s.start_minimized, |s| {
+                        &mut s.start_minimized
+                    }),
+                    ("Launch at login", None, s.launch_at_login, |s| &mut s.launch_at_login),
+                    (
+                        "Notify on auto-switch",
+                        Some("Desktop notification whenever the auto-switcher changes account."),
+                        s.notify_on_auto_switch,
+                        |s| &mut s.notify_on_auto_switch,
+                    ),
+                    ("Start auto-switch with the app", None, s.auto_start_auto_switch, |s| {
+                        &mut s.auto_start_auto_switch
+                    }),
+                ];
+                for (label, hint, on, flag) in toggles {
+                    widgets::field(ui, label, hint, true, |ui| {
+                        if widgets::switch(ui, label, on, true).clicked() {
+                            edit(Box::new(move |s| *flag(s) = !on));
+                        }
+                    });
+                }
+            });
+        },
+    );
     natural
 }
 
@@ -721,11 +800,19 @@ mod tests {
 
     #[test]
     fn updater_lines_follow_the_state() {
-        let mut u = UpdaterState { status: UpdaterStatus::Downloading, version: Some("1.2.0".into()), percent: Some(41.6), ..Default::default() };
+        let mut u = UpdaterState {
+            status: UpdaterStatus::Downloading,
+            version: Some("1.2.0".into()),
+            percent: Some(41.6),
+            ..Default::default()
+        };
         assert_eq!(updater_text(&u).0, "Downloading 1.2.0… 42%");
         u.status = UpdaterStatus::Disabled;
         u.disabled_reason = Some("Installed from a .deb — update with your package manager.".into());
-        assert_eq!(updater_text(&u), ("Automatic updates are off".into(), "Installed from a .deb — update with your package manager.".into()));
+        assert_eq!(
+            updater_text(&u),
+            ("Automatic updates are off".into(), "Installed from a .deb — update with your package manager.".into())
+        );
         u.status = UpdaterStatus::Error;
         u.error = Some("signature mismatch".into());
         assert_eq!(updater_text(&u).1, "signature mismatch");

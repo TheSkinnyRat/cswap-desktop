@@ -83,7 +83,10 @@ fn shot(h: &mut Harness<'_, World>, name: &str) {
     // so a snapshot taken in one zone still matches in another.
     let clocks: Vec<egui::Rect> = h
         .query_all_by_role(Role::Label)
-        .filter(|n| n.accesskit_node().value().is_some_and(|v| is_clock(&v)) || n.accesskit_node().label().is_some_and(|v| is_clock(&v)))
+        .filter(|n| {
+            n.accesskit_node().value().is_some_and(|v| is_clock(&v))
+                || n.accesskit_node().label().is_some_and(|v| is_clock(&v))
+        })
         .map(|n| n.rect())
         .collect();
     for r in clocks {
@@ -178,7 +181,12 @@ fn updater_box_follows_the_state() {
     assert_eq!(*f.updates.checks.lock().unwrap(), 1);
 
     // a downloaded update: a toast once, a dot on Settings, and the install button
-    let ready = UpdaterState { status: UpdaterStatus::Downloaded, current: "1.0.0".into(), version: Some("1.0.1".into()), ..Default::default() };
+    let ready = UpdaterState {
+        status: UpdaterStatus::Downloaded,
+        current: "1.0.0".into(),
+        version: Some("1.0.1".into()),
+        ..Default::default()
+    };
     f.updates.set(ready.clone());
     f.sink.send(Event::Updater(ready));
     settle(&mut h);
@@ -326,7 +334,6 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
     h.get_by_role_and_label(Role::Button, "Expand the sidebar");
 }
 
-
 /// Every shared control in both themes, with a menu open, and a confirm dialog: the look of
 /// what ui-accounts builds on, checked by eye in the snapshots.
 #[test]
@@ -350,7 +357,10 @@ fn gallery(theme: egui::Theme, name: &str) {
             .with_render_cursor(false)
             .with_theme(theme)
             .with_context_setup(move |ctx| {
-                crate::style::setup(ctx, if theme == egui::Theme::Dark { ThemeSetting::Dark } else { ThemeSetting::Light });
+                crate::style::setup(
+                    ctx,
+                    if theme == egui::Theme::Dark { ThemeSetting::Dark } else { ThemeSetting::Light },
+                );
             })
             .build_ui(move |ui| {
                 let t = widgets::tokens(ui);
@@ -375,7 +385,13 @@ fn gallery(theme: egui::Theme, name: &str) {
                     });
                 });
                 ui.horizontal(|ui| {
-                    for (l, tone) in [("OK", Tone::Ok), ("Token expired", Tone::Danger), ("Keychain locked", Tone::Warn), ("API key", Tone::Muted), ("Max 5x", Tone::Accent)] {
+                    for (l, tone) in [
+                        ("OK", Tone::Ok),
+                        ("Token expired", Tone::Danger),
+                        ("Keychain locked", Tone::Warn),
+                        ("API key", Tone::Muted),
+                        ("Max 5x", Tone::Accent),
+                    ] {
                         widgets::chip(ui, l, tone);
                     }
                     widgets::kbd(ui, "Ctrl K");
@@ -383,22 +399,47 @@ fn gallery(theme: egui::Theme, name: &str) {
                 });
                 ui.horizontal(|ui| {
                     widgets::input(ui, "Alias", &mut text, "alias", false, 200.0);
-                    widgets::select(ui, "Interval", &mut sel, &[(60, "1 min".to_owned()), (300, "5 min".to_owned())], 120.0);
+                    widgets::select(
+                        ui,
+                        "Interval",
+                        &mut sel,
+                        &[(60, "1 min".to_owned()), (300, "5 min".to_owned())],
+                        120.0,
+                    );
                     widgets::switch(ui, "on", true, true);
                     widgets::switch(ui, "off", false, true);
                     widgets::switch(ui, "disabled", true, false);
-                    if let Some(v) = widgets::segmented(ui, seg, &[(0u8, Some(icon::SUN), "Light"), (1, Some(icon::MOON), "Dark")]) {
+                    if let Some(v) =
+                        widgets::segmented(ui, seg, &[(0u8, Some(icon::SUN), "Light"), (1, Some(icon::MOON), "Dark")])
+                    {
                         seg = v;
                     }
                 });
-                widgets::card(ui, Some("Card title"), |ui| { widgets::chip(ui, "v0.25.0", Tone::Ok); }, 0.0, |ui| {
-                    egui::Frame::new().inner_margin(egui::Margin::symmetric(16, 12)).show(ui, |ui| {
-                        widgets::field(ui, "Inline field", Some("A hint that explains the setting in one line."), true, |ui| {
-                            widgets::switch(ui, "Inline field", true, true)
+                widgets::card(
+                    ui,
+                    Some("Card title"),
+                    |ui| {
+                        widgets::chip(ui, "v0.25.0", Tone::Ok);
+                    },
+                    0.0,
+                    |ui| {
+                        egui::Frame::new().inner_margin(egui::Margin::symmetric(16, 12)).show(ui, |ui| {
+                            widgets::field(
+                                ui,
+                                "Inline field",
+                                Some("A hint that explains the setting in one line."),
+                                true,
+                                |ui| widgets::switch(ui, "Inline field", true, true),
+                            );
                         });
-                    });
-                });
-                widgets::empty(ui, icon::SCROLL_TEXT, "Nothing yet", "Commands will show up here as the app talks to cswap.");
+                    },
+                );
+                widgets::empty(
+                    ui,
+                    icon::SCROLL_TEXT,
+                    "Nothing yet",
+                    "Commands will show up here as the app talks to cswap.",
+                );
             });
         h.run_steps(4);
         h.get_by_role_and_label(Role::Button, "More").click();
@@ -422,7 +463,14 @@ fn confirm_dialog() {
             widgets::page_header(ui, "Accounts", None, |ui| {
                 Button::new("Add account").primary().icon(icon::PLUS).show(ui);
             });
-            widgets::confirm(ui.ctx(), "rm", "Remove Account-2?", "work@example.com is removed from cswap's vault. This cannot be undone.", "Remove", true);
+            widgets::confirm(
+                ui.ctx(),
+                "rm",
+                "Remove Account-2?",
+                "work@example.com is removed from cswap's vault. This cannot be undone.",
+                "Remove",
+                true,
+            );
         });
     h.run_steps(4);
     h.get_by_role_and_label(Role::Button, "Remove");
