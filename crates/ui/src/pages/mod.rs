@@ -2,6 +2,8 @@
 //! `XPage::ui(&mut self, ui: &mut egui::Ui, cx: &mut Cx)`.
 
 pub mod accounts;
+// ui-accounts' private controls, until the shared `widgets` replace them.
+pub(crate) mod kit;
 pub mod auto;
 pub mod log;
 pub mod mappings;
