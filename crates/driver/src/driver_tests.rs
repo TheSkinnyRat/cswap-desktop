@@ -548,7 +548,14 @@ fn native_trait_methods_work_from_a_plain_thread() {
         assert!(wait(native.list_unclaimed()).unwrap().is_empty());
         assert!(wait(native.launch_session("2", Some(&dir))).is_ok());
         native.edit_settings(Box::new(|s| s.refresh_seconds = 30)); // reschedules the timer
-        native.edit_settings(Box::new(|s| s.cswap_path = None)); // unchanged path: no re-detect
+        // A changed path re-detects in the background, through the captured handle.
+        let f = fake().display().to_string();
+        native.edit_settings(Box::new(move |s| s.cswap_path = Some(f)));
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while native.binary().map(|b| b.source) != Some(BinarySource::Settings) {
+            assert!(Instant::now() < deadline, "re-detection after a path change never finished");
+            std::thread::sleep(Duration::from_millis(20));
+        }
         assert!(wait(native.auto_start(true)).running);
         assert!(!wait(native.auto_stop()).running);
         assert_eq!(wait(native.auto_once(true)).unwrap().outcome, AutoOutcome::NoAction);
