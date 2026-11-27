@@ -410,6 +410,18 @@ impl From<ChipTone> for Tone {
     }
 }
 
+impl From<cswap_core::format::Tone> for Tone {
+    fn from(c: cswap_core::format::Tone) -> Self {
+        use cswap_core::format::Tone as F;
+        match c {
+            F::Ok => Tone::Ok,
+            F::Warn => Tone::Warn,
+            F::Danger => Tone::Danger,
+            F::Muted => Tone::Muted,
+        }
+    }
+}
+
 /// Width [`chip`] takes for `label`.
 pub fn chip_width(ui: &Ui, label: &str) -> f32 {
     measure(ui, label, style::body_medium(11.0)).x + 12.0

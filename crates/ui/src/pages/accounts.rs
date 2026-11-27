@@ -479,7 +479,7 @@ impl AccountsPage {
     }
 
     /// Switch + row menu. Returns the action picked.
-    fn actions(&self, ui: &mut Ui, t: &Tokens, a: &Account) -> Option<RowAct> {
+    fn actions(&self, ui: &mut Ui, _t: &Tokens, a: &Account) -> Option<RowAct> {
         let mut out = None;
         let n = a.number;
         let disabled = a.disabled == Some(true);
