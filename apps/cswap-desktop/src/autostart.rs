@@ -24,6 +24,7 @@ pub fn launch_target() -> PathBuf {
     PathBuf::from(exe.to_string_lossy().trim_start_matches(r"\\?\").to_string())
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // Windows and tests
 /// Whether a Run value starts `exe`: a value left pointing at another copy does not.
 pub fn value_launches(value: &str, exe: &Path) -> bool {
     let exe = exe.to_string_lossy().to_lowercase();
@@ -39,10 +40,12 @@ pub fn run_value(exe: &Path) -> String {
     format!("\"{}\" {HIDDEN_FLAG}", exe.display())
 }
 
+#[cfg_attr(windows, allow(dead_code))] // used on macOS / Linux and in tests
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+#[cfg_attr(windows, allow(dead_code))] // used on macOS / Linux and in tests
 pub fn mac_plist(exe: &Path) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -61,6 +64,7 @@ pub fn mac_plist(exe: &Path) -> String {
 }
 
 /// `Exec=` quoting per the Desktop Entry spec: quote the path, escape `"`, `` ` ``, `$`, `\`.
+#[cfg_attr(windows, allow(dead_code))] // used on macOS / Linux and in tests
 pub fn desktop_entry(exe: &Path) -> String {
     let mut q = String::new();
     for c in exe.to_string_lossy().chars() {

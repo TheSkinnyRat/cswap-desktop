@@ -160,7 +160,7 @@ fn spawn_router(events: Receiver<Event>, control: Arc<Control>, cswap: Arc<dyn C
                     Event::Settings(s) => {
                         // As 0.1.23's setSettings: the login item follows a CHANGE of the
                         // setting, in a packaged copy only.
-                        if s.launch_at_login != last.launch_at_login && packaged {
+                        if s.launch_at_login != last.launch_at_login && packaged && autostart::is_enabled() != s.launch_at_login {
                             if let Err(e) = autostart::set_enabled(s.launch_at_login) {
                                 tracing::warn!("launch at login: {e}");
                             }
