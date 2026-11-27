@@ -27,6 +27,10 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 [dev-dependencies]
 egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
 # The demo opens a real window; the app crate picks its own eframe features.
-eframe = { workspace = true, features = ["glow", "accesskit", "default_fonts", "wayland", "x11"] }
+eframe = { workspace = true, features = ["glow", "accesskit", "default_fonts"] }
 # Turns on `testing` for the examples (the demo runs on the in-memory services).
 cswap-ui = { path = ".", features = ["testing"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# winit has no window system to build against on Linux otherwise.
+eframe = { workspace = true, features = ["wayland", "x11"] }
