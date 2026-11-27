@@ -511,7 +511,7 @@ fn setting_row(
             SpecKind::Number | SpecKind::Text => {
                 let buf = edits.entry(spec.key.to_string()).or_insert_with(|| current.clone());
                 let dirty = *buf != current;
-                let r = widgets::input_opts(ui, "", buf, "", false, control_w, false);
+                let r = widgets::input_opts(ui, spec.label, buf, "", false, control_w, false);
                 if dirty {
                     ui.painter().rect_stroke(
                         r.rect,
