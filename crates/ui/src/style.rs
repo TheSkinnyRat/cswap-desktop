@@ -38,19 +38,19 @@ pub fn icons() -> FontFamily {
 }
 
 pub fn body(size: f32) -> FontId {
-    FontId::unique(size, FontFamily::Proportional)
+    FontId::new(size, FontFamily::Proportional)
 }
 pub fn body_medium(size: f32) -> FontId {
-    FontId::unique(size, medium())
+    FontId::new(size, medium())
 }
 pub fn body_semibold(size: f32) -> FontId {
-    FontId::unique(size, semibold())
+    FontId::new(size, semibold())
 }
 pub fn mono(size: f32) -> FontId {
-    FontId::unique(size, FontFamily::Monospace)
+    FontId::new(size, FontFamily::Monospace)
 }
 pub fn icon(size: f32) -> FontId {
-    FontId::unique(size, icons())
+    FontId::new(size, icons())
 }
 
 fn inter_at(weight: f32) -> FontData {
