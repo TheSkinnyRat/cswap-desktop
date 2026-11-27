@@ -542,11 +542,11 @@ fn native_trait_methods_work_from_a_plain_thread() {
         assert_eq!(info.version.as_deref(), Some("0.25.0"));
         assert_eq!(wait(native.refresh()).payload.unwrap().accounts.len(), 4);
         assert!(wait(native.switch_to("2", false)).unwrap().switched);
-        assert!(wait(native.status()).is_ok());
-        assert!(wait(native.config()).is_ok());
+        wait(native.status()).unwrap();
+        wait(native.config()).unwrap();
         assert_eq!(wait(native.list_mappings()).unwrap().len(), 1);
         assert!(wait(native.list_unclaimed()).unwrap().is_empty());
-        assert!(wait(native.launch_session("2", Some(&dir))).is_ok());
+        wait(native.launch_session("2", Some(&dir))).unwrap();
         native.edit_settings(Box::new(|s| s.refresh_seconds = 30)); // reschedules the timer
         // A changed path re-detects in the background, through the captured handle.
         let f = fake().display().to_string();
