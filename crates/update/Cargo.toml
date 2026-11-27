@@ -10,8 +10,29 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# The release tool: signs assets with the key in CSWAP_UPDATE_SIGNING_KEY, verifies them,
+# writes 0.1.x's electron-updater feeds. Used by release.yml and by hand.
+[[bin]]
+name = "cswap-release"
+path = "src/bin/cswap-release.rs"
+
 [dependencies]
 cswap-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true }
+ed25519-dalek = "2.2"
+sha2 = "0.10"
+base64 = "0.22"
+semver = "1"
+# keygen only: 32 bytes from the OS for a new signing key.
+getrandom = "0.3"
+# The same TLS stack the agent settled on: `rustls-no-provider` + a ring ClientConfig.
+# reqwest's own `rustls` feature means aws-lc-rs (a C build, a second crypto stack).
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json"] }
+rustls = { version = "0.23.31", default-features = false, features = ["std", "ring", "tls12", "logging"] }
+rustls-native-certs = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

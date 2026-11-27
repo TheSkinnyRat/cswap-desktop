@@ -1,0 +1,62 @@
+name: CI
+
+# fmt, clippy and tests on all three OSes. Nothing here publishes anything; releases are
+# release.yml's, from main only.
+on:
+  push:
+    branches: [main, v1, 'v1-*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all --check
+
+  test:
+    name: clippy · test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04: the release builds there (oldest glibc), so CI checks the same.
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup component add clippy
+      # Node runs the fake cswap (test/fake-cswap) in the driver's tests.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # egui_kittest renders with wgpu: Mesa's software Vulkan on a runner without a GPU.
+      - name: Software renderer (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      # The release tool and the app build in release mode as release.yml does.
+      - run: cargo build --release --locked -p cswap-desktop -p cswap-update
+      - name: The app starts and answers --version
+        shell: bash
+        run: |
+          bin=target/release/claude-swap
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" --version
+
