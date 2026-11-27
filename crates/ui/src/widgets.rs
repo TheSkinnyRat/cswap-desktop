@@ -827,10 +827,12 @@ pub fn page_header(
         })
         .response
         .rect;
+        // no actions: no row for them either (Settings)
+        let act_h = if actions_width > 0.0 { 32.0 } else { 0.0 };
         let act_rect = if side_by_side {
-            Rect::from_min_size(pos2(top.x + w - actions_width, top.y), vec2(actions_width, 32.0))
+            Rect::from_min_size(pos2(top.x + w - actions_width, top.y), vec2(actions_width, act_h))
         } else {
-            Rect::from_min_size(pos2(top.x, left.max.y + 12.0), vec2(actions_width.min(w), 32.0))
+            Rect::from_min_size(pos2(top.x, left.max.y + 12.0), vec2(actions_width.min(w), act_h))
         };
         let mut a = ui.new_child(egui::UiBuilder::new().max_rect(act_rect).layout(Layout::right_to_left(Align::Center)));
         a.spacing_mut().item_spacing.x = 8.0;
