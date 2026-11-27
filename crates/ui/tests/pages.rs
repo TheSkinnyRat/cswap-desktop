@@ -158,6 +158,8 @@ fn harness_with(world: World, width: f32) -> Harness<'static, World> {
         // Inputs are named by the field label painted above them, which accesskit does
         // not see; the shared widgets (ui-shell) will link the two.
         .with_accessibility_check(false)
+        // egui's bundled Ubuntu-Light lacks "→"; the app's Inter (ui-shell) has it.
+        .allow_missing_glyphs()
         .build_ui_state(|ui, w: &mut World| w.frame(ui), world);
     h.run();
     h
