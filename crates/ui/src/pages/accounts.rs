@@ -34,6 +34,11 @@ pub(crate) fn local_offset() -> i64 {
     chrono::Local::now().offset().local_minus_utc() as i64
 }
 
+/// A menu entry with its 0.1.23 icon.
+fn with<'a>(it: Option<widgets::MenuItem<'a>>, glyph: &'a str) -> Option<widgets::MenuItem<'a>> {
+    it.map(|i| i.with_icon(glyph))
+}
+
 /// A toast with 0.1.23's (title, body) shape.
 pub(crate) fn notify(cx: &mut Cx, kind: ToastKind, title: &str, body: Option<&str>) {
     match body.filter(|b| !b.is_empty()) {
@@ -243,18 +248,21 @@ impl AccountsPage {
                 // right-to-left: the last control first
                 let more = Button::new("").variant(Variant::Ghost).icon(icon::ELLIPSIS).label("More").show(ui);
                 picked.2 = widgets::menu_list(&more, 260.0, &[
-                        item("Export all accounts"),
-                        item("Import accounts"),
+                        with(item("Export all accounts"), icon::DOWNLOAD),
+                        with(item("Import accounts"), icon::UPLOAD),
                         None,
-                        item_hint("Token diagnostics", "--token-status"),
+                        with(item_hint("Token diagnostics", "--token-status"), icon::STETHOSCOPE),
                     ]);
                 let add_r = add.show(ui);
-                picked.1 = widgets::menu_list(&add_r, 240.0, &[item("From current Claude login"), item("From setup-token or API key")]);
+                picked.1 = widgets::menu_list(&add_r, 240.0, &[
+                        with(item("From current Claude login"), icon::USER_PLUS),
+                        with(item("From setup-token or API key"), icon::KEY_ROUND),
+                    ]);
                 let rot = rotate.show(ui);
                 picked.0 = widgets::menu_list(&rot, 260.0, &[
-                        item_hint("Next account", "rotation"),
-                        item_hint("Best (most quota left)", "best"),
-                        item("Next available (skip limited)"),
+                        with(item_hint("Next account", "rotation"), icon::ARROW_RIGHT_LEFT),
+                        with(item_hint("Best (most quota left)", "best"), icon::SPARKLES),
+                        with(item("Next available (skip limited)"), icon::SHUFFLE),
                     ]);
                 let (m_icon, m_tip) = if mask {
                     (icon::EYE_OFF, "Show email addresses")
@@ -488,13 +496,16 @@ impl AccountsPage {
         let run_hint = format!("cswap run {n}");
         let slot_hint = format!("slot {n}");
         let items = [
-            item(if a.alias.is_some() { "Change alias" } else { "Set alias" }),
-            item("Move to slot"),
-            item(if disabled { "Enable (back in rotation)" } else { "Disable (hold out of rotation)" }),
+            with(item(if a.alias.is_some() { "Change alias" } else { "Set alias" }), icon::TAG),
+            with(item("Move to slot"), icon::MOVE_VERTICAL),
+            with(
+                item(if disabled { "Enable (back in rotation)" } else { "Disable (hold out of rotation)" }),
+                if disabled { icon::EYE } else { icon::EYE_OFF },
+            ),
             None,
-            item_hint("Open terminal as this account", &run_hint),
-            item("Export this account"),
-            item_hint("Re-add from the current login", &slot_hint),
+            with(item_hint("Open terminal as this account", &run_hint), icon::SQUARE_TERMINAL),
+            with(item("Export this account"), icon::DOWNLOAD),
+            with(item_hint("Re-add from the current login", &slot_hint), icon::PENCIL),
             None,
             Some(widgets::MenuItem { label: "Remove account", danger: true, icon: Some(icon::TRASH_2), ..Default::default() }),
         ];

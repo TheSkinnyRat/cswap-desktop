@@ -1050,7 +1050,7 @@ pub fn dialog(
             let max_body = (screen.height() * 0.76 - 110.0).max(120.0);
             egui::ScrollArea::vertical().max_height(max_body).auto_shrink([false, true]).show(ui, |ui| {
                 Frame::new().inner_margin(Margin::same(16)).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 8.0;
+                    ui.spacing_mut().item_spacing.y = 10.0;
                     ui.set_width(width - 32.0);
                     body(ui);
                 });
