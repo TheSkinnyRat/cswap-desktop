@@ -330,9 +330,18 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
 /// Every shared control in both themes, with a menu open, and a confirm dialog: the look of
 /// what ui-accounts builds on, checked by eye in the snapshots.
 #[test]
-fn widget_gallery() {
+fn widget_gallery_light() {
+    gallery(egui::Theme::Light, "light");
+}
+
+#[test]
+fn widget_gallery_dark() {
+    gallery(egui::Theme::Dark, "dark");
+}
+
+fn gallery(theme: egui::Theme, name: &str) {
     use crate::widgets::{self, Button, Size, Tone, Variant, icon};
-    for (theme, name) in [(egui::Theme::Light, "light"), (egui::Theme::Dark, "dark")] {
+    {
         let mut sel = 60u32;
         let mut text = String::from("work");
         let mut seg = 1u8;
@@ -397,7 +406,11 @@ fn widget_gallery() {
         h.get_by_role_and_label(Role::MenuItem, "Best");
         h.snapshot(format!("widgets-{name}"));
     }
+}
 
+#[test]
+fn confirm_dialog() {
+    use crate::widgets::{self, Button, icon};
     let mut h = Harness::builder()
         .with_size(vec2(760.0, 420.0))
         .with_render_cursor(false)
