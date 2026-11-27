@@ -176,12 +176,12 @@ mod native {
         pub fn new(wake: impl Fn() + Send + Sync + Clone + 'static) -> Result<Tray, String> {
             let (tx, rx) = channel::<Action>();
             let (menu_tx, menu_wake): (Sender<Action>, _) = (tx.clone(), wake.clone());
-            MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
+            MenuEvent::set_event_handler(Some(std::sync::Arc::new(move |e: MenuEvent| {
                 if let Some(a) = action_of(e.id().0.as_str()) {
                     let _ = menu_tx.send(a);
                     menu_wake();
                 }
-            }));
+            })));
             TrayIconEvent::set_event_handler(Some(move |e: TrayIconEvent| {
                 let a = match e {
                     TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => Action::Toggle,

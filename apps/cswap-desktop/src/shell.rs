@@ -441,10 +441,10 @@ impl eframe::App for Window<'_> {
         self.app.ui(ui, frame);
     }
 
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
         self.core.control.set_window(None);
         self.core.sink.set_waker(None);
-        self.app.on_exit();
+        self.app.on_exit(gl);
     }
 }
 
