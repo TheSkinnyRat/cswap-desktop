@@ -159,7 +159,7 @@ impl SettingsPage {
             }
             (UpdaterStatus::NotAvailable, None) => cx.toasts.success("You are on the latest version"),
             (_, None) if u.version.is_some() => cx.toasts.success("You are on the latest version"),
-            _ => cx.toasts.info("Updates are off for this copy\nThe release page has the latest version."),
+            _ => cx.toasts.info("Updates are off for this copy\nClaude Swap on GitHub (below) lists the latest release."),
         }
     }
 
@@ -356,7 +356,7 @@ impl SettingsPage {
                     let open_w = if vault.is_some() { 72.0 } else { 0.0 };
                     let text = vault.clone().unwrap_or_else(|| "unknown".into());
                     let r = ui
-                        .allocate_ui(vec2((ui.available_width() - open_w).max(60.0), 20.0), |ui| {
+                        .allocate_ui_with_layout(vec2((ui.available_width() - open_w).max(60.0), 28.0), Layout::left_to_right(Align::Center), |ui| {
                             let mut job = widgets::job(&text, style::mono(12.0), t.text);
                             job.wrap.max_rows = 1;
                             job.wrap.break_anywhere = true;
@@ -497,12 +497,6 @@ impl SettingsPage {
                                         }
                                     }
                                     UpdaterStatus::Disabled => {
-                                        if self.found.is_none()
-                                            && let Some(url) = &u.release_url
-                                            && Button::new("Release page").small().ghost().icon(icon::EXTERNAL_LINK).show(ui).clicked()
-                                        {
-                                            cx.services.host.open_external(url);
-                                        }
                                         let b = Button::new("Check for updates")
                                             .small()
                                             .icon(icon::CIRCLE_ARROW_UP)

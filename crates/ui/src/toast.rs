@@ -63,7 +63,7 @@ impl Toasts {
             .fold(None, |m: Option<f64>, x| Some(m.map_or(x, |m| m.min(x))))
     }
 
-    /// Bottom-right stack, newest at the bottom, 360 px wide.
+    /// Bottom-right stack, newest on top (`flex-col-reverse`), 360 px wide.
     pub fn show(&mut self, ctx: &egui::Context) {
         use egui::{Align2, CornerRadius, Frame, Margin, Stroke, vec2};
 
@@ -87,7 +87,7 @@ impl Toasts {
             .show(ctx, |ui| {
                 ui.set_width(width);
                 ui.spacing_mut().item_spacing.y = 8.0;
-                for (i, toast) in self.items.iter().enumerate() {
+                for (i, toast) in self.items.iter().enumerate().rev() {
                     let (title, detail) = match toast.text.split_once('\n') {
                         Some((a, b)) => (a, Some(b.trim())),
                         None => (toast.text.as_str(), None),

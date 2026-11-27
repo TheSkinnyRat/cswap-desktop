@@ -209,7 +209,8 @@ impl StubCswap {
                         accounts,
                         ..Default::default()
                     }),
-                    fetched_at: Some("2026-09-10T08:00:00Z".into()),
+                    // now, so the title bar reads "just now" in every render
+                    fetched_at: Some(now_iso()),
                     ..Default::default()
                 },
                 settings: AppSettings::default(),
@@ -241,6 +242,11 @@ impl StubCswap {
     pub fn calls(&self) -> Vec<String> {
         self.st().calls.clone()
     }
+}
+
+/// The current time as RFC 3339 UTC.
+pub fn now_iso() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
 pub fn log_entry(id: u64, args: &[&str], ok: bool) -> CommandLogEntry {

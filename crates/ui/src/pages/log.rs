@@ -135,7 +135,8 @@ fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::them
             egui::UiBuilder::new().max_rect(r.shrink2(vec2(12.0, 0.0))).layout(Layout::left_to_right(Align::Center)),
         );
         child.spacing_mut().item_spacing.x = 12.0;
-        child.add_space(13.0);
+        // chevron (13) + gap (12); `add_space` adds no item spacing of its own
+        child.add_space(25.0);
         widgets::text(&mut child, local_hms(&e.at), style::body(11.5), t.text_3);
         child.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 12.0;

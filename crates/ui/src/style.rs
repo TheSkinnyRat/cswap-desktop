@@ -182,6 +182,12 @@ pub fn pop_shadow(t: &Tokens) -> Shadow {
     Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(a) }
 }
 
+/// A small card's pop shadow (tooltips): the full one dwarfs a one-line label.
+pub fn tip_shadow(t: &Tokens) -> Shadow {
+    let a = if t.dark { 120 } else { 30 };
+    Shadow { offset: [0, 3], blur: 10, spread: 0, color: Color32::from_black_alpha(a) }
+}
+
 /// `--shadow` (cards).
 pub fn card_shadow(t: &Tokens) -> Shadow {
     let a = if t.dark { 70 } else { 12 };

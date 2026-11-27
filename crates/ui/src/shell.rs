@@ -105,7 +105,7 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
         {
             let name = a.alias.clone().unwrap_or_else(|| mask_email(&a.email, view.settings.mask_emails));
             let g = ui.painter().layout_job(widgets::job(&name, style::body_medium(12.0), t.accent));
-            let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 8.0 + 6.0 + 8.0 + 2.0, 22.0), Sense::hover());
+            let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 22.0), Sense::hover());
             widgets::name(ui, &resp, &format!("Active: {name}"));
             ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), t.accent_soft);
             ui.painter().circle_filled(pos2(r.left() + 11.0, r.center().y), 3.0, t.accent);

@@ -538,22 +538,32 @@ pub fn field<R>(ui: &mut Ui, label: &str, hint: Option<&str>, inline: bool, cont
         }
     };
     if inline {
-        // The control is laid out first, right-aligned, so the labels know what is left.
+        // `items-center`: the label block and the control are centred on each other. Both
+        // heights are known only after drawing, so they come from the previous frame (one
+        // frame to settle, then stable).
+        let id = ui.make_persistent_id(("field", label));
+        let (row_h, labels_h): (f32, f32) = ui.data(|d| d.get_temp(id)).unwrap_or((0.0, 0.0));
+        let full = ui.available_width();
         let mut out = None;
-        ui.horizontal(|ui| {
-            let full = ui.available_width();
-            let r = ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let ctrl = ui.scope(|ui| control(ui));
-                let ctrl_w = ctrl.response.rect.width();
-                out = Some(ctrl.inner);
-                let rest = (full - ctrl_w - 16.0).max(80.0);
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.set_max_width(rest);
-                    ui.vertical(|ui| labels(ui));
-                });
+        let mut measured = (0.0, 0.0);
+        ui.allocate_ui_with_layout(vec2(full, row_h.max(1.0)), Layout::right_to_left(Align::Center), |ui| {
+            let ctrl = ui.scope(|ui| control(ui));
+            let ctrl_h = ctrl.response.rect.height();
+            let rest = (full - ctrl.response.rect.width() - 16.0).max(80.0);
+            out = Some(ctrl.inner);
+            let top = ui.max_rect().top() + ((row_h - labels_h) / 2.0).max(0.0);
+            let rect = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(rest, labels_h.max(1.0)));
+            let r = ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)), |ui| {
+                ui.set_width(rest);
+                labels(ui)
             });
-            let _ = r;
+            let lh = r.response.rect.height();
+            measured = (ctrl_h.max(lh), lh);
         });
+        if measured != (row_h, labels_h) {
+            ui.data_mut(|d| d.insert_temp(id, measured));
+            ui.ctx().request_repaint();
+        }
         out.expect("control ran")
     } else {
         ui.vertical(|ui| {
@@ -712,7 +722,7 @@ pub fn tooltip(ui: &Ui, resp: &Response, label: &str, side: Side) {
                 .fill(t.surface)
                 .stroke(Stroke::new(1.0, t.border))
                 .corner_radius(CornerRadius::same(RADIUS_MD))
-                .shadow(style::pop_shadow(&t))
+                .shadow(style::tip_shadow(&t))
                 .inner_margin(Margin::symmetric(8, 4))
                 .show(ui, |ui| {
                     let mut j = job(label, style::body(11.5), t.text);
