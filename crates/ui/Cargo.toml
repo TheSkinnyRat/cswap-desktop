@@ -20,3 +20,5 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 
 [dev-dependencies]
 egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
+# The page tests render with egui's bundled fonts; the app installs its own (ui-shell).
+egui = { workspace = true, features = ["default_fonts"] }
