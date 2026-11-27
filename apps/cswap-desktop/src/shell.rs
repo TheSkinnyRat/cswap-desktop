@@ -147,18 +147,21 @@ pub struct Core {
 
 impl Core {
     pub fn new(services: Services, sink: cswap_core::EventSink, control: Arc<Control>, woken: Receiver<()>) -> Core {
-        let wake = {
-            let c = control.clone();
-            move || c.wake()
-        };
-        let tray = match Tray::new(wake) {
-            Ok(t) => Some(t),
-            Err(e) => {
-                tracing::warn!("tray icon unavailable: {e}");
-                None
-            }
-        };
-        Core { services, sink, control, woken, tray, visible: false, exiting: false }
+        let mut core = Core { services, sink, control, woken, tray: None, visible: false, exiting: false };
+        // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
+        // the window's creation (the event loop is up by then) makes it.
+        #[cfg(not(target_os = "macos"))]
+        core.make_tray();
+        core
+    }
+
+    fn make_tray(&mut self) {
+        let c = self.control.clone();
+        match Tray::new(move || c.wake()) {
+            Ok(t) => self.tray = Some(t),
+            Err(e) => tracing::warn!("tray icon unavailable: {e}"),
+        }
+        self.control.tray_changed();
     }
 
     pub fn has_tray(&self) -> bool {
@@ -280,7 +283,7 @@ impl Core {
 /// Runs the UI on the main thread until Quit. `show` = open the window at start.
 pub fn run(mut core: Core, mut show: bool) -> Result<(), String> {
     // Started hidden but nothing to come back from: the window opens after all.
-    if !core.has_tray() {
+    if !core.has_tray() && !cfg!(target_os = "macos") {
         show = true;
     }
     let result = run_platform(&mut core, show);
@@ -369,6 +372,12 @@ impl<'a> Window<'a> {
         let repaint = ctx.clone();
         core.sink.set_waker(Some(Arc::new(move || repaint.request_repaint())));
         let app = CswapApp::new(cc, core.services.clone(), rx);
+        #[cfg(target_os = "macos")]
+        if core.tray.is_none() {
+            core.make_tray();
+        }
+        // Started hidden but there is no tray to come back from: show it after all.
+        let visible = visible || !core.has_tray();
         core.visible = visible;
         let mut w = Window { core, app, raise_frames: 0, closing: false };
         if visible {

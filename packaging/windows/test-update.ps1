@@ -100,6 +100,8 @@ http.createServer((req, res) => {
     WaitExit $app 20000
     for ($i = 0; $i -lt 60 -and (Get-ItemProperty $uninstKey).DisplayVersion -ne '9.9.9'; $i++) { Start-Sleep 1 }
     Check ((Get-ItemProperty $uninstKey).DisplayVersion -eq '9.9.9') 'quitting ran the helper, which ran the 9.9.9 installer silently'
+    # The entry is written mid-install; the helper logs once the installer has exited.
+    for ($i = 0; $i -lt 60 -and -not (Select-String -Quiet -Path $log -Pattern '\[helper\] nsis: installed 9.9.9'); $i++) { Start-Sleep 1 }
     Check ((Select-String -Quiet -Path $log -Pattern '\[helper\] nsis: installed 9.9.9')) 'helper logged the install'
     Check (-not (Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$dir\Claude Swap.exe" })) 'install on quit does not restart the app (as 0.1.x)'
 
