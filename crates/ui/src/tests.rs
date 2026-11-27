@@ -37,27 +37,32 @@ fn fixture() -> (Fixture, Receiver<Event>) {
     // Off, so a test's command log does not depend on whether another test in this process
     // already spent the process-wide focus refresh.
     cswap.set_settings(AppSettings { refresh_on_focus: false, ..Default::default() });
-    // a log to show: one list read and one switch that changes nothing
-    cswap.refresh();
-    cswap.switch_to("1", false);
-    // the mock's events from the seeding are not this window's business
+    // The command log is pushed as the driver pushes it, with FIXED times: the mock stamps
+    // its own entries with the wall clock, which made the log renders differ now and then.
     while rx.try_recv().is_ok() {}
+    sink.send(Event::CommandLog(entry(1, &["list", "--json"], true)));
+    sink.send(Event::CommandLog(entry(2, &["switch", "1", "--json"], true)));
     (Fixture { cswap, host: RecordingHost::new("linux"), updates: DisabledUpdates::new("1.0.0"), sink }, rx)
+}
+
+/// A logged CLI call at a fixed time.
+fn entry(id: u64, args: &[&str], ok: bool) -> CommandLogEntry {
+    CommandLogEntry {
+        id,
+        at: "2026-11-27T17:06:51.000Z".into(),
+        args: args.iter().map(|s| s.to_string()).collect(),
+        exit_code: Some(if ok { 0 } else { 1 }),
+        duration_ms: 120 + id * 37,
+        ok,
+        stdout: ok.then(|| "{\"schemaVersion\": 1}".into()),
+        stderr: (!ok).then(|| "No account found with identifier: 9".into()),
+        error: None,
+    }
 }
 
 /// A failed call, as the driver logs one (the mock's calls all succeed).
 fn failed_entry(id: u64) -> CommandLogEntry {
-    CommandLogEntry {
-        id,
-        at: cswap_core::format::iso_from_ms(cswap_core::format::now_ms()),
-        args: ["switch", "9", "--json"].map(String::from).to_vec(),
-        exit_code: Some(1),
-        duration_ms: 231,
-        ok: false,
-        stdout: None,
-        stderr: Some("No account found with identifier: 9".into()),
-        error: None,
-    }
+    entry(id, &["switch", "9", "--json"], false)
 }
 
 fn cli_calls(f: &Fixture, args: &[&str]) -> usize {
@@ -118,8 +123,11 @@ fn shot(h: &mut Harness<'_, World>, name: &str) {
             n.accesskit_node().value().is_some_and(|v| is_clock(&v))
                 || n.accesskit_node().label().is_some_and(|v| is_clock(&v))
         })
-        // the whole time column, whatever the digits' widths
-        .map(|n| egui::Rect::from_min_size(n.rect().min, vec2(crate::pages::log::TIME_W, n.rect().height())))
+        // the whole time column, whatever the digits' widths, and a little bleed around it
+        .map(|n| {
+            let r = n.rect();
+            egui::Rect::from_min_max(r.min - vec2(2.0, 2.0), egui::pos2(r.min.x + crate::pages::log::TIME_W + 2.0, r.max.y + 2.0))
+        })
         .collect();
     for r in clocks {
         h.mask(r);

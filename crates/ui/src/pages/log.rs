@@ -11,7 +11,7 @@ use crate::style::{self, mix};
 use crate::widgets::{self, Button, Tone, icon};
 
 /// Width of the time column, enough for "88:88:88" at 11.5 px.
-pub const TIME_W: f32 = 50.0;
+pub const TIME_W: f32 = 54.0;
 
 /// Entries kept in the window (0.1.23's store kept the last 300).
 pub const LOG_CAP: usize = 300;
