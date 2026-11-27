@@ -111,10 +111,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
-              -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+          # The community feed answers 504 now and then (seen on this repo's CI): retry.
+          for ($i = 1; $i -le 4; $i++) {
+            if ((Get-Command makensis -ErrorAction SilentlyContinue) -or
+                (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { break }
             choco install nsis -y --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "choco install nsis failed ($LASTEXITCODE)" }
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 4) { throw "choco install nsis failed ($LASTEXITCODE)" }
+            Start-Sleep (30 * $i)
           }
       - name: Package (Windows)
         if: runner.os == 'Windows'
