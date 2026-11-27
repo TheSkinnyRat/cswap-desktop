@@ -143,12 +143,26 @@ pub struct Core {
     /// The window is open and not hidden (for the tray icon's toggle click).
     visible: bool,
     exiting: bool,
+    /// Glow first (small, light); wgpu once glow could not start here.
+    renderer: eframe::Renderer,
+    /// This eframe pass got as far as creating the window's app.
+    started: bool,
 }
 
 impl Core {
     pub fn new(services: Services, sink: cswap_core::EventSink, control: Arc<Control>, woken: Receiver<()>) -> Core {
         #[cfg_attr(target_os = "macos", allow(unused_mut))]
-        let mut core = Core { services, sink, control, woken, tray: None, visible: false, exiting: false };
+        let mut core = Core {
+            services,
+            sink,
+            control,
+            woken,
+            tray: None,
+            visible: false,
+            exiting: false,
+            renderer,
+            started: false,
+        };
         // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
         // the window's creation (the event loop is up by then) makes it.
         #[cfg(not(target_os = "macos"))]
@@ -314,7 +328,7 @@ fn run_platform(core: &mut Core, show: bool) -> Result<(), String> {
     open_window(core, show)
 }
 
-fn native_options(visible: bool) -> eframe::NativeOptions {
+fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOptions {
     // 0.1.23's BrowserWindow: 1120x720, min 760x520.
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Claude Swap")
@@ -331,7 +345,7 @@ fn native_options(visible: bool) -> eframe::NativeOptions {
     }
     eframe::NativeOptions {
         viewport,
-        renderer: eframe::Renderer::Glow,
+        renderer,
         // Closing must come back here, not end the process: eframe's other mode calls
         // `process::exit` from inside the event loop.
         run_and_return: true,
@@ -341,18 +355,33 @@ fn native_options(visible: bool) -> eframe::NativeOptions {
 }
 
 /// One eframe pass: from opening the window until it closes to the tray or the app exits.
+///
+/// glow needs OpenGL 2.0+, which Windows' basic display driver (a VM, a GPU-less machine,
+/// some remote sessions) does not have: measured on GitHub's windows runner, "egui_glow
+/// requires opengl 2.0+", where 0.1.x's Chromium still drew. So a pass that fails before
+/// its window exists is tried once more on wgpu (DX12 with its WARP software adapter,
+/// Metal, Vulkan/GL), which then stays the choice for this process.
 fn open_window(core: &mut Core, visible: bool) -> Result<(), String> {
-    let c = &mut *core;
-    let r = eframe::run_native(
-        "Claude Swap",
-        native_options(visible),
-        Box::new(move |cc| Ok(Box::new(Window::new(cc, c, visible)))),
-    );
-    // Whether or not eframe called `on_exit`: nothing may reach a window that is gone.
-    core.control.set_window(None);
-    core.sink.set_waker(None);
-    core.visible = false;
-    r.map_err(|e| e.to_string())
+    loop {
+        core.started = false;
+        let c = &mut *core;
+        let r = eframe::run_native(
+            "Claude Swap",
+            native_options(visible, c.renderer),
+            Box::new(move |cc| Ok(Box::new(Window::new(cc, c, visible)))),
+        );
+        // Whether or not eframe called `on_exit`: nothing may reach a window that is gone.
+        core.control.set_window(None);
+        core.sink.set_waker(None);
+        core.visible = false;
+        match r {
+            Err(e) if !core.started && core.renderer == eframe::Renderer::Glow => {
+                tracing::warn!("glow could not start ({e}); trying wgpu");
+                core.renderer = eframe::Renderer::Wgpu;
+            }
+            r => return r.map_err(|e| e.to_string()),
+        }
+    }
 }
 
 /// The window, for one eframe pass.
@@ -367,6 +396,7 @@ struct Window<'a> {
 
 impl<'a> Window<'a> {
     fn new(cc: &eframe::CreationContext<'_>, core: &'a mut Core, visible: bool) -> Self {
+        core.started = true;
         let (tx, rx) = channel();
         let ctx = cc.egui_ctx.clone();
         core.control.set_window(Some((ctx.clone(), tx)));

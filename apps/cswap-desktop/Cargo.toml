@@ -25,13 +25,13 @@ cswap-core = { workspace = true }
 cswap-driver = { workspace = true }
 cswap-ui = { workspace = true }
 cswap-update = { workspace = true }
-anyhow = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-# glow, not wgpu (as Reina Agent 1.0.1): a far smaller binary and memory footprint for a
-# window that is mostly closed. accesskit: the window can be driven through UI Automation.
-eframe = { workspace = true, features = ["glow", "accesskit", "default_fonts"] }
+# glow first (as Reina Agent 1.0.1): a far smaller memory footprint for a window that is
+# mostly closed. wgpu only where glow cannot start (no OpenGL 2: VMs, GPU-less machines;
+# see shell.rs `open_window`). accesskit: the window can be driven through UI Automation.
+eframe = { workspace = true, features = ["glow", "wgpu", "accesskit", "default_fonts"] }
 egui = { workspace = true }
 png = "0.18"
 notify-rust = "4"
