@@ -374,11 +374,11 @@ pub fn input(ui: &mut Ui, t: &Tokens, value: &mut String, id: &str, hint: &str, 
         .password(password)
         .frame(frame)
         .desired_width(width - 18.0);
-    let out = edit.show(ui);
-    if out.response.has_focus() {
-        ui.painter().rect_stroke(out.response.rect, CornerRadius::same(RADIUS_MD), Stroke::new(1.0, t.accent), StrokeKind::Inside);
+    let resp = edit.show(ui).response.response;
+    if resp.has_focus() {
+        ui.painter().rect_stroke(resp.rect, CornerRadius::same(RADIUS_MD), Stroke::new(1.0, t.accent), StrokeKind::Inside);
     }
-    out.response
+    resp
 }
 
 /// A field label over a control, with a hint below.

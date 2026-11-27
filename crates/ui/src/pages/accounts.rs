@@ -491,7 +491,9 @@ impl AccountsPage {
         };
         // top-aligned cells first (the row is `items-start`), to learn the row's height
         let mut h = 19.0f32;
-        h = h.max(cell(&mut row, 1, &mut |ui| name_block(ui, t, a, plan, s.mask_emails, now, off)));
+        h = h.max(cell(&mut row, 1, &mut |ui| {
+            name_block(ui, t, a, plan, s.mask_emails, now, off);
+        }));
         let cells = view::window_cells(a, models, false);
         let mut empty_cols = Vec::new();
         for (k, c) in cells.iter().enumerate() {
@@ -900,6 +902,7 @@ fn add_dialog(
     let mut submit = false;
     let mut cancel = false;
     let busy = run.is_some();
+    let can_submit = !(slot_taken && !*overwrite);
     let out = kit::dialog(
         ctx,
         t,
@@ -952,7 +955,7 @@ fn add_dialog(
             }
         },
         |ui| {
-            submit = Btn::new("Add account").variant(Variant::Primary).loading(busy).enabled(!(slot_taken && !*overwrite)).show(ui, t).clicked();
+            submit = Btn::new("Add account").variant(Variant::Primary).loading(busy).enabled(can_submit).show(ui, t).clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
@@ -984,6 +987,7 @@ fn token_dialog(
     let slot_taken = slot_num.is_some_and(|n| taken.contains(&n));
     let (mut submit, mut cancel) = (false, false);
     let busy = run.is_some();
+    let can_submit = !token.trim().is_empty() && !(slot_taken && !*overwrite);
     let out = kit::dialog(
         ctx,
         t,
@@ -1031,8 +1035,7 @@ fn token_dialog(
             }
         },
         |ui| {
-            let ok = !token.trim().is_empty() && !(slot_taken && !*overwrite);
-            submit = Btn::new("Register token").variant(Variant::Primary).loading(busy).enabled(ok).show(ui, t).clicked();
+            submit = Btn::new("Register token").variant(Variant::Primary).loading(busy).enabled(can_submit).show(ui, t).clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
@@ -1068,6 +1071,8 @@ fn alias_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, alias
     let valid = view::alias_valid(alias);
     let busy = run.is_some();
     let (mut save, mut unset, mut cancel, mut enter) = (false, false, false, false);
+    let can_save = !alias.is_empty() && valid && Some(alias.as_str()) != a.alias.as_deref();
+    let preview = format!("cswap switch {}", if alias.is_empty() { "dev" } else { alias.as_str() });
     let out = kit::dialog(
         ctx,
         t,
@@ -1077,7 +1082,7 @@ fn alias_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, alias
         |ui| {
             ui.horizontal_wrapped(|ui| {
                 kit::text(ui, format!("{}. An alias works anywhere a slot number or email does:", a.email), 12.5, t.text_2);
-                kit::code(ui, t, &format!("cswap switch {}", if alias.is_empty() { "dev" } else { alias }));
+                kit::code(ui, t, &preview);
             });
             kit::field(ui, t, "Alias", Some("Letters, digits, . - _ — not purely numeric."), |ui| {
                 let w = ui.available_width();
@@ -1092,8 +1097,7 @@ fn alias_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, alias
             }
         },
         |ui| {
-            let ok = !alias.is_empty() && valid && Some(alias.as_str()) != a.alias.as_deref();
-            save = Btn::new("Save").variant(Variant::Primary).loading(busy).enabled(ok).show(ui, t).clicked();
+            save = Btn::new("Save").variant(Variant::Primary).loading(busy).enabled(can_save).show(ui, t).clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
             if a.alias.is_some() {
                 unset = Btn::new("Remove alias").variant(Variant::Ghost).loading(busy).show(ui, t).clicked();
@@ -1126,6 +1130,7 @@ fn move_dialog(
     let occupant = list.iter().find(|x| x.number == n && x.number != a.number);
     let busy = run.is_some();
     let (mut go, mut cancel) = (false, false);
+    let can_go = !slot.is_empty() && n >= 1 && n != a.number;
     let out = kit::dialog(
         ctx,
         t,
@@ -1151,8 +1156,7 @@ fn move_dialog(
             }
         },
         |ui| {
-            let ok = !slot.is_empty() && n >= 1 && n != a.number;
-            go = Btn::new(if occupant.is_some() { "Swap" } else { "Move" }).variant(Variant::Primary).loading(busy).enabled(ok).show(ui, t).clicked();
+            go = Btn::new(if occupant.is_some() { "Swap" } else { "Move" }).variant(Variant::Primary).loading(busy).enabled(can_go).show(ui, t).clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
