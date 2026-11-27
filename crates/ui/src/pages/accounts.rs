@@ -618,7 +618,7 @@ impl AccountsPage {
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 10.0;
                             for c in &cells {
-                                window_cell(ui, t, a.number, c, true, false, s.show_pace, now, off);
+                                ui.scope(|ui| window_cell(ui, t, a.number, c, true, false, s.show_pace, now, off));
                             }
                         });
                     }
@@ -758,6 +758,8 @@ fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, ring
         return;
     }
     let width = ui.available_width();
+    // The text line, 4 px, then the track: no item spacing from the card's column layout.
+    ui.spacing_mut().item_spacing.y = 0.0;
     let (top, _) = ui.allocate_exact_size(vec2(width, 16.0), Sense::hover());
     let p = ui.painter().clone();
     // right side first: ("ahead") reset
@@ -872,7 +874,7 @@ fn slot_warning(ui: &mut Ui, t: &Tokens, text: &str, overwrite: &mut bool) {
         .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
         .inner_margin(Margin::symmetric(12, 8))
         .show(ui, |ui| {
-            ui.set_width(w - 24.0);
+            ui.set_width(w - 26.0);
             ui.horizontal(|ui| {
                 kit::text(ui, text, 12.5, t.warn);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| kit::switch(ui, t, overwrite, "Overwrite slot", true));
@@ -1222,7 +1224,7 @@ fn switch_row(ui: &mut Ui, t: &Tokens, title: &str, sub: &str, on: &mut bool, la
         .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
         .inner_margin(Margin::symmetric(12, 8))
         .show(ui, |ui| {
-            ui.set_width(w - 24.0);
+            ui.set_width(w - 26.0);
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
@@ -1368,7 +1370,7 @@ fn diag_dialog(ctx: &egui::Context, t: &Tokens, run: &mut Pending<CsResult<Plain
                         .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
                         .inner_margin(Margin::symmetric(12, 8))
                         .show(ui, |ui| {
-                            ui.set_width(w - 24.0);
+                            ui.set_width(w - 26.0);
                             egui::ScrollArea::vertical().max_height(ctx.content_rect().height() * 0.46).show(ui, |ui| {
                                 ui.add(egui::Label::new(egui::RichText::new(s.trim()).font(kit::mono(12.0)).color(t.text_2)).selectable(true).wrap());
                             });
@@ -1473,7 +1475,7 @@ fn run_dialog(
                 .corner_radius(CornerRadius::same(crate::theme::RADIUS_MD))
                 .inner_margin(Margin::symmetric(12, 8))
                 .show(ui, |ui| {
-                    ui.set_width(w - 24.0);
+                    ui.set_width(w - 26.0);
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         let shown = if dir.trim().is_empty() { "~".to_string() } else { dir.trim().to_string() };

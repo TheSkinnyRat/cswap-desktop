@@ -130,7 +130,8 @@ impl MappingsPage {
                 |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
-                        kit::mono_text(ui, "cswap run ", 12.0, t.text_2);
+                        kit::mono_text(ui, "cswap run", 12.0, t.text_2);
+                        kit::text(ui, " ", 12.5, t.text_2);
                         let rest = "with no account launches the account mapped to the current directory — session mode, this terminal only. Open one straight from a row.";
                         for w in rest.split(' ') {
                             kit::text(ui, format!("{w} "), 12.5, t.text_2);

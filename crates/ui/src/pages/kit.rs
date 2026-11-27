@@ -605,7 +605,8 @@ pub fn notice(ui: &mut Ui, t: &Tokens, msg: &str, tone: ChipTone) {
         .corner_radius(CornerRadius::same(RADIUS_LG - 2))
         .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
-            ui.set_width(w - 24.0);
+            // inner width + margins + the 1 px stroke on both sides = the row's width
+            ui.set_width(w - 26.0);
             para(ui, msg, 12.5, fg);
         });
 }
