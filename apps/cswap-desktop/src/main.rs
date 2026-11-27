@@ -11,8 +11,6 @@ mod host;
 mod instance;
 mod notify;
 mod shell;
-#[cfg(feature = "stub-driver")]
-mod stub;
 mod tray;
 
 use std::ffi::OsString;
@@ -29,27 +27,16 @@ use crate::shell::Control;
 
 const REPO: &str = "TheSkinnyRat/cswap-desktop";
 
-#[cfg(not(feature = "stub-driver"))]
 fn data_dir() -> PathBuf {
     cswap_driver::data_dir()
 }
 
-#[cfg(feature = "stub-driver")]
-fn data_dir() -> PathBuf {
-    stub::data_dir()
-}
-
-#[cfg(not(feature = "stub-driver"))]
 fn start_driver(data_dir: PathBuf, sink: EventSink) -> (Arc<dyn Cswap>, Box<dyn FnOnce()>) {
     let native = cswap_driver::Native::start(cswap_driver::DriverConfig { data_dir }, sink);
     let n = native.clone();
     (native, Box::new(move || n.shutdown()))
 }
 
-#[cfg(feature = "stub-driver")]
-fn start_driver(data_dir: PathBuf, sink: EventSink) -> (Arc<dyn Cswap>, Box<dyn FnOnce()>) {
-    (stub::StubCswap::start(data_dir, sink), Box::new(|| {}))
-}
 
 /// A copy the app may let rewire the user's login items: not a cargo build, not a test run
 /// with its own data dir (0.1.23 checked `app.isPackaged`).

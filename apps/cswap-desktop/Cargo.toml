@@ -15,11 +15,6 @@ workspace = true
 name = "claude-swap"
 path = "src/main.rs"
 
-[features]
-# Runs the app against a small in-memory cswap instead of the real driver: for trying the
-# tray and window lifetime before the driver part is merged. Not for releases.
-stub-driver = []
-
 [dependencies]
 cswap-core = { workspace = true }
 cswap-driver = { workspace = true }

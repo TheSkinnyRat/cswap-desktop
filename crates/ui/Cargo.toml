@@ -10,7 +10,29 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# `cswap_ui::testing`: a recording Host and a disabled Updates, for the app crate's own tests
+# and the demo. Always compiled into this crate's tests.
+testing = []
+
 [dependencies]
 cswap-core = { workspace = true }
-egui = { workspace = true }
+# default_fonts: Hack is the monospace face (paths, the command log) and the emoji fonts catch
+# symbols Inter lacks. Inter itself and the lucide icons are embedded from assets/fonts.
+egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true }
+serde_json = { workspace = true }
+# Local wall-clock time: the log and the updater ("Checked 14:05"), and the UTC offset the
+# core's reset clocks take as an argument ("resets 14:30").
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
+# The demo opens a real window; the app crate picks its own eframe features.
+eframe = { workspace = true, features = ["glow", "accesskit", "default_fonts"] }
+# Turns on `testing` for the examples (the demo runs on the in-memory services).
+cswap-ui = { path = ".", features = ["testing"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# winit has no window system to build against on Linux otherwise.
+eframe = { workspace = true, features = ["wayland", "x11"] }

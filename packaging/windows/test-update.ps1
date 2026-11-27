@@ -4,12 +4,12 @@
 # A second round serves a release whose installer does not match its signature: it must
 # never run.
 #
-# Needs a TRIAL build: the app with `--features stub-driver` (until the driver is merged)
-# built with CSWAP_UPDATE_PUBLIC_KEY set to the TEST key's public half, and cswap-release:
+# Needs a TRIAL build: the app built with CSWAP_UPDATE_PUBLIC_KEY set to the TEST key's
+# public half (it overrides the compiled-in release key), and cswap-release:
 #
 #   $env:CSWAP_UPDATE_PUBLIC_KEY = '6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw='
-#   cargo build --release -p cswap-desktop --features stub-driver -p cswap-update
-#   pwsh packaging\windows\test-update.ps1 -Exe target\release\claude-swap.exe
+#   cargo build --release -p cswap-desktop -p cswap-update --target-dir target\trial
+#   pwsh packaging\windows\test-update.ps1 -Exe target\trial\release\claude-swap.exe -Tool target\trial\release\cswap-release.exe
 #
 # Test GUID, shortcut, Run value and folders as test-installer.ps1: a real install is
 # never touched (checked at the end). It opens the app's window briefly (to close it).
