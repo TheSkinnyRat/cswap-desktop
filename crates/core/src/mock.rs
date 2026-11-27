@@ -32,12 +32,15 @@ struct State {
     log: Vec<CommandLogEntry>,
     next_log_id: u64,
     binary: Option<CswapBinaryInfo>,
+    mappings: Vec<Mapping>,
 }
 
 pub struct MockCswap {
     st: Mutex<State>,
     sink: EventSink,
     now_ms: i64,
+    /// Built with [`MockCswap::at`]: every stamp uses `now_ms`, so renders repeat exactly.
+    fixed: bool,
 }
 
 fn win(now: i64, pct: f64, secs: i64, weekly: bool) -> UsageWindow {
@@ -64,8 +67,25 @@ fn account(number: u32, email: &str) -> Account {
     Account { number, email: email.into(), usage_status: "ok".into(), ..Default::default() }
 }
 
-/// The five fixture accounts, with resets relative to `now` (Unix ms).
+/// Which model columns the fixture produces.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fixture {
+    /// Fable on accounts 1–2, Sonnet only in account 5's last-good usage: exercises the
+    /// union of models and empty cells. The default, for tests.
+    #[default]
+    TwoModels,
+    /// Fable only, what real cswap reports today: for README screenshots, where a second
+    /// model column would make the 1240 px table scroll sideways.
+    OneModel,
+}
+
+/// The five fixture accounts (two model columns), with resets relative to `now` (Unix ms).
 pub fn fixture_payload(now: i64) -> ListPayload {
+    fixture_payload_for(now, Fixture::TwoModels)
+}
+
+/// The five fixture accounts in the chosen [`Fixture`] variant.
+pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
     let iso = |s: i64| Some(iso_from_ms(now + s * 1000));
     let a1 = Account {
         organization_name: "you@example.com's Organization".into(),
@@ -114,7 +134,7 @@ pub fn fixture_payload(now: i64) -> ListPayload {
         last_good_usage: Some(Usage {
             five_hour: Some(win(now, 88.0, 3000, false)),
             seven_day: Some(win(now, 70.0, 100_000, true)),
-            scoped: Some(vec![scoped(now, "Sonnet", 34.0, 100_000)]),
+            scoped: (fixture == Fixture::TwoModels).then(|| vec![scoped(now, "Sonnet", 34.0, 100_000)]),
             ..Default::default()
         }),
         last_good_age_seconds: Some(7200.0),
@@ -157,12 +177,18 @@ fn matches(a: &Account, t: &str) -> bool {
 impl MockCswap {
     /// Fixture data relative to the wall clock.
     pub fn new(sink: EventSink) -> Self {
-        Self::at(sink, now_ms())
+        Self { fixed: false, ..Self::at(sink, now_ms()) }
     }
 
     /// Fixture data relative to a fixed `now` (Unix ms), so renders are identical every
     /// run. Pages that show countdowns must be given the same `now`.
     pub fn at(sink: EventSink, now: i64) -> Self {
+        Self::with_fixture(sink, now, Fixture::TwoModels)
+    }
+
+    /// Like [`MockCswap::at`] with a chosen [`Fixture`] (README screenshots use
+    /// [`Fixture::OneModel`]).
+    pub fn with_fixture(sink: EventSink, now: i64, fixture: Fixture) -> Self {
         let binary = CswapBinaryInfo {
             path: Some("/home/you/.local/bin/cswap".into()),
             source: BinarySource::Uv,
@@ -171,7 +197,7 @@ impl MockCswap {
             candidates: Vec::new(),
         };
         let st = State {
-            payload: Some(fixture_payload(now)),
+            payload: Some(fixture_payload_for(now, fixture)),
             error: None,
             refreshing: false,
             plans: fixture_plans(now),
@@ -181,8 +207,22 @@ impl MockCswap {
             log: Vec::new(),
             next_log_id: 1,
             binary: Some(binary),
+            mappings: vec![
+                Mapping {
+                    path: "/home/you/work/client-app".into(),
+                    email: "work@example.com".into(),
+                    organization_uuid: Some("org-2".into()),
+                    account: None,
+                },
+                Mapping {
+                    path: "D:\\Projects\\side-project".into(),
+                    email: "gone@example.com".into(),
+                    organization_uuid: None,
+                    account: None,
+                },
+            ],
         };
-        Self { st: Mutex::new(st), sink, now_ms: now }
+        Self { st: Mutex::new(st), sink, now_ms: now, fixed: true }
     }
 
     /// The `now` the fixture was built against.
@@ -220,6 +260,10 @@ impl MockCswap {
         self.lock().settings = settings;
     }
 
+    fn clock(&self) -> i64 {
+        if self.fixed { self.now_ms } else { now_ms() }
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         // A panicking test thread must not wedge every later call.
         self.st.lock().unwrap_or_else(|e| e.into_inner())
@@ -228,7 +272,7 @@ impl MockCswap {
     fn record(&self, st: &mut State, args: &[&str]) {
         let e = CommandLogEntry {
             id: st.next_log_id,
-            at: iso_from_ms(now_ms()),
+            at: iso_from_ms(self.clock()),
             args: args.iter().map(|s| s.to_string()).collect(),
             exit_code: Some(0),
             duration_ms: 120,
@@ -433,32 +477,36 @@ impl Cswap for MockCswap {
 
     fn list_mappings(&self) -> Pending<CsResult<Vec<Mapping>>> {
         let st = self.lock();
-        let work = st.payload.as_ref().and_then(|p| p.accounts.iter().find(|a| a.email == "work@example.com").cloned());
-        Pending::ready(Ok(vec![
-            Mapping {
-                path: "/home/you/work/client-app".into(),
-                email: "work@example.com".into(),
-                organization_uuid: Some("org-2".into()),
-                account: work,
-            },
-            Mapping {
-                path: "D:\\Projects\\side-project".into(),
-                email: "gone@example.com".into(),
-                organization_uuid: None,
-                account: None,
-            },
-        ]))
+        let accounts = st.payload.as_ref().map(|p| p.accounts.as_slice()).unwrap_or_default();
+        // Joined with the current list by email, as the driver does.
+        let rows = st
+            .mappings
+            .iter()
+            .map(|m| Mapping { account: accounts.iter().find(|a| a.email == m.email).cloned(), ..m.clone() })
+            .collect();
+        Pending::ready(Ok(rows))
     }
 
     fn map_directory(&self, target: &str, path: &str) -> Pending<CsResult<PlainOutput>> {
         let mut st = self.lock();
         self.record(&mut st, &["map", target, path]);
-        ok_out("ok")
+        let Some(a) = st.payload.as_ref().and_then(|p| p.accounts.iter().find(|a| matches(a, target))).cloned() else {
+            return Pending::ready(Err(not_found(target)));
+        };
+        st.mappings.retain(|m| m.path != path);
+        st.mappings.push(Mapping {
+            path: path.into(),
+            email: a.email.clone(),
+            organization_uuid: Some(a.organization_uuid.clone()).filter(|s| !s.is_empty()),
+            account: None,
+        });
+        ok_out(&format!("Mapped {path} -> Account-{} ({})", a.number, a.email))
     }
 
     fn unmap_directory(&self, path: &str) -> Pending<CsResult<PlainOutput>> {
         let mut st = self.lock();
         self.record(&mut st, &["unmap", path]);
+        st.mappings.retain(|m| m.path != path);
         ok_out("ok")
     }
 
@@ -545,11 +593,11 @@ impl Cswap for MockCswap {
             st.auto = AutoStatus {
                 running: true,
                 pid: Some(4242),
-                started_at: Some(iso_from_ms(now_ms())),
+                started_at: Some(iso_from_ms(self.clock())),
                 dry_run: Some(dry_run),
                 ..Default::default()
             };
-            let ev = poll_event(now_ms());
+            let ev = poll_event(self.clock());
             st.auto_events.push(ev.clone());
             (st.auto.clone(), ev)
         };
@@ -574,8 +622,11 @@ impl Cswap for MockCswap {
     }
 
     fn auto_once(&self, _dry_run: bool) -> Pending<CsResult<AutoOnceResult>> {
-        let ev =
-            auto_event(now_ms(), "no-switch", json!({ "reason": "below-threshold", "detail": "active headroom 55%" }));
+        let ev = auto_event(
+            self.clock(),
+            "no-switch",
+            json!({ "reason": "below-threshold", "detail": "active headroom 55%" }),
+        );
         Pending::ready(Ok(AutoOnceResult { exit_code: Some(2), outcome: AutoOutcome::NoAction, events: vec![ev] }))
     }
 
@@ -754,6 +805,24 @@ mod tests {
         assert_eq!(models(&p.accounts[4]), ["Sonnet"]);
         assert!(models(&p.accounts[2]).is_empty());
         assert!(p.accounts.iter().all(|a| a.email.ends_with("@example.com") || a.email.ends_with("@token.local")));
+        let one = fixture_payload_for(0, Fixture::OneModel);
+        assert_eq!(crate::view::models(&one.accounts), ["Fable"]);
+        let (sink, _rx) = EventSink::new();
+        let m = MockCswap::with_fixture(sink, 0, Fixture::OneModel);
+        assert_eq!(crate::view::models(&m.accounts().payload.unwrap().accounts), ["Fable"]);
+    }
+
+    #[test]
+    fn mappings_join_accounts_and_change() {
+        let (m, _rx) = mock();
+        let rows = m.list_mappings().take().unwrap().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].account.as_ref().map(|a| a.number), Some(2));
+        assert!(rows[1].account.is_none(), "the mapped account is gone");
+        m.map_directory("main", "/tmp/picked-project").take().unwrap().unwrap();
+        assert_eq!(m.list_mappings().take().unwrap().unwrap().len(), 3);
+        m.unmap_directory("/tmp/picked-project").take().unwrap().unwrap();
+        assert_eq!(m.list_mappings().take().unwrap().unwrap().len(), 2);
     }
 
     #[test]
