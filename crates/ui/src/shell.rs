@@ -5,7 +5,7 @@
 //! the Collapse button, persisted as the `sidebarCollapsed` setting.
 
 use cswap_core::{AccountsState, AppSettings, AutoStatus, CswapBinaryInfo, Page, UpdaterState, UpdaterStatus};
-use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, Rect, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align, Align2, Color32, CornerRadius, Layout, Rect, Sense, Stroke, Ui, pos2, vec2};
 
 use cswap_core::format::{age_seconds, mask_email, parse_iso_ms};
 use crate::style::{self, mix};
