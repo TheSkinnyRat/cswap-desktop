@@ -238,13 +238,12 @@ impl CswapApp {
                 navigate: &mut navigate,
             };
             let page = self.page;
-            egui::ScrollArea::vertical().id_salt(("main", page)).auto_shrink([false, false]).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.spacing_mut().item_spacing.y = 0.0;
-                if needs_onboarding {
-                    self.onboarding.ui(ui, &mut cx);
-                    return;
-                }
+            // Pages get the whole content rect and scroll themselves (vertically, and the
+            // Accounts list also sideways in the 780–956 px band), so nothing here scrolls.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            if needs_onboarding {
+                self.onboarding.ui(ui, &mut cx);
+            } else {
                 match page {
                     Page::Settings => self.settings_page.ui(ui, &mut cx),
                     Page::Log => self.log_page.ui(ui, &mut cx),
@@ -254,7 +253,7 @@ impl CswapApp {
                     Page::Auto => not_yet(ui, "Auto-switch"),
                     Page::Mappings => not_yet(ui, "Mappings"),
                 }
-            });
+            }
             self.palette.poll(&mut cx);
             self.palette.show(&ctx, &mut cx);
         });

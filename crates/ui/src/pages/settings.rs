@@ -165,7 +165,16 @@ impl SettingsPage {
         }
     }
 
+    /// The page in the content rect; it runs its own vertical scroll (the shell does not).
     pub fn ui(&mut self, ui: &mut Ui, cx: &mut Cx) {
+        egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            self.body(ui, cx);
+        });
+    }
+
+    fn body(&mut self, ui: &mut Ui, cx: &mut Cx) {
         self.poll(cx);
         widgets::page_header(ui, "Settings", None, |_| {});
         let two = ui.ctx().content_rect().width() >= TWO_COLUMNS_FROM;
