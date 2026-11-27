@@ -27,7 +27,7 @@ If cswap is missing when the app starts, it offers to run that install for you.
 | Linux | [AppImage](https://github.com/TheSkinnyRat/cswap-desktop/releases/latest/download/claude-swap-desktop-linux-x86_64.AppImage) · [.deb](https://github.com/TheSkinnyRat/cswap-desktop/releases/latest/download/claude-swap-desktop-linux-amd64.deb) |
 | macOS | [Apple silicon (.dmg)](https://github.com/TheSkinnyRat/cswap-desktop/releases/latest/download/claude-swap-desktop-mac-arm64.dmg) · [Intel (.dmg)](https://github.com/TheSkinnyRat/cswap-desktop/releases/latest/download/claude-swap-desktop-mac-x64.dmg) |
 
-Every build is unsigned, so Windows SmartScreen and macOS Gatekeeper will want a confirmation the first time. Windows and Linux update themselves from here; macOS cannot without a signature, so it checks and links you back to the release.
+No build is signed by Microsoft or Apple, so Windows SmartScreen and macOS Gatekeeper will want a confirmation the first time. After that the app updates itself from here on every platform (installer, portable exe, AppImage, macOS app). Each release file carries a signature from this project's own key, and the app refuses anything that does not verify. The `.deb` checks for updates and links you to the release.
 
 On macOS the first launch is blocked as coming from an unidentified developer: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Claude Swap. Builds up to v0.1.21 were not signed at all and macOS calls them *damaged*; update, or clear the download flag once with `xattr -cr "/Applications/Claude Swap.app"`.
 
@@ -43,7 +43,7 @@ On macOS the first launch is blocked as coming from an unidentified developer: o
 - **Directory mappings** — see and edit the `cswap map` table for session mode.
 - **Export / import** — `.cswap` backups, single account or all, `--full` and `--force` as switches.
 - **Tray** — active account and usage in the tooltip, switch from the tray menu, close-to-tray, launch at login.
-- **Updates** — Windows and Linux check GitHub releases at start and every six hours, download in the background and install on quit or on request.
+- **Updates** — checks GitHub releases at start and every six hours, downloads in the background, verifies the release signature and installs on quit or on request.
 - **Log** — every cswap call the app made: arguments, exit code, duration, output.
 - **Privacy** — one button masks every email address and organisation name, for a screenshot or a stream.
 - **Responsive** — below a table's worth of room each account becomes a card; in between, the table scrolls sideways inside its own frame rather than dragging the page with it. The sidebar collapses to icons on a narrow window, or on demand.
@@ -76,23 +76,31 @@ The app never writes credentials and never talks to Anthropic. **Every read and 
 
 Python and claude-swap are deliberately **not** bundled: two cswap versions writing the same vault is how accounts go missing.
 
+Since v1 the app is written in Rust with [egui](https://github.com/emilk/egui). It used to be Electron: the installer went from about 114 MB to about 6 MB, and memory while it sits in the tray dropped accordingly.
+
 ```
-src/main      Electron main — cswap driver (spawn + JSON), auto-switch runner, vault watcher, tray, IPC
-src/preload   contextBridge: window.cswap (typed in src/shared/types.ts)
-src/renderer  React + Tailwind UI (works in a plain browser with a mock API for UI work)
-test/fake-cswap  a stand-in cswap with the same verbs, --json schema and stdin prompts
+crates/core      pure model: cswap's --json schema, settings, the service traits, an in-memory mock
+crates/driver    the cswap driver: spawn + JSON, serialized writes, auto-switch runner, vault watcher
+crates/ui        the window (egui): pages, widgets, theme; runs against the mock in tests
+crates/update    self-update from GitHub releases, verified with the project's ed25519 key
+apps/cswap-desktop  the app: single instance, tray, window lifetime, dialogs, wiring
+packaging/       Windows NSIS, macOS .app/.dmg, Linux AppImage/.deb
+test/fake-cswap  a stand-in cswap with the same verbs, --json schema and stdin prompts (Node)
 ```
 
 ## Development
 
+Needs Rust (see `rust-version` in `Cargo.toml`) and Node (only for the fake cswap the tests run).
+
 ```bash
-npm ci
-npm run dev          # electron-vite with HMR
-npm run typecheck
-npm test             # vitest: driver against the fake cswap
-npm run build && npx playwright test    # Electron e2e against the fake cswap (Linux: xvfb-run -a npx playwright test)
-npm run dist:win     # installer + portable exe into release/
+cargo run -p cswap-desktop             # the app (binary: claude-swap)
+cargo run -p cswap-ui --example demo   # the window alone, against the in-memory mock (--dark, --no-cswap)
+cargo test --workspace                 # driver against the fake cswap, UI through egui_kittest
+cargo clippy --workspace --all-targets -- -D warnings
+DOCS=1 cargo test -p cswap-ui readme_screenshots    # regenerate docs/screenshots
 ```
+
+Packaging scripts live in `packaging/` (Windows needs NSIS); CI builds all three platforms.
 
 Useful environment variables while developing or testing:
 
@@ -101,13 +109,12 @@ Useful environment variables while developing or testing:
 | `CSWAP_DESKTOP_BIN` | Use this executable instead of auto-detection (a path set in Settings still wins) |
 | `CSWAP_DESKTOP_USERDATA` | Where the app keeps its own `settings.json` |
 | `FAKE_CSWAP_STATE` | State file for `test/fake-cswap` |
-| `CSWAP_REAL=1` | Run the read-only e2e against the cswap installed on this machine |
-| `CSWAP_REAL_SWITCH=<slot>` | One real switch to that slot and back, through the UI |
-| `CSWAP_REAL_RUN=<slot>` | Open one real session-mode terminal from the UI |
+| `CSWAP_DESKTOP_TEST_NO_SPAWN=1` | Session mode reports the command instead of opening a terminal |
+| `CSWAP_REAL=1` | With `cargo test -p cswap-driver -- --ignored real_`: read-only checks against the cswap installed on this machine |
 
 Keyboard: <kbd>Ctrl</kbd>+<kbd>K</kbd> switch account · <kbd>Ctrl</kbd>+<kbd>R</kbd> refresh usage · <kbd>Ctrl</kbd>+<kbd>,</kbd> settings.
 
-Releases: tag `vX.Y.Z` and push the tag — the Release workflow builds Windows, Linux and macOS packages and attaches them to a GitHub release (as a draft; publish it to make the updater see it). Installer names carry no version, so the download links above always point at the newest build.
+Releases: bump `version` in the root `Cargo.toml` and merge it to `main` — the Release workflow builds Windows, Linux and macOS packages, signs every file with the release key (repository secret `CSWAP_UPDATE_SIGNING_KEY`) and publishes the release. Installer names carry no version, so the download links above always point at the newest build.
 
 ## License
 
