@@ -126,7 +126,10 @@ fn shot(h: &mut Harness<'_, World>, name: &str) {
         // the whole time column, whatever the digits' widths, and a little bleed around it
         .map(|n| {
             let r = n.rect();
-            egui::Rect::from_min_max(r.min - vec2(2.0, 2.0), egui::pos2(r.min.x + crate::pages::log::TIME_W + 2.0, r.max.y + 2.0))
+            egui::Rect::from_min_max(
+                r.min - vec2(2.0, 2.0),
+                egui::pos2(r.min.x + crate::pages::log::TIME_W + 2.0, r.max.y + 2.0),
+            )
         })
         .collect();
     for r in clocks {
