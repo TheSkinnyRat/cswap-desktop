@@ -371,6 +371,27 @@ fn renders() {
         let mut h = harness(Which::Mappings, 1240.0, dark);
         shot(&mut h, &format!("mappings-{theme}"));
     }
+    // dialogs
+    for (menu, item, name) in [
+        ("Actions for account 3", "Remove account", "dialog-remove"),
+        ("Actions for account 2", "Open terminal as this account", "dialog-run"),
+        ("Actions for account 2", "Set alias", "dialog-alias"),
+        ("Add account", "From current Claude login", "dialog-add"),
+        ("Add account", "From setup-token or API key", "dialog-token"),
+        ("More", "Export all accounts", "dialog-export"),
+    ] {
+        let mut h = harness(Which::Accounts, 1240.0, false);
+        h.get_by_role_and_label(Role::Button, menu).click();
+        h.run();
+        h.get_by_label(item).click();
+        h.run();
+        h.run();
+        shot(&mut h, &format!("accounts-{name}-light"));
+    }
+    let mut h = harness(Which::Accounts, 1240.0, true);
+    h.get_by_role_and_label(Role::Button, "Rotate").click();
+    h.run();
+    shot(&mut h, "accounts-menu-rotate-dark");
     // empty / error states
     let world = World::new(Which::Accounts, false);
     world.mock.set_list(Some(Default::default()), None);
