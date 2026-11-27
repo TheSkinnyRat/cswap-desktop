@@ -4,7 +4,7 @@
 //   FAKE_CSWAP_STATE  path to the state file (default: ./fake-cswap-state.json)
 //   FAKE_CSWAP_DELAY  ms to sleep before answering (default 0)
 //   FAKE_CSWAP_FAIL   verb name that should fail with an error envelope
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const STATE = process.env.FAKE_CSWAP_STATE || 'fake-cswap-state.json'
@@ -36,7 +36,11 @@ const seed = () => ({
 // write) and the next reader sees the short JSON followed by the long one's tail.
 // So each invocation holds an exclusive lock from its first read to its exit; `auto`
 // holds it per tick. A holder killed mid-command (a timeout, taskkill /t) leaves its pid
-// behind and is recognised as dead.
+// behind; that lock is taken over only once the pid is dead AND the file is older than
+// STALE_MS. The age matters on Windows: a waiter reading the file keeps it delete-pending
+// after a holder exits normally, sees that holder's pid dead, and would otherwise delete
+// the NEXT holder's fresh lock (two holders, lost writes).
+const STALE_MS = 2000
 const LOCK = `${STATE}.lock`
 let locked = false
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
@@ -64,12 +68,14 @@ function lock() {
       if (!['EEXIST', 'EPERM', 'EBUSY'].includes(e.code)) throw e
     }
     let holder = 0
+    let age = 0
     try {
+      age = Date.now() - statSync(LOCK).mtimeMs
       holder = Number(readFileSync(LOCK, 'utf8'))
     } catch {
       /* gone or just created and still empty: retry */
     }
-    if (holder && !alive(holder)) {
+    if (holder && age > STALE_MS && !alive(holder)) {
       try {
         unlinkSync(LOCK)
       } catch {
