@@ -90,7 +90,7 @@ fn harness_sized(f: &Fixture, rx: Receiver<Event>, width: f32, height: f32) -> H
         .with_max_steps(30)
         .with_theme(if theme == ThemeSetting::Dark { egui::Theme::Dark } else { egui::Theme::Light })
         .build_ui_state(
-            |ui, w: &mut World| {
+            move |ui, w: &mut World| {
                 if w.app.is_none() {
                     let (s, rx) = w.init.take().expect("services");
                     let mut app = CswapApp::with_context(ui.ctx(), s, rx);
