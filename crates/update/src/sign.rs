@@ -12,10 +12,11 @@ use base64::engine::general_purpose::STANDARD as B64;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha512};
 
-/// The public half of the release key, base64 of 32 bytes. Empty until the main session
-/// creates the production key; an empty key turns the updater off (`Disabled`), it never
-/// falls back to trusting an unsigned download.
-pub const RELEASE_PUBLIC_KEY: &str = "";
+/// The public half of the production release key (base64 of the raw 32 bytes; hex
+/// 2b4a42b8e18050a8993948d0384fbcb04899fe764b0f1c585e0f003ae5db3451). Only the main
+/// session holds the private half (secret `CSWAP_UPDATE_SIGNING_KEY`, base64 of the 32-byte
+/// seed). Changing it strands every installed copy: they would refuse all later releases.
+pub const RELEASE_PUBLIC_KEY: &str = "K0pCuOGAUKiZOUjQOE+8sEiZ/nZLDxxYXg8AOuXbNFE=";
 
 /// Environment variable holding the private key (base64 of the 32-byte seed).
 pub const SIGNING_KEY_ENV: &str = "CSWAP_UPDATE_SIGNING_KEY";
@@ -130,6 +131,15 @@ pub(crate) mod tests {
         // Garbage signature text: refused, not a panic.
         assert!(verify(&vk, "x", "1.0.0", &d, "not base64!").is_err());
         assert!(verify(&vk, "x", "1.0.0", &d, "AAAA").is_err());
+    }
+
+    #[test]
+    fn the_compiled_release_key_is_the_production_key() {
+        let k = public_key(RELEASE_PUBLIC_KEY).expect("a valid ed25519 public key");
+        let hex: String = k.to_bytes().iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, "2b4a42b8e18050a8993948d0384fbcb04899fe764b0f1c585e0f003ae5db3451");
+        // The test key is a different key: nothing it signs passes as a release.
+        assert_ne!(test_key().verifying_key(), k);
     }
 
     #[test]
