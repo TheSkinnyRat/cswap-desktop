@@ -14,6 +14,7 @@ workspace = true
 cswap-core = { workspace = true }
 egui = { workspace = true }
 eframe = { workspace = true }
+serde_json = { workspace = true }
 # Local UTC offset for reset clocks ("resets 14:30"); the core's formatting takes it as an argument.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 

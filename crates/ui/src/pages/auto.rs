@@ -291,7 +291,7 @@ impl AutoPage {
             for (label, all_v) in [("Important", false), ("All", true)] {
                 let bw = kit::measure(ui, label, kit::font(11.5)).x + 16.0;
                 let r = egui::Rect::from_min_size(pos2(x, seg.min.y + 3.0), vec2(bw, 18.0));
-                let resp = ui.interact(r, ui.id().with(("feed-filter", label)), Sense::click());
+                let resp = ui.interact(r, ui.scope_id().with(("feed-filter", label)), Sense::click());
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::accesskit::Role::Button, true, self.show_all == all_v, label));
                 let on = self.show_all == all_v;
                 if on {

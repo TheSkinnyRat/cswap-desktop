@@ -275,7 +275,7 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
     let g = kit::galley(ui, m.path.clone(), kit::mono(12.0), t.text, text_w);
     let path_rect = Rect::from_min_size(pos2(text_x, rect.min.y + 10.0), g.size());
     ui.painter().galley(path_rect.min, g, t.text);
-    let _ = ui.interact(path_rect, ui.id().with(("map-path", &m.path)), Sense::hover()).on_hover_text(&m.path);
+    let _ = ui.interact(path_rect, ui.scope_id().with(("map-path", &m.path)), Sense::hover()).on_hover_text(&m.path);
     ui.scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))), |ui| {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
