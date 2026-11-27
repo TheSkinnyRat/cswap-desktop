@@ -25,7 +25,7 @@ jobs:
       version: ${{ steps.check.outputs.version }}
       mode: ${{ steps.check.outputs.mode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,8 +100,8 @@ jobs:
       MODE: ${{ needs.decide.outputs.mode }}
       CSWAP_UPDATE_SIGNING_KEY: ${{ secrets.CSWAP_UPDATE_SIGNING_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Tests first

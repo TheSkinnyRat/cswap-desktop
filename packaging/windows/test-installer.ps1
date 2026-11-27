@@ -64,6 +64,9 @@ try {
     Set-ItemProperty $uninstKey DisplayName 'Claude Swap 0.1.23'
     Set-ItemProperty $uninstKey DisplayVersion '0.1.23'
     Set-ItemProperty $uninstKey UninstallString "`"$dir\Uninstall Claude Swap.exe`" /currentuser"
+    # A fresh runner has no Run key at all. Never `New-Item -Force` here: on an existing
+    # key that would replace it, with every login item in it.
+    if (-not (Test-Path $runKey)) { New-Item $runKey | Out-Null }
     Set-ItemProperty $runKey $runValue "`"$dir\Claude Swap.exe`" --hidden"
 
     # ---- build the test installer

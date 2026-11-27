@@ -28,7 +28,7 @@ jobs:
         runner: [macos-latest]
         source: [release, build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download the published .dmg
         if: matrix.source == 'release'

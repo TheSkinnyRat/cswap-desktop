@@ -150,20 +150,21 @@ mod tests {
 
     #[test]
     fn windows_install_vs_portable_vs_dev() {
+        // Forward slashes: a separator on Windows too, so the same cases run on every OS.
         let yes = |_: &Path| true;
         let no = |_: &Path| false;
         let uninst = |p: &Path| p.ends_with(UNINSTALLER);
         assert!(matches!(
-            detect(&probe("windows", r"C:\U\AppData\Local\Programs\cswap\Claude Swap.exe", &uninst, &yes)),
+            detect(&probe("windows", "C:/U/AppData/Local/Programs/cswap/Claude Swap.exe", &uninst, &yes)),
             InstallKind::Nsis { .. }
         ));
         assert!(matches!(
-            detect(&probe("windows", r"D:\tools\claude-swap-desktop-win-x64-portable.exe", &no, &yes)),
+            detect(&probe("windows", "D:/tools/claude-swap-desktop-win-x64-portable.exe", &no, &yes)),
             InstallKind::Portable { .. }
         ));
-        assert!(matches!(detect(&probe("windows", r"D:\ro\x.exe", &no, &no)), InstallKind::Link { .. }));
+        assert!(matches!(detect(&probe("windows", "D:/ro/x.exe", &no, &no)), InstallKind::Link { .. }));
         assert_eq!(
-            detect(&probe("windows", r"D:\src\cswap\target\release\claude-swap.exe", &uninst, &yes)),
+            detect(&probe("windows", "D:/src/cswap/target/release/claude-swap.exe", &uninst, &yes)),
             InstallKind::Dev
         );
         assert_eq!(

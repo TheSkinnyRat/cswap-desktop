@@ -18,7 +18,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup component add rustfmt
       - run: cargo fmt --all --check
 
@@ -31,10 +31,10 @@ jobs:
         # ubuntu-22.04: the release builds there (oldest glibc), so CI checks the same.
         os: [windows-latest, ubuntu-22.04, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup component add clippy
       # Node runs the fake cswap (test/fake-cswap) in the driver's tests.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       # egui_kittest renders with wgpu: Mesa's software Vulkan on a runner without a GPU.
@@ -70,7 +70,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-22.04, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build (stub driver)
         shell: bash
         run: |
