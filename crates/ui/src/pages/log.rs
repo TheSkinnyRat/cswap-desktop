@@ -36,7 +36,6 @@ pub fn push_capped(log: &mut Vec<CommandLogEntry>, e: CommandLogEntry) {
     }
 }
 
-
 impl LogPage {
     pub fn new() -> Self {
         Self::default()
