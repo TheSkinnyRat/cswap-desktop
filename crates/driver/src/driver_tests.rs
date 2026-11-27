@@ -235,6 +235,37 @@ fn serializes_mutations_so_two_concurrent_switches_never_interleave() {
     assert_eq!(t.state()["activeAccountNumber"], 3);
 }
 
+/// Reads are not queued (0.1.23 and the real cswap, which locks its vault, allow them to
+/// overlap each other and the mutation queue). The fake must hold up under that too:
+/// before it locked its state file, overlapping writes tore it (CI run 46060773051).
+#[test]
+fn overlapping_reads_and_mutations_all_succeed() {
+    let t = T::new();
+    t.on(t.cli.list()).unwrap(); // seed
+    let results = t.on(async {
+        let mut set = tokio::task::JoinSet::new();
+        for i in 0..24 {
+            let cli = t.cli.clone();
+            set.spawn(async move {
+                match i % 4 {
+                    0 => cli.list().await.map(drop),
+                    1 => cli.status().await.map(drop),
+                    2 => cli.config().await.map(drop),
+                    _ => cli.switch_to(if i % 8 == 3 { "2" } else { "1" }, false).await.map(drop),
+                }
+            });
+        }
+        set.join_all().await
+    });
+    for r in &results {
+        if let Err(e) = r {
+            panic!("an overlapping call failed: {e}");
+        }
+    }
+    // Every call is in the fake's own log: none of the writes was lost.
+    assert_eq!(t.state()["log"].as_array().unwrap().len(), 2 + 24);
+}
+
 #[test]
 fn a_missing_binary_is_a_spawn_error_not_a_crash() {
     let t = T::new();
