@@ -59,7 +59,7 @@ fn mac_bundle(exe: &Path) -> Option<PathBuf> {
 
 pub fn detect(p: &Probe<'_>) -> InstallKind {
     if p.os == "linux" {
-        if let Some(file) = p.appimage.as_ref().filter(|f| f.is_absolute()) {
+        if let Some(file) = p.appimage.as_ref().filter(|f| f.has_root()) {
             return match file.parent() {
                 Some(dir) if (p.writable)(dir) => InstallKind::AppImage { file: file.clone() },
                 _ => InstallKind::Link { reason: format!("{} is in a folder this user cannot write to", file.display()) },

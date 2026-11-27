@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+build = "build.rs"
 
 [lints]
 workspace = true
@@ -14,10 +15,47 @@ workspace = true
 name = "claude-swap"
 path = "src/main.rs"
 
+[features]
+# Runs the app against a small in-memory cswap instead of the real driver: for trying the
+# tray and window lifetime before the driver part is merged. Not for releases.
+stub-driver = []
+
 [dependencies]
 cswap-core = { workspace = true }
 cswap-driver = { workspace = true }
 cswap-ui = { workspace = true }
 cswap-update = { workspace = true }
-eframe = { workspace = true }
 anyhow = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+# glow, not wgpu (as Reina Agent 1.0.1): a far smaller binary and memory footprint for a
+# window that is mostly closed. accesskit: the window can be driven through UI Automation.
+eframe = { workspace = true, features = ["glow", "accesskit", "default_fonts"] }
+egui = { workspace = true }
+png = "0.18"
+notify-rust = "4"
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = "0.27"
+rfd = { version = "0.17", default-features = false }
+
+# Linux: the StatusNotifierItem tray talks D-Bus itself (ksni), no GTK/libappindicator;
+# rfd asks the desktop's file-chooser portal. winit needs a window system to build for.
+[target.'cfg(target_os = "linux")'.dependencies]
+tray-icon = { version = "0.27", default-features = false, features = ["ksni"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
+eframe = { workspace = true, features = ["x11", "wayland"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_HiDpi"] }
+
+# macOS: closing to the menu bar hides the app (as Cmd+H) rather than ordering the window
+# out, so the Dock / Cmd+Tab bring it back (see shell.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
+
+[build-dependencies]
+winresource = "0.1"

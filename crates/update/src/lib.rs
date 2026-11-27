@@ -382,6 +382,8 @@ impl Inner {
         match swap::hand_over(&self.kind, &dl, &self.cfg.data_dir, true) {
             Ok(()) => {
                 self.log(&format!("handed over {} for {}", dl.asset, dl.version));
+                // Handed over: the quit that follows must not install it a second time.
+                *lock(&self.ready) = None;
                 (self.quit)();
             }
             Err(e) => self.fail(e),
