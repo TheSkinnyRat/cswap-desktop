@@ -246,7 +246,8 @@ impl MockCswap {
         self.lock().plans = plans;
     }
 
-    /// `None` = no cswap found (the onboarding screen).
+    /// `None` = detection still running (the `Cswap::binary` contract). Onboarding shows for
+    /// `Some(info)` without a version, i.e. detection finished and found nothing usable.
     pub fn set_binary(&self, binary: Option<CswapBinaryInfo>) {
         self.lock().binary = binary;
     }
