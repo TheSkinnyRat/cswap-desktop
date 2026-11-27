@@ -134,9 +134,30 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("claude-swap: the window failed: {e}");
+            report_startup_failure(&data, &e);
             ExitCode::FAILURE
         }
+    }
+}
+
+/// A release build has no console, so a window that cannot start would otherwise look like
+/// an app that never started at all: say it in a dialog and leave it in the data dir.
+fn report_startup_failure(data: &std::path::Path, e: &str) {
+    let msg = format!("Claude Swap could not open its window: {e}");
+    eprintln!("claude-swap: {msg}");
+    let _ = std::fs::create_dir_all(data);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(data.join("claude-swap.log")) {
+        use std::io::Write;
+        let _ = writeln!(f, "{} {msg}", cswap_update::time::iso_now());
+    }
+    // Tests and CI run without anyone to click OK.
+    if std::env::var_os("CSWAP_DESKTOP_USERDATA").is_none() {
+        rfd::MessageDialog::new()
+            .set_title("Claude Swap")
+            .set_description(&msg)
+            .set_level(rfd::MessageLevel::Error)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
     }
 }
 

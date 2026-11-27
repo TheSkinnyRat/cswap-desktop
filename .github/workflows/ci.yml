@@ -89,8 +89,8 @@ jobs:
           ./packaging/windows/build.ps1 -SkipBuild
           # TEMP probe: does the window open on a GPU-less runner?
           $env:CSWAP_DESKTOP_USERDATA = "$env:RUNNER_TEMP\probe"
-          $p = Start-Process target\debug\claude-swap.exe -PassThru -RedirectStandardError probe-err.txt -ErrorAction SilentlyContinue
-          if (-not $p) { cargo build -p cswap-desktop --features cswap-desktop/stub-driver; $p = Start-Process target\debug\claude-swap.exe -PassThru -RedirectStandardError probe-err.txt }
+          cargo build -p cswap-desktop --features cswap-desktop/stub-driver
+          $p = Start-Process target\debug\claude-swap.exe -PassThru -RedirectStandardError probe-err.txt
           Start-Sleep 8; "probe exited=$($p.HasExited) code=$($p.ExitCode)"; Get-Content probe-err.txt -ErrorAction SilentlyContinue | Select-Object -Last 20
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
           Remove-Item Env:\CSWAP_DESKTOP_USERDATA
