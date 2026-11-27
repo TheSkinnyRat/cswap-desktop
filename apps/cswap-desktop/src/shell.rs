@@ -405,8 +405,9 @@ fn renderer_line(cc: &eframe::CreationContext<'_>, glow_error: Option<&str>) -> 
     if let Some(gl) = cc.gl.as_ref() {
         use eframe::glow::HasContext;
         // SAFETY: plain string queries on the context eframe just made current.
-        let (renderer, version) =
-            unsafe { (gl.get_parameter_string(eframe::glow::RENDERER), gl.get_parameter_string(eframe::glow::VERSION)) };
+        let (renderer, version) = unsafe {
+            (gl.get_parameter_string(eframe::glow::RENDERER), gl.get_parameter_string(eframe::glow::VERSION))
+        };
         return format!("window renderer: glow (OpenGL {renderer}, {version})");
     }
     let adapter = cc
