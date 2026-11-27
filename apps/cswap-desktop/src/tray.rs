@@ -197,7 +197,7 @@ mod native {
             let image = tray_icon::Icon::from_rgba(rgba, w, h).map_err(|e| e.to_string())?;
             let builder = TrayIconBuilder::new().with_tooltip("Claude Swap").with_menu(Box::new(Menu::new()));
             #[cfg(target_os = "macos")]
-            let builder = builder.with_icon(image).with_icon_as_template(true).with_menu_on_left_click(true);
+            let builder = builder.with_icon_templated(image).with_menu_on_left_click(true);
             #[cfg(not(target_os = "macos"))]
             let builder = builder.with_icon(image).with_menu_on_left_click(false);
             // StatusNotifierItem hosts fall back to the id when there is no title, and

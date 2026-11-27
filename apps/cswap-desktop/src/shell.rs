@@ -147,6 +147,7 @@ pub struct Core {
 
 impl Core {
     pub fn new(services: Services, sink: cswap_core::EventSink, control: Arc<Control>, woken: Receiver<()>) -> Core {
+        #[cfg_attr(target_os = "macos", allow(unused_mut))]
         let mut core = Core { services, sink, control, woken, tray: None, visible: false, exiting: false };
         // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
         // the window's creation (the event loop is up by then) makes it.

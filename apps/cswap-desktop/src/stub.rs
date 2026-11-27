@@ -56,8 +56,7 @@ impl StubCswap {
             ..Default::default()
         };
         let accounts = AccountsState { payload: Some(payload), fetched_at: Some("now".into()), ..Default::default() };
-        let s =
-            Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), settings)) });
+        let s = Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), settings)) });
         let st = s.state.lock().unwrap().0.clone();
         s.sink.send(Event::Accounts(st));
         s

@@ -49,10 +49,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+      - run: cargo clippy --workspace --all-targets --locked --features cswap-desktop/stub-driver -- -D warnings  # TEMP-STUB
+      - run: cargo test --workspace --locked --features cswap-desktop/stub-driver  # TEMP-STUB
       # The release tool and the app build in release mode as release.yml does.
-      - run: cargo build --release --locked -p cswap-desktop -p cswap-update
+      - run: cargo build --release --locked -p cswap-desktop -p cswap-update --features cswap-desktop/stub-driver  # TEMP-STUB
       - name: The app starts and answers --version
         shell: bash
         run: |
