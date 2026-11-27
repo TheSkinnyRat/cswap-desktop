@@ -70,7 +70,6 @@ pub fn parse_iso_ms(s: &str) -> Option<i64> {
         return None;
     }
     let (mut h, mut mi, mut se, mut frac_ms, mut off) = (0, 0, 0, 0i64, 0i64);
-    let mut i = 10;
     if b.len() > 10 {
         if b[10] != b'T' && b[10] != b' ' {
             return None;
@@ -80,7 +79,7 @@ pub fn parse_iso_ms(s: &str) -> Option<i64> {
             return None;
         }
         mi = num(14..16)?;
-        i = 16;
+        let mut i = 16;
         if b.get(16) == Some(&b':') {
             se = num(17..19)?;
             i = 19;
