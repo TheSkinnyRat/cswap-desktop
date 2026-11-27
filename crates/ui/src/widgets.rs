@@ -446,13 +446,14 @@ pub fn select<T: PartialEq + Clone>(ui: &mut Ui, label: &str, value: &mut T, opt
     let mut changed = false;
     egui::Popup::menu(&resp).width(width).frame(popup_frame(&t)).show(|ui| {
         ui.set_min_width(width - 8.0);
-        for (v, l) in options {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.with_layout(Layout::top_down_justified(Align::Min), |ui| for (v, l) in options {
             let on = v == value;
             if menu_item(ui, l, None, on, false, true, None).clicked() && !on {
                 *value = v.clone();
                 changed = true;
             }
-        }
+        });
     });
     changed
 }
@@ -758,10 +759,16 @@ pub fn menu_item(
     let font = style::body(13.0);
     let g = ui.painter().layout_job(job(label, font, Color32::PLACEHOLDER));
     let hint_g = hint.map(|h| ui.painter().layout_job(job(h, style::body(11.0), t.text_3)));
-    let w = (8.0 + if glyph.is_some() { 26.0 } else { 0.0 } + g.size().x + hint_g.as_ref().map_or(0.0, |h| h.size().x + 12.0) + if checked { 24.0 } else { 0.0 } + 8.0)
-        .max(ui.available_width());
+    let w = 8.0
+        + if glyph.is_some() { 26.0 } else { 0.0 }
+        + g.size().x
+        + hint_g.as_ref().map_or(0.0, |h| h.size().x + 12.0)
+        + if checked { 24.0 } else { 0.0 }
+        + 8.0;
     let sense = if enabled { Sense::click() } else { Sense::hover() };
-    let (rect, resp) = ui.allocate_exact_size(vec2(w, 30.0), sense);
+    // In the menu's justified layout this takes the menu's width; the content width above is
+    // what sizes the menu in its sizing pass, so the longest label decides.
+    let (rect, resp) = ui.allocate_at_least(vec2(w, 30.0), sense);
     let owned = label.to_owned();
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, &owned));
     ui.ctx().accesskit_node_builder(resp.id, |n| n.set_role(Role::MenuItem));
@@ -809,7 +816,7 @@ pub fn menu<R>(trigger: &Response, min_width: f32, add: impl FnOnce(&mut Ui) -> 
         .show(|ui| {
             ui.set_min_width(min_width - 8.0);
             ui.spacing_mut().item_spacing.y = 0.0;
-            add(ui)
+            ui.with_layout(Layout::top_down_justified(Align::Min), add).inner
         })
         .map(|r| r.inner)
 }
