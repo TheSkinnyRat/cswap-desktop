@@ -300,3 +300,17 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
     assert!(f.cswap.st().settings.sidebar_collapsed, "persisted as a setting");
     h.get_by_role_and_label(Role::Button, "Expand the sidebar");
 }
+
+#[test]
+#[ignore]
+fn debug_settings_layout() {
+    let (f, rx) = fixture();
+    let mut h = harness(&f, rx, 1240.0);
+    settle(&mut h);
+    nav(&mut h, "Settings");
+    for l in ["cswap binary", "Appearance & behaviour", "Data", "About", "Start auto-switch with the app", "Locations checked"] {
+        for n in h.query_all_by_label(l) {
+            eprintln!("{l}: {:?} {:?}", n.accesskit_node().role(), n.rect());
+        }
+    }
+}
