@@ -1,0 +1,11 @@
+# Snapshot tolerance for egui_kittest (read from the crate dir, where `cargo test` runs).
+#
+# The renders are compared on every OS CI runs, each with a different rasteriser (Windows'
+# GPU or WARP, Mesa's llvmpipe on Linux, Metal on macOS). Those disagree only on
+# anti-aliased edges: on ubuntu-22.04 thousands of pixels differ, but at most 47 by >= 0.6
+# and none by >= 2.0 (CI c06a2fb). A real change (a moved control, a changed word or
+# colour) makes hundreds of pixels differ by far more than 2.0; see the report of the
+# ui-shell part for the mutations that proved it. So: a pixel counts as different only from
+# 2.0, and a handful of such pixels is still a pass.
+threshold = 2.0
+max_failed_pixels = 16
