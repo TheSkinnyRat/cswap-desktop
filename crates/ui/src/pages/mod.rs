@@ -3,6 +3,8 @@
 
 pub mod accounts;
 pub mod auto;
+// ui-accounts' private controls, until the shared `widgets` replace them.
+pub(crate) mod kit;
 pub mod log;
 pub mod mappings;
 pub mod onboarding;

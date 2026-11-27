@@ -21,7 +21,9 @@ cswap-core = { workspace = true }
 # symbols Inter lacks. Inter itself and the lucide icons are embedded from assets/fonts.
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true }
-# Local wall-clock time for the log and the updater ("Checked 14:05"), as toLocaleTimeString did.
+serde_json = { workspace = true }
+# Local wall-clock time: the log and the updater ("Checked 14:05"), and the UTC offset the
+# core's reset clocks take as an argument ("resets 14:30").
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [dev-dependencies]
