@@ -104,6 +104,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      # egui_kittest renders with wgpu: Mesa's software Vulkan on a runner without a GPU.
+      - name: Software renderer (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
       - name: Tests first
         run: cargo test --workspace --locked
 
