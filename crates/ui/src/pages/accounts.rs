@@ -902,7 +902,7 @@ fn add_dialog(
     let mut submit = false;
     let mut cancel = false;
     let busy = run.is_some();
-    let can_submit = !(slot_taken && !*overwrite);
+    let can_submit = !slot_taken || *overwrite;
     let out = kit::dialog(
         ctx,
         t,
@@ -987,7 +987,7 @@ fn token_dialog(
     let slot_taken = slot_num.is_some_and(|n| taken.contains(&n));
     let (mut submit, mut cancel) = (false, false);
     let busy = run.is_some();
-    let can_submit = !token.trim().is_empty() && !(slot_taken && !*overwrite);
+    let can_submit = !token.trim().is_empty() && (!slot_taken || *overwrite);
     let out = kit::dialog(
         ctx,
         t,

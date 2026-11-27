@@ -358,6 +358,7 @@ pub fn switch(ui: &mut Ui, t: &Tokens, on: &mut bool, label: &str, enabled: bool
     resp
 }
 
+#[allow(clippy::too_many_arguments)]
 /// A single-line input in the 0.1.23 frame (32 px, 7 px radius, accent on focus).
 pub fn input(ui: &mut Ui, t: &Tokens, value: &mut String, id: &str, hint: &str, width: f32, mono_font: bool, password: bool) -> Response {
     let f = if mono_font { mono(12.0) } else { font(13.0) };
