@@ -5,6 +5,7 @@
 // No console window in a release build: this is a tray app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod applog;
 mod autostart;
 mod host;
 mod instance;
@@ -123,7 +124,7 @@ fn main() -> ExitCode {
 
     let services =
         Services { cswap, updates: updater.clone(), host: Arc::new(host::DesktopHost { control: control.clone() }) };
-    let core = shell::Core::new(services, sink, control, woken);
+    let core = shell::Core::new(services, sink, control, woken, data.clone());
     let show = !(hidden || settings.start_minimized);
     let result = shell::run(core, show);
 
@@ -145,11 +146,7 @@ fn main() -> ExitCode {
 fn report_startup_failure(data: &std::path::Path, e: &str) {
     let msg = format!("Claude Swap could not open its window: {e}");
     eprintln!("claude-swap: {msg}");
-    let _ = std::fs::create_dir_all(data);
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(data.join("claude-swap.log")) {
-        use std::io::Write;
-        let _ = writeln!(f, "{} {msg}", cswap_update::time::iso_now());
-    }
+    applog::line(data, &msg);
     // Tests and CI run without anyone to click OK.
     if std::env::var_os("CSWAP_DESKTOP_USERDATA").is_none() {
         rfd::MessageDialog::new()

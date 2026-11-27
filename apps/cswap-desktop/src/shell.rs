@@ -147,10 +147,20 @@ pub struct Core {
     renderer: eframe::Renderer,
     /// This eframe pass got as far as creating the window's app.
     started: bool,
+    /// Why glow was given up, for the log line the first window writes.
+    glow_error: Option<String>,
+    renderer_logged: bool,
+    data_dir: std::path::PathBuf,
 }
 
 impl Core {
-    pub fn new(services: Services, sink: cswap_core::EventSink, control: Arc<Control>, woken: Receiver<()>) -> Core {
+    pub fn new(
+        services: Services,
+        sink: cswap_core::EventSink,
+        control: Arc<Control>,
+        woken: Receiver<()>,
+        data_dir: std::path::PathBuf,
+    ) -> Core {
         #[cfg_attr(target_os = "macos", allow(unused_mut))]
         let mut core = Core {
             services,
@@ -162,6 +172,9 @@ impl Core {
             exiting: false,
             renderer: eframe::Renderer::Glow,
             started: false,
+            glow_error: None,
+            renderer_logged: false,
+            data_dir,
         };
         // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
         // the window's creation (the event loop is up by then) makes it.
@@ -376,11 +389,37 @@ fn open_window(core: &mut Core, visible: bool) -> Result<(), String> {
         core.visible = false;
         match r {
             Err(e) if !core.started && core.renderer == eframe::Renderer::Glow => {
-                tracing::warn!("glow could not start ({e}); trying wgpu");
+                crate::applog::line(&core.data_dir, &format!("glow could not start the window ({e}); trying wgpu"));
+                core.glow_error = Some(e.to_string());
                 core.renderer = eframe::Renderer::Wgpu;
             }
             r => return r.map_err(|e| e.to_string()),
         }
+    }
+}
+
+/// "window renderer: glow (OpenGL <renderer>, <version>)" or "window renderer: wgpu (Dx12,
+/// <adapter>, Cpu) because glow could not start: <error>", once per process: what a bug
+/// report about a blank or slow window needs first.
+fn renderer_line(cc: &eframe::CreationContext<'_>, glow_error: Option<&str>) -> String {
+    if let Some(gl) = cc.gl.as_ref() {
+        use eframe::glow::HasContext;
+        // SAFETY: plain string queries on the context eframe just made current.
+        let (renderer, version) =
+            unsafe { (gl.get_parameter_string(eframe::glow::RENDERER), gl.get_parameter_string(eframe::glow::VERSION)) };
+        return format!("window renderer: glow (OpenGL {renderer}, {version})");
+    }
+    let adapter = cc
+        .wgpu_render_state
+        .as_ref()
+        .map(|rs| {
+            let i = rs.adapter.get_info();
+            format!("{:?}, {}, {:?}", i.backend, i.name, i.device_type)
+        })
+        .unwrap_or_else(|| "unknown adapter".into());
+    match glow_error {
+        Some(e) => format!("window renderer: wgpu ({adapter}) because glow could not start: {e}"),
+        None => format!("window renderer: wgpu ({adapter})"),
     }
 }
 
@@ -397,6 +436,10 @@ struct Window<'a> {
 impl<'a> Window<'a> {
     fn new(cc: &eframe::CreationContext<'_>, core: &'a mut Core, visible: bool) -> Self {
         core.started = true;
+        if !core.renderer_logged {
+            core.renderer_logged = true;
+            crate::applog::line(&core.data_dir, &renderer_line(cc, core.glow_error.as_deref()));
+        }
         let (tx, rx) = channel();
         let ctx = cc.egui_ctx.clone();
         core.control.set_window(Some((ctx.clone(), tx)));
