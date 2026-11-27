@@ -810,6 +810,7 @@ pub fn menu_separator(ui: &mut Ui) {
 pub fn menu<R>(trigger: &Response, min_width: f32, add: impl FnOnce(&mut Ui) -> R) -> Option<R> {
     let t = style::tokens(&trigger.ctx);
     egui::Popup::menu(trigger)
+        .width(min_width)
         .frame(popup_frame(&t))
         .align(egui::RectAlign::BOTTOM_END)
         .gap(4.0)

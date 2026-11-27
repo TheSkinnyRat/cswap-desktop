@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
-use cswap_core::{CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState, UpdaterStatus};
+use cswap_core::{Cswap, CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState, UpdaterStatus};
 use egui::accesskit::Role;
 use egui::{Key, Modifiers, vec2};
 use egui_kittest::Harness;
@@ -427,4 +427,59 @@ fn confirm_dialog() {
     h.run_steps(4);
     h.get_by_role_and_label(Role::Button, "Remove");
     h.snapshot("dialog-confirm");
+}
+
+/// The README images (`docs/screenshots/*.png`, 0.1.23's `docs.spec.ts`), regenerated with
+/// `DOCS=1 cargo test -p cswap-ui readme_screenshots`. A rendering job, not a check: without
+/// `DOCS` it returns at once. 1240 px is the floor, not a taste: below a 1220 window the three
+/// window columns hit their minimum and the Switch button leaves the frame. Everything shown
+/// comes from the in-memory fixture (`@example.com`, `/home/you`), never from this machine.
+#[test]
+fn readme_screenshots() {
+    if std::env::var_os("DOCS").is_none() {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/screenshots");
+    std::fs::create_dir_all(&dir).expect("docs dir");
+    let save = |h: &mut Harness<'_, World>, name: &str| {
+        let img = h.render().expect("render");
+        img.save(dir.join(format!("{name}.png"))).expect("save png");
+    };
+    let (f, rx) = fixture();
+    let mut h = harness(&f, rx, 1240.0);
+    settle(&mut h);
+    save(&mut h, "accounts-light");
+
+    h.key_press_modifiers(Modifiers::COMMAND, Key::K);
+    settle(&mut h);
+    save(&mut h, "palette");
+    h.key_press(Key::Escape);
+    settle(&mut h);
+
+    nav(&mut h, "Auto-switch");
+    save(&mut h, "auto");
+
+    nav(&mut h, "Settings");
+    save(&mut h, "settings-light");
+
+    h.get_by_role_and_label(Role::RadioButton, "Dark").click();
+    settle(&mut h);
+    nav(&mut h, "Accounts");
+    save(&mut h, "accounts-dark");
+
+    // the ring view, and the same page once the window is too narrow for a table
+    f.cswap.edit_settings(Box::new(|s| s.usage_view = cswap_core::UsageView::Rings));
+    settle(&mut h);
+    save(&mut h, "accounts-rings");
+    f.cswap.edit_settings(Box::new(|s| {
+        s.usage_view = cswap_core::UsageView::Bars;
+        s.theme = ThemeSetting::Light;
+    }));
+    h.set_size(vec2(620.0, 780.0));
+    settle(&mut h);
+    save(&mut h, "accounts-compact");
+
+    h.set_size(vec2(1240.0, 780.0));
+    nav(&mut h, "Mappings");
+    save(&mut h, "mappings");
 }
