@@ -147,6 +147,9 @@ impl CswapApp {
         // Cheap (a clone under a lock), and it makes every edit visible on the next frame
         // whether or not the service also pushes `Event::Settings`.
         self.settings = self.services.cswap.settings();
+        // Same for the binary: a detection started anywhere (Settings, onboarding, the
+        // driver's own) shows in the sidebar and lifts onboarding without its event.
+        self.binary = self.services.cswap.binary().or(self.binary.take());
         if self.applied_theme != Some(self.settings.theme) {
             style::apply_theme(&ctx, self.settings.theme);
             self.applied_theme = Some(self.settings.theme);
@@ -204,7 +207,7 @@ impl CswapApp {
                 binary: self.binary.as_ref(),
                 updater: &self.updater,
                 mac: self.services.host.platform() == "macos",
-                now_unix: shell::now_unix(),
+                now_ms: cswap_core::format::now_ms(),
             };
             egui::Panel::top("titlebar")
                 .exact_size(shell::TITLEBAR_H)

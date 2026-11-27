@@ -4,6 +4,7 @@
 //! also offers "Go to <page>". Enter switches to the highlighted account through the CLI
 //! (or opens the page); the result comes back as a toast.
 
+use cswap_core::format::{mask_email, pct};
 use cswap_core::{Account, AccountsState, CsResult, Page, Pending, SwitchPayload};
 use egui::{
     Align, Align2, Color32, CornerRadius, Frame, Key, Layout, Margin, Modifiers, Sense, Stroke, Ui, pos2, vec2,
@@ -47,24 +48,6 @@ pub fn rows(accounts: &AccountsState, query: &str) -> Vec<Row> {
         out.extend(PAGES.iter().filter(|(_, n)| n.contains(&needle)).map(|(p, _)| Row::Page(*p)));
     }
     out
-}
-
-/// Keeps the first three characters of an address (the "Hide email addresses" setting).
-pub(crate) fn mask_email(email: &str, on: bool) -> String {
-    if !on || email.is_empty() {
-        return email.to_owned();
-    }
-    let local = email.split('@').next().unwrap_or(email);
-    let head: String = local.chars().take(3).collect();
-    let n = email.chars().count().saturating_sub(3).clamp(3, 8);
-    format!("{head}{}", "•".repeat(n))
-}
-
-fn pct(v: Option<f64>) -> String {
-    match v {
-        Some(p) if !p.is_nan() => format!("{}%", p.round() as i64),
-        _ => "—".into(),
-    }
 }
 
 #[derive(Default)]
@@ -392,12 +375,5 @@ mod tests {
         assert_eq!(numbers(&rows(&s, "1")), ["1"]);
         assert_eq!(numbers(&rows(&s, " set")), ["Settings"]);
         assert_eq!(numbers(&rows(&s, "zzz")), Vec::<String>::new());
-    }
-
-    #[test]
-    fn masking_keeps_three_characters() {
-        assert_eq!(mask_email("work@company.com", true), "wor••••••••");
-        assert_eq!(mask_email("ab@x.io", true), "ab••••");
-        assert_eq!(mask_email("work@company.com", false), "work@company.com");
     }
 }

@@ -6,13 +6,17 @@
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
-use cswap_core::{Cswap, CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState, UpdaterStatus};
+use cswap_core::mock::MockCswap;
+use cswap_core::{
+    AppSettings, CommandLogEntry, Cswap, CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState,
+    UpdaterStatus,
+};
 use egui::accesskit::Role;
 use egui::{Key, Modifiers, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 
-use crate::testing::{DisabledUpdates, HostCall, RecordingHost, StubCswap};
+use crate::testing::{DisabledUpdates, HostCall, RecordingHost};
 use crate::{CswapApp, Services};
 
 struct World {
@@ -21,7 +25,7 @@ struct World {
 }
 
 struct Fixture {
-    cswap: Arc<StubCswap>,
+    cswap: Arc<MockCswap>,
     host: Arc<RecordingHost>,
     updates: Arc<DisabledUpdates>,
     sink: EventSink,
@@ -29,8 +33,35 @@ struct Fixture {
 
 fn fixture() -> (Fixture, Receiver<Event>) {
     let (sink, rx) = EventSink::new();
-    let cswap = StubCswap::new(Some(sink.clone()));
+    let cswap = Arc::new(MockCswap::new(sink.clone()));
+    // Off, so a test's command log does not depend on whether another test in this process
+    // already spent the process-wide focus refresh.
+    cswap.set_settings(AppSettings { refresh_on_focus: false, ..Default::default() });
+    // a log to show: one list read and one switch that changes nothing
+    cswap.refresh();
+    cswap.switch_to("1", false);
+    // the mock's events from the seeding are not this window's business
+    while rx.try_recv().is_ok() {}
     (Fixture { cswap, host: RecordingHost::new("linux"), updates: DisabledUpdates::new("1.0.0"), sink }, rx)
+}
+
+/// A failed call, as the driver logs one (the mock's calls all succeed).
+fn failed_entry(id: u64) -> CommandLogEntry {
+    CommandLogEntry {
+        id,
+        at: cswap_core::format::iso_from_ms(cswap_core::format::now_ms()),
+        args: ["switch", "9", "--json"].map(String::from).to_vec(),
+        exit_code: Some(1),
+        duration_ms: 231,
+        ok: false,
+        stdout: None,
+        stderr: Some("No account found with identifier: 9".into()),
+        error: None,
+    }
+}
+
+fn cli_calls(f: &Fixture, args: &[&str]) -> usize {
+    f.cswap.command_log().iter().filter(|e| e.args == args).count()
 }
 
 fn harness(f: &Fixture, rx: Receiver<Event>, width: f32) -> Harness<'static, World> {
@@ -39,7 +70,7 @@ fn harness(f: &Fixture, rx: Receiver<Event>, width: f32) -> Harness<'static, Wor
 
 fn harness_sized(f: &Fixture, rx: Receiver<Event>, width: f32, height: f32) -> Harness<'static, World> {
     let services = Services { cswap: f.cswap.clone(), updates: f.updates.clone(), host: f.host.clone() };
-    let theme = f.cswap.st().settings.theme;
+    let theme = f.cswap.settings().theme;
     let world = World { app: None, init: Some((services, rx)) };
     Harness::builder()
         .with_size(vec2(width, height))
@@ -119,9 +150,10 @@ fn renders_settings_and_log_in_light_and_dark() {
     nav(&mut h, "Settings");
     h.get_by_role_and_label(Role::RadioButton, "Dark").click();
     settle(&mut h);
-    assert_eq!(f.cswap.st().settings.theme, ThemeSetting::Dark);
+    assert_eq!(f.cswap.settings().theme, ThemeSetting::Dark);
     assert_eq!(h.ctx.theme(), egui::Theme::Dark);
     shot(&mut h, "settings-dark");
+    f.sink.send(Event::CommandLog(failed_entry(100)));
     nav(&mut h, "Log");
     h.get_by_role_and_label(Role::Button, "cswap switch 9 --json").click();
     settle(&mut h);
@@ -139,14 +171,14 @@ fn settings_edits_reach_the_service() {
     settle(&mut h);
     h.get_by_role_and_label(Role::MenuItem, "5 min").click();
     settle(&mut h);
-    assert_eq!(f.cswap.st().settings.refresh_seconds, 300);
+    assert_eq!(f.cswap.settings().refresh_seconds, 300);
 
     h.get_by_role_and_label(Role::CheckBox, "Hide email addresses").click();
     settle(&mut h);
-    assert!(f.cswap.st().settings.mask_emails);
+    assert!(f.cswap.settings().mask_emails);
     h.get_by_role_and_label(Role::CheckBox, "Close to tray").click();
     settle(&mut h);
-    assert!(!f.cswap.st().settings.close_to_tray);
+    assert!(!f.cswap.settings().close_to_tray);
 
     // the vault opens through the Host, the links go out through it too
     h.get_by_role_and_label(Role::Button, "Open").click();
@@ -155,7 +187,7 @@ fn settings_edits_reach_the_service() {
     assert_eq!(
         f.host.calls(),
         vec![
-            HostCall::OpenPath("/home/you/.claude-swap-backup".into()),
+            HostCall::OpenPath("/home/you/.local/share/claude-swap".into()),
             HostCall::OpenExternal("https://github.com/realiti4/claude-swap".into())
         ]
     );
@@ -164,6 +196,12 @@ fn settings_edits_reach_the_service() {
     h.get_by_role_and_label(Role::Button, "Upgrade cswap").click();
     settle(&mut h);
     assert!(app(&h).toasts.items.iter().any(|t| t.text.ends_with("claude-swap is already at the latest version")));
+
+    // an unclaimed credential entry is listed and purged through the CLI
+    h.get_by_label("a1b2c3");
+    h.get_by_role_and_label(Role::Button, "Purge").click();
+    settle(&mut h);
+    assert!(app(&h).toasts.items.iter().any(|t| t.text == "Purged a1b2c3"));
 }
 
 #[test]
@@ -204,45 +242,44 @@ fn log_lists_newest_first_and_clears() {
     let mut h = harness(&f, rx, 1240.0);
     settle(&mut h);
     nav(&mut h, "Log");
-    let rows: Vec<String> = h
-        .query_all_by_role(Role::Button)
-        .filter_map(|n| n.accesskit_node().label())
-        .filter(|l| l.starts_with("cswap "))
-        .collect();
-    assert_eq!(rows, ["cswap switch 9 --json", "cswap config get --json", "cswap list --json"]);
-    // pushed while open
-    f.sink.send(Event::CommandLog(crate::testing::log_entry(4, &["status", "--json"], true)));
+    let rows = |h: &Harness<'_, World>| -> Vec<String> {
+        h.query_all_by_role(Role::Button)
+            .filter_map(|n| n.accesskit_node().label())
+            .filter(|l| l.starts_with("cswap "))
+            .collect()
+    };
+    assert_eq!(rows(&h), ["cswap switch 1 --json", "cswap list --json"]);
+    // pushed while open, on top
+    f.sink.send(Event::CommandLog(failed_entry(100)));
     settle(&mut h);
-    h.get_by_role_and_label(Role::Button, "cswap status --json");
+    assert_eq!(rows(&h)[0], "cswap switch 9 --json");
+    h.get_by_label("exit 1");
     h.get_by_role_and_label(Role::Button, "Clear").click();
     settle(&mut h);
     h.get_by_label("Nothing yet");
-    assert!(f.cswap.calls().contains(&"clear_log".to_owned()));
+    assert!(f.cswap.command_log().is_empty(), "cleared in the service too");
 }
 
 #[test]
 fn without_cswap_onboarding_shows_and_a_custom_path_recovers() {
     let (f, rx) = fixture();
-    {
-        let mut s = f.cswap.st();
-        s.binary = Some(CswapBinaryInfo {
-            path: Some("/definitely/not/here/cswap".into()),
-            error: Some("spawn ENOENT".into()),
-            candidates: vec!["/home/you/.local/bin".into()],
-            ..Default::default()
-        });
-        s.detect = s.binary.clone();
-    }
+    f.cswap.set_binary(Some(CswapBinaryInfo {
+        path: Some("/definitely/not/here/cswap".into()),
+        error: Some("spawn ENOENT".into()),
+        candidates: vec!["/home/you/.local/bin".into()],
+        ..Default::default()
+    }));
     let mut h = harness(&f, rx, 1240.0);
     settle(&mut h);
     h.get_by_label("cswap is not installed yet");
     h.get_by_label("cswap not found");
     shot(&mut h, "onboarding-light");
 
-    // Install with uv fails here (no uv in the stub): the error is a toast that stays
+    // Install with uv reports back and detects again (still nothing found here)
     h.get_by_role_and_label(Role::Button, "Install with uv").click();
     settle(&mut h);
-    assert!(app(&h).toasts.items.iter().any(|t| t.text.starts_with("Install failed")));
+    assert!(app(&h).toasts.items.iter().any(|t| t.text == "claude-swap installed"));
+    h.get_by_label("cswap is not installed yet");
 
     // the Settings button leaves onboarding; a saved path is detected at once
     // the card's own Settings button, not the sidebar's
@@ -252,12 +289,12 @@ fn without_cswap_onboarding_shows_and_a_custom_path_recovers() {
         .click();
     settle(&mut h);
     assert_eq!(app(&h).page, Page::Settings);
-    f.cswap.st().detect = Some(CswapBinaryInfo {
+    f.cswap.set_binary(Some(CswapBinaryInfo {
         path: Some("/opt/fake/cswap".into()),
         version: Some("0.25.0".into()),
         source: cswap_core::BinarySource::Settings,
         ..Default::default()
-    });
+    }));
     let input = h
         .query_all_by_label("Custom path")
         .find(|n| n.accesskit_node().role() == Role::TextInput)
@@ -267,7 +304,7 @@ fn without_cswap_onboarding_shows_and_a_custom_path_recovers() {
     settle(&mut h);
     h.get_by_role_and_label(Role::Button, "Save").click();
     settle(&mut h);
-    assert_eq!(f.cswap.st().settings.cswap_path.as_deref(), Some("/opt/fake/cswap"));
+    assert_eq!(f.cswap.settings().cswap_path.as_deref(), Some("/opt/fake/cswap"));
     h.get_by_label("cswap 0.25.0");
     nav(&mut h, "Accounts");
     assert!(h.query_by_label("cswap is not installed yet").is_none());
@@ -284,11 +321,11 @@ fn palette_switches_through_the_cli_and_closes_on_escape() {
     let input = h.get_by_role_and_label(Role::TextInput, "Switch to account");
     assert!(input.accesskit_node().is_focused(), "the query field takes focus");
     shot(&mut h, "palette-light");
-    h.get_by_role_and_label(Role::TextInput, "Switch to account").type_text("acme");
+    h.get_by_role_and_label(Role::TextInput, "Switch to account").type_text("company");
     settle(&mut h);
     h.key_press(Key::Enter);
     settle(&mut h);
-    assert!(f.cswap.calls().contains(&"switch 2".to_owned()));
+    assert_eq!(cli_calls(&f, &["switch", "2", "--json"]), 1);
     assert!(!app(&h).palette.open);
     assert!(app(&h).toasts.items.iter().any(|t| t.text.starts_with("Switched to Account-2")));
     // the active pill follows the pushed list
@@ -301,14 +338,13 @@ fn palette_switches_through_the_cli_and_closes_on_escape() {
     settle(&mut h);
     assert!(!app(&h).palette.open);
 
-    // Ctrl+, opens Settings; Ctrl+R refreshes (the count is relative: the focus refresh is
-    // throttled process-wide, so another test may already have spent it)
-    let before = f.cswap.calls().iter().filter(|c| *c == "refresh").count();
+    // Ctrl+, opens Settings; Ctrl+R refreshes
+    let before = cli_calls(&f, &["list", "--json"]);
     h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
     h.key_press_modifiers(Modifiers::COMMAND, Key::R);
     settle(&mut h);
     assert_eq!(app(&h).page, Page::Settings);
-    assert_eq!(f.cswap.calls().iter().filter(|c| *c == "refresh").count(), before + 1, "{:?}", f.cswap.calls());
+    assert_eq!(cli_calls(&f, &["list", "--json"]), before + 1);
 }
 
 #[test]
@@ -330,7 +366,7 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
     settle(&mut h);
     h.get_by_role_and_label(Role::Button, "Collapse the sidebar").click();
     settle(&mut h);
-    assert!(f.cswap.st().settings.sidebar_collapsed, "persisted as a setting");
+    assert!(f.cswap.settings().sidebar_collapsed, "persisted as a setting");
     h.get_by_role_and_label(Role::Button, "Expand the sidebar");
 }
 
@@ -494,6 +530,8 @@ fn readme_screenshots() {
         img.save(dir.join(format!("{name}.png"))).expect("save png");
     };
     let (f, rx) = fixture();
+    // ONE scoped model, as real cswap reports today, so the floor shows the whole table
+    f.cswap.set_list(Some(crate::testing::one_model_payload(f.cswap.now_ms())), None);
     let mut h = harness(&f, rx, 1240.0);
     settle(&mut h);
     save(&mut h, "accounts-light");

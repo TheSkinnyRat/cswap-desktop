@@ -4,21 +4,20 @@
 
 use std::sync::Arc;
 
-use cswap_core::{CswapBinaryInfo, EventSink, ThemeSetting};
-use cswap_ui::testing::{DisabledUpdates, RecordingHost, StubCswap};
+use cswap_core::mock::{MockCswap, MockUpdates};
+use cswap_core::{AppSettings, CswapBinaryInfo, EventSink, ThemeSetting};
+use cswap_ui::testing::RecordingHost;
 use cswap_ui::{CswapApp, Services};
 
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
     let (sink, events) = EventSink::new();
-    let cswap = StubCswap::new(Some(sink.clone()));
+    let cswap = Arc::new(MockCswap::new(sink.clone()));
     if args.iter().any(|a| a == "--dark") {
-        cswap.st().settings.theme = ThemeSetting::Dark;
+        cswap.set_settings(AppSettings { theme: ThemeSetting::Dark, ..Default::default() });
     }
     if args.iter().any(|a| a == "--no-cswap") {
-        let none = CswapBinaryInfo { candidates: vec!["~/.local/bin".into()], ..Default::default() };
-        cswap.st().binary = Some(none.clone());
-        cswap.st().detect = Some(none);
+        cswap.set_binary(Some(CswapBinaryInfo { candidates: vec!["~/.local/bin".into()], ..Default::default() }));
     }
     let platform = if cfg!(target_os = "windows") {
         "windows"
@@ -27,7 +26,7 @@ fn main() -> eframe::Result {
     } else {
         "linux"
     };
-    let services = Services { cswap, updates: DisabledUpdates::new("1.0.0"), host: RecordingHost::new(platform) };
+    let services = Services { cswap, updates: Arc::new(MockUpdates), host: RecordingHost::new(platform) };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Claude Swap (demo)")

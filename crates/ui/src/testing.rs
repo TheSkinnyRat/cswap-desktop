@@ -3,13 +3,11 @@
 //! [`DisabledUpdates`], an updater that is off (dev builds) but still records calls.
 //! Public behind the `testing` feature; always compiled into this crate's tests.
 //!
-//! [`StubCswap`] is a minimal in-memory `Cswap` used until ui-accounts' `MockCswap` is merged
-//! into `v1`; then the tests and the demo move to the mock and the stub goes away.
+//! The `Cswap` side is `cswap_core::mock::MockCswap`.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use cswap_core::settings::SettingsEdit;
 use cswap_core::*;
 
 /// Everything the window asked of the platform, in order.
@@ -134,288 +132,22 @@ impl Updates for DisabledUpdates {
     }
 }
 
-// ---- stub cswap (until MockCswap lands) ----------------------------------------------------
+// ---- fixtures ------------------------------------------------------------------------------
 
-pub struct StubState {
-    pub accounts: AccountsState,
-    pub settings: AppSettings,
-    pub binary: Option<CswapBinaryInfo>,
-    /// What `detect_binary` finds next (defaults to `binary`).
-    pub detect: Option<CswapBinaryInfo>,
-    pub log: Vec<CommandLogEntry>,
-    pub unclaimed: Vec<UnclaimedEntry>,
-    pub auto: AutoStatus,
-    /// Every call, as `verb args…`.
-    pub calls: Vec<String>,
-}
-
-pub struct StubCswap {
-    pub s: Mutex<StubState>,
-    sink: Option<EventSink>,
-}
-
-fn ok_out(s: &str) -> CsResult<PlainOutput> {
-    Ok(PlainOutput { stdout: s.into(), stderr: String::new(), exit_code: Some(0) })
-}
-
-fn win(pct: f64) -> UsageWindow {
-    UsageWindow { pct, ..Default::default() }
-}
-
-impl StubCswap {
-    /// The fixture of 0.1.23's README screenshots (`docs.spec.ts`).
-    pub fn new(sink: Option<EventSink>) -> Arc<Self> {
-        let acc = |n: u32, email: &str, alias: Option<&str>, org: &str, p5: Option<f64>, p7: Option<f64>| Account {
-            number: n,
-            email: email.into(),
-            alias: alias.map(Into::into),
-            organization_name: org.into(),
-            is_organization: !org.is_empty(),
-            active: n == 1,
-            usage_status: "ok".into(),
-            usage: p5.map(|p| Usage { five_hour: Some(win(p)), seven_day: p7.map(win), ..Default::default() }),
-            ..Default::default()
-        };
-        let mut a4 = acc(4, "api-key-4@token.local", None, "", None, None);
-        a4.usage_status = "api_key".into();
-        let accounts = vec![
-            acc(1, "you@example.com", Some("main"), "", Some(45.0), Some(12.0)),
-            acc(2, "work@example.com", None, "Acme Inc", Some(100.0), Some(61.0)),
-            acc(3, "spare@example.com", None, "", Some(3.0), Some(40.0)),
-            a4,
-        ];
-        let binary = CswapBinaryInfo {
-            path: Some("/home/you/.local/bin/cswap".into()),
-            source: BinarySource::Uv,
-            version: Some("0.25.0".into()),
-            error: None,
-            candidates: vec!["/home/you/.local/bin".into()],
-        };
-        let log = vec![
-            log_entry(1, &["list", "--json"], true),
-            log_entry(2, &["config", "get", "--json"], true),
-            log_entry(3, &["switch", "9", "--json"], false),
-        ];
-        Arc::new(StubCswap {
-            s: Mutex::new(StubState {
-                accounts: AccountsState {
-                    payload: Some(ListPayload {
-                        schema_version: 1,
-                        active_account_number: Some(1),
-                        accounts,
-                        ..Default::default()
-                    }),
-                    // now, so the title bar reads "just now" in every render
-                    fetched_at: Some(now_iso()),
-                    ..Default::default()
-                },
-                settings: AppSettings::default(),
-                binary: Some(binary.clone()),
-                detect: None,
-                log,
-                unclaimed: vec![],
-                auto: AutoStatus::default(),
-                calls: vec![],
-            }),
-            sink,
-        })
-    }
-
-    pub fn st(&self) -> MutexGuard<'_, StubState> {
-        self.s.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    fn call(&self, c: String) {
-        self.st().calls.push(c);
-    }
-
-    fn send(&self, e: Event) {
-        if let Some(s) = &self.sink {
-            s.send(e);
+/// The mock's fixture with ONE scoped model (`Fable`), as real cswap reports today: the
+/// README screenshots use it so the 1240 px floor still shows the whole table. Tests keep
+/// the mock's two-model fixture, which exercises the generated columns harder.
+pub fn one_model_payload(now_ms: i64) -> ListPayload {
+    let mut p = cswap_core::mock::fixture_payload(now_ms);
+    for a in &mut p.accounts {
+        for u in [a.usage.as_mut(), a.last_good_usage.as_mut()].into_iter().flatten() {
+            if let Some(sc) = u.scoped.as_mut() {
+                sc.retain(|w| w.name == "Fable");
+                if sc.is_empty() {
+                    u.scoped = None;
+                }
+            }
         }
     }
-
-    pub fn calls(&self) -> Vec<String> {
-        self.st().calls.clone()
-    }
-}
-
-/// The current time as RFC 3339 UTC.
-pub fn now_iso() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-}
-
-pub fn log_entry(id: u64, args: &[&str], ok: bool) -> CommandLogEntry {
-    CommandLogEntry {
-        id,
-        at: "2026-09-10T08:00:00Z".into(),
-        args: args.iter().map(|s| (*s).to_owned()).collect(),
-        exit_code: Some(if ok { 0 } else { 1 }),
-        duration_ms: 120 + id * 37,
-        ok,
-        stdout: Some(if ok { "{\"schemaVersion\": 1}".into() } else { String::new() }),
-        stderr: (!ok).then(|| "No account found with identifier: 9".into()),
-        error: None,
-    }
-}
-
-impl Cswap for StubCswap {
-    fn accounts(&self) -> AccountsState {
-        self.st().accounts.clone()
-    }
-    fn refresh(&self) -> Pending<AccountsState> {
-        self.call("refresh".into());
-        let a = self.accounts();
-        self.send(Event::Accounts(a.clone()));
-        Pending::ready(a)
-    }
-    fn status(&self) -> Pending<CsResult<StatusPayload>> {
-        Pending::ready(Err(CswapError::new("Stub", "not in the stub")))
-    }
-    fn switch_to(&self, target: &str, _force: bool) -> Pending<CsResult<SwitchPayload>> {
-        self.call(format!("switch {target}"));
-        let mut s = self.st();
-        let Some(p) = s.accounts.payload.as_mut() else {
-            return Pending::ready(Err(CswapError::new("NotFound", "no list")));
-        };
-        let Some(n) = p.accounts.iter().find(|a| a.number.to_string() == target).map(|a| a.number) else {
-            return Pending::ready(Err(CswapError::new(
-                "AccountNotFoundError",
-                format!("No account found with identifier: {target}"),
-            )));
-        };
-        for a in &mut p.accounts {
-            a.active = a.number == n;
-        }
-        p.active_account_number = Some(n);
-        let email = p.accounts.iter().find(|a| a.number == n).map(|a| a.email.clone()).unwrap_or_default();
-        let st = s.accounts.clone();
-        drop(s);
-        self.send(Event::Accounts(st));
-        Pending::ready(Ok(SwitchPayload {
-            schema_version: 1,
-            switched: true,
-            message: format!("Switched to Account-{n} ({email})"),
-            ..Default::default()
-        }))
-    }
-    fn rotate(&self, _strategy: Option<RotateStrategy>) -> Pending<CsResult<SwitchPayload>> {
-        Pending::ready(Err(CswapError::new("Stub", "not in the stub")))
-    }
-    fn add_account(&self, _o: AddAccountOptions) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn add_token(&self, _o: AddTokenOptions) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn remove_account(&self, _t: &str) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn set_disabled(&self, _t: &str, _d: bool) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn set_alias(&self, _t: &str, _a: Option<&str>) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn move_account(&self, _t: &str, _s: u32) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn swap_accounts(&self, _a: &str, _b: &str) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn list_mappings(&self) -> Pending<CsResult<Vec<Mapping>>> {
-        Pending::ready(Ok(vec![]))
-    }
-    fn map_directory(&self, _t: &str, _p: &str) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn unmap_directory(&self, _p: &str) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn config(&self) -> Pending<CsResult<ConfigPayload>> {
-        Pending::ready(Ok(ConfigPayload { schema_version: 1, ..Default::default() }))
-    }
-    fn set_config(&self, _k: &str, _v: Option<&str>) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out("ok"))
-    }
-    fn export_accounts(&self, _o: ExportOptions, path: &str) -> Pending<CsResult<Transfer>> {
-        Pending::ready(Ok(Transfer { path: path.into(), output: PlainOutput::default() }))
-    }
-    fn import_accounts(&self, _o: ImportOptions, path: &str) -> Pending<CsResult<Transfer>> {
-        Pending::ready(Ok(Transfer { path: path.into(), output: PlainOutput::default() }))
-    }
-    fn list_unclaimed(&self) -> Pending<CsResult<Vec<UnclaimedEntry>>> {
-        Pending::ready(Ok(self.st().unclaimed.clone()))
-    }
-    fn purge_unclaimed(&self, id: &str) -> Pending<CsResult<PlainOutput>> {
-        self.call(format!("purge {id}"));
-        self.st().unclaimed.retain(|u| u.id != id);
-        Pending::ready(ok_out("ok"))
-    }
-    fn upgrade_cswap(&self) -> Pending<CsResult<PlainOutput>> {
-        self.call("upgrade".into());
-        Pending::ready(ok_out("Updated claude-swap\nclaude-swap is already at the latest version"))
-    }
-    fn token_status(&self) -> Pending<CsResult<PlainOutput>> {
-        Pending::ready(ok_out(""))
-    }
-    fn launch_session(&self, _t: &str, _cwd: Option<&str>) -> Pending<CsResult<LaunchedSession>> {
-        Pending::ready(Err(CswapError::new("Stub", "not in the stub")))
-    }
-    fn auto_start(&self, _dry_run: bool) -> Pending<AutoStatus> {
-        Pending::ready(self.st().auto.clone())
-    }
-    fn auto_stop(&self) -> Pending<AutoStatus> {
-        Pending::ready(self.st().auto.clone())
-    }
-    fn auto_status(&self) -> AutoStatus {
-        self.st().auto.clone()
-    }
-    fn auto_events(&self) -> Vec<AutoEvent> {
-        vec![]
-    }
-    fn auto_once(&self, _dry_run: bool) -> Pending<CsResult<AutoOnceResult>> {
-        Pending::ready(Err(CswapError::new("Stub", "not in the stub")))
-    }
-    fn settings(&self) -> AppSettings {
-        self.st().settings.clone()
-    }
-    fn edit_settings(&self, edit: SettingsEdit) -> AppSettings {
-        let s = {
-            let mut st = self.st();
-            edit(&mut st.settings);
-            st.settings.clone()
-        };
-        self.call("edit_settings".into());
-        self.send(Event::Settings(s.clone()));
-        s
-    }
-    fn binary(&self) -> Option<CswapBinaryInfo> {
-        self.st().binary.clone()
-    }
-    fn detect_binary(&self) -> Pending<CswapBinaryInfo> {
-        self.call("detect".into());
-        let b = {
-            let mut s = self.st();
-            let b = s.detect.clone().or_else(|| s.binary.clone()).unwrap_or_default();
-            s.binary = Some(b.clone());
-            b
-        };
-        self.send(Event::Binary(b.clone()));
-        Pending::ready(b)
-    }
-    fn install_cswap(&self) -> Pending<CsResult<PlainOutput>> {
-        self.call("install".into());
-        Pending::ready(Err(CswapError::new("InstallError", "uv was not found on PATH")))
-    }
-    fn command_log(&self) -> Vec<CommandLogEntry> {
-        self.st().log.clone()
-    }
-    fn clear_command_log(&self) {
-        self.call("clear_log".into());
-        self.st().log.clear();
-    }
-    fn vault_path(&self) -> Option<String> {
-        Some("/home/you/.claude-swap-backup".into())
-    }
+    p
 }

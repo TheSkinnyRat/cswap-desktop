@@ -7,7 +7,7 @@
 use cswap_core::{AccountsState, AppSettings, AutoStatus, CswapBinaryInfo, Page, UpdaterState, UpdaterStatus};
 use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, Rect, Sense, Stroke, Ui, pos2, vec2};
 
-use crate::palette::mask_email;
+use cswap_core::format::{age_seconds, mask_email, parse_iso_ms};
 use crate::style::{self, mix};
 use crate::theme::{RADIUS_MD, Tokens};
 use crate::widgets::{self, Side, icon};
@@ -28,8 +28,8 @@ pub struct ShellView<'a> {
     pub binary: Option<&'a CswapBinaryInfo>,
     pub updater: &'a UpdaterState,
     pub mac: bool,
-    /// Seconds since the Unix epoch, for "updated 3m ago".
-    pub now_unix: f64,
+    /// Unix milliseconds, for "updated 3m ago".
+    pub now_ms: i64,
 }
 
 /// What the user asked of the shell this frame.
@@ -73,7 +73,7 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 12.0;
         // refresh, with the age of the list beside it
-        let age = view.accounts.fetched_at.as_deref().and_then(parse_iso).map(|at| age_text(view.now_unix - at));
+        let age = view.accounts.fetched_at.as_deref().and_then(parse_iso_ms).map(|at| age_seconds(Some((view.now_ms - at) as f64 / 1000.0)));
         let age_g = age.as_ref().map(|a| ui.painter().layout_job(widgets::job(a, style::body(11.0), t.text_3)));
         let w = 6.0 + 13.0 + age_g.as_ref().map_or(0.0, |g| g.size().x + 6.0) + 6.0;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 26.0), Sense::click());
@@ -277,75 +277,9 @@ fn status_line(ui: &mut Ui, view: &ShellView, narrow: bool, t: &Tokens) {
     }
 }
 
-/// Lays out a frame that fills `rect` with no margin, for painting chrome into.
-pub fn chrome_frame() -> Frame {
-    Frame::new().inner_margin(Margin::ZERO)
-}
-
-// ---- time ----------------------------------------------------------------------------------
-
-/// Seconds since the epoch for an RFC 3339 / ISO 8601 UTC-or-offset timestamp, the way cswap
-/// and the driver write them (`2026-09-10T08:00:00.000Z`, `...+07:00`).
-pub fn parse_iso(s: &str) -> Option<f64> {
-    let s = s.trim();
-    let (date, rest) = s.split_once(['T', ' '])?;
-    let mut d = date.split('-');
-    let (y, mo, da): (i64, i64, i64) = (d.next()?.parse().ok()?, d.next()?.parse().ok()?, d.next()?.parse().ok()?);
-    let tz_at = rest.find(['Z', 'z', '+', '-']).unwrap_or(rest.len());
-    let (time, tz) = rest.split_at(tz_at);
-    let mut tp = time.split(':');
-    let h: i64 = tp.next()?.parse().ok()?;
-    let mi: i64 = tp.next()?.parse().ok()?;
-    let sec: f64 = tp.next().unwrap_or("0").parse().ok()?;
-    let offset = match tz {
-        "" | "Z" | "z" => 0,
-        o => {
-            let sign = if o.starts_with('-') { -1 } else { 1 };
-            let o = &o[1..];
-            let (oh, om) = o.split_once(':').unwrap_or((&o[..2.min(o.len())], &o[2.min(o.len())..]));
-            sign * (oh.parse::<i64>().ok()? * 3600 + om.parse::<i64>().unwrap_or(0) * 60)
-        }
-    };
-    // days from civil (Howard Hinnant)
-    let y2 = if mo <= 2 { y - 1 } else { y };
-    let era = y2.div_euclid(400);
-    let yoe = y2 - era * 400;
-    let doy = (153 * (mo + if mo > 2 { -3 } else { 9 }) + 2) / 5 + da - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146097 + doe - 719468;
-    Some((days * 86400 + h * 3600 + mi * 60 - offset) as f64 + sec)
-}
-
-/// `ageSeconds` of format.ts: "just now", "3m ago", "2h ago", "4d ago".
-pub fn age_text(sec: f64) -> String {
-    let s = sec.max(0.0) as u64;
-    if s < 60 {
-        "just now".into()
-    } else if s < 3600 {
-        format!("{}m ago", s / 60)
-    } else if s < 86400 {
-        format!("{}h ago", s / 3600)
-    } else {
-        format!("{}d ago", s / 86400)
-    }
-}
-
-pub fn now_unix() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn iso_timestamps_parse_with_offsets() {
-        assert_eq!(parse_iso("1970-01-01T00:00:00Z"), Some(0.0));
-        assert_eq!(parse_iso("2026-09-10T08:00:00.500Z"), Some(1_789_027_200.5));
-        assert_eq!(parse_iso("2026-09-10T15:00:00+07:00"), Some(1_789_027_200.0));
-        assert_eq!(parse_iso("2026-09-10T03:00:00-05:00"), Some(1_789_027_200.0));
-        assert_eq!(parse_iso("not a date"), None);
-    }
 
     // The sidebar rule Purwa asked for: forced under 860 px of WINDOW, a choice above it.
     #[test]
