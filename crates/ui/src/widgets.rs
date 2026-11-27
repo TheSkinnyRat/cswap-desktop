@@ -776,7 +776,8 @@ pub fn empty(ui: &mut Ui, glyph: Option<&str>, title: &str, body: &str, action: 
                 icon(ui, g, 28.0, t.text_3);
                 ui.add_space(12.0);
             }
-            line(ui, title, style::body_medium(14.0), t.text);
+            let r = line(ui, title, style::body_medium(14.0), t.text);
+            r.widget_info(|| WidgetInfo::labeled(Role::Label, true, title));
             ui.add_space(4.0);
             let g = wrapped(ui, body, style::body(12.5), t.text_2, (w - 48.0).min(420.0));
             let (rr, _) = ui.allocate_exact_size(g.size(), Sense::hover());
