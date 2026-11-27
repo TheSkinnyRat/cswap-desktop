@@ -61,7 +61,7 @@ impl OnboardingPage {
         let avail = ui.available_size();
         let width = 560f32.min(avail.x - 48.0);
         // Vertically centred in the page (`flex h-full items-center`), once it is measured.
-        let h_id = ui.id().with("onboarding-h");
+        let h_id = ui.scope_id().with("onboarding-h");
         let last_h: f32 = ui.ctx().data(|d| d.get_temp(h_id)).unwrap_or(0.0);
         ui.add_space(((avail.y - last_h) / 2.0).max(24.0));
         let r = ui.vertical_centered(|ui| {

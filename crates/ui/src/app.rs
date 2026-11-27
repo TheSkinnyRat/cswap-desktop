@@ -187,7 +187,7 @@ impl CswapApp {
         let width = ctx.content_rect().width();
         let (narrow, forced) = shell::sidebar_narrow(width, self.settings.sidebar_collapsed);
         let target = if narrow { shell::SIDEBAR_NARROW } else { shell::SIDEBAR_WIDE };
-        let sidebar_w = ctx.animate_value_with_time(egui::Id::new("sidebar-w"), target, crate::theme::TRANSITION_SECS);
+        let sidebar_w = ctx.animate_value_with_time(egui::Id::unique("sidebar-w"), target, crate::theme::TRANSITION_SECS);
 
         let mut act = ShellAction::default();
         {

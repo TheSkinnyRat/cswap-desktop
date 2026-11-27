@@ -38,19 +38,19 @@ pub fn icons() -> FontFamily {
 }
 
 pub fn body(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Proportional)
+    FontId::unique(size, FontFamily::Proportional)
 }
 pub fn body_medium(size: f32) -> FontId {
-    FontId::new(size, medium())
+    FontId::unique(size, medium())
 }
 pub fn body_semibold(size: f32) -> FontId {
-    FontId::new(size, semibold())
+    FontId::unique(size, semibold())
 }
 pub fn mono(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Monospace)
+    FontId::unique(size, FontFamily::Monospace)
 }
 pub fn icon(size: f32) -> FontId {
-    FontId::new(size, icons())
+    FontId::unique(size, icons())
 }
 
 fn inter_at(weight: f32) -> FontData {
@@ -123,7 +123,7 @@ pub fn apply_theme(ctx: &Context, theme: ThemeSetting) {
 /// The palette of the theme this frame is drawn in.
 pub fn tokens(ctx: &Context) -> Tokens {
     let dark = ctx.theme() == Theme::Dark;
-    let id = egui::Id::new(("cswap-tokens", dark));
+    let id = egui::Id::unique(("cswap-tokens", dark));
     if let Some(t) = ctx.data(|d| d.get_temp::<Arc<Tokens>>(id)) {
         return (*t).clone();
     }

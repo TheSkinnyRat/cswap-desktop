@@ -94,19 +94,28 @@ impl LogPage {
                     ui.set_width(ui.available_width());
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let n = self.log.len();
+                    let mut toggled = None;
                     for (k, e) in self.log.iter().rev().enumerate() {
-                        self.row(ui, e, k + 1 == n, &t);
+                        if row(ui, e, self.open == Some(e.id), k + 1 == n, &t) {
+                            toggled = Some(e.id);
+                        }
+                    }
+                    if let Some(id) = toggled {
+                        self.open = if self.open == Some(id) { None } else { Some(id) };
                     }
                 });
         });
     }
 
-    fn row(&mut self, ui: &mut Ui, e: &CommandLogEntry, last: bool, t: &crate::theme::Tokens) {
-        let open = self.open == Some(e.id);
+}
+
+/// One log row (and its output when `open`). Returns true when clicked.
+fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::theme::Tokens) -> bool {
+    {
         let w = ui.available_width();
         let (r, resp) = ui.allocate_exact_size(vec2(w, 36.0), Sense::click());
         let cmd = format!("cswap {}", e.args.join(" "));
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, &cmd));
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, open, &cmd));
         let ht = widgets::hover_t(ui, resp.id, resp.hovered());
         ui.painter().rect_filled(r, 0.0, egui::Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.5), ht));
         let rot = ui.ctx().animate_bool_with_time(resp.id.with("rot"), open, crate::theme::TRANSITION_SECS);
@@ -146,9 +155,7 @@ impl LogPage {
                 ui.add(egui::Label::new(j).selectable(false).truncate());
             });
         });
-        if resp.clicked() {
-            self.open = if open { None } else { Some(e.id) };
-        }
+        let clicked = resp.clicked();
         if open {
             let line = ui.available_rect_before_wrap();
             ui.painter().hline(line.x_range(), line.top(), Stroke::new(1.0, mix(t.border, t.surface, 0.4)));
@@ -183,6 +190,7 @@ impl LogPage {
             let y = ui.cursor().top();
             ui.painter().hline(r.x_range(), y - 0.5, Stroke::new(1.0, t.border));
         }
+        clicked
     }
 }
 

@@ -77,7 +77,7 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
         let age_g = age.as_ref().map(|a| ui.painter().layout_job(widgets::job(a, style::body(11.0), t.text_3)));
         let w = 6.0 + 13.0 + age_g.as_ref().map_or(0.0, |g| g.size().x + 6.0) + 6.0;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 26.0), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Refresh usage"));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Refresh usage"));
         let ht = widgets::hover_t(ui, resp.id, resp.hovered());
         ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, ht));
         let fg = mix(t.text_3, t.text, ht);
@@ -120,7 +120,7 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
         let kg = ui.painter().layout_job(widgets::job(kbd_text, style::mono(10.5), t.text_2));
         let w = 8.0 + 13.0 + 8.0 + if show_label { g.size().x + 8.0 } else { 0.0 } + kg.size().x + 8.0 + 8.0;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 26.0), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
         let ht = widgets::hover_t(ui, resp.id, resp.hovered());
         ui.painter().rect(
             r,
@@ -164,7 +164,7 @@ pub fn sidebar(ui: &mut Ui, view: &ShellView, narrow: bool, forced: bool, act: &
         let on = view.page == page;
         let w = if narrow { 40.0 } else { inner.width() };
         let (r, resp) = ui.allocate_exact_size(vec2(w, 32.0), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, label));
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, label));
         let ht = widgets::hover_t(&ui, resp.id, resp.hovered() && !on);
         let fill = if on { t.surface_2 } else { Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht) };
         ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), fill);
@@ -218,7 +218,7 @@ pub fn sidebar(ui: &mut Ui, view: &ShellView, narrow: bool, forced: bool, act: &
         let label = if narrow { "Expand the sidebar" } else { "Collapse the sidebar" };
         let w = if narrow { 40.0 } else { inner.width() };
         let (r, resp) = ui.allocate_exact_size(vec2(w, 28.0), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
         let ht = widgets::hover_t(&ui, resp.id, resp.hovered());
         ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2.gamma_multiply(0.7), ht));
         let fg = mix(t.text_3, t.text, ht);

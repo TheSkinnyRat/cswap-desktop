@@ -284,7 +284,7 @@ impl<'a> Button<'a> {
         let sense = if enabled { Sense::click() } else { Sense::hover() };
         let (rect, resp) = ui.allocate_exact_size(vec2(width, h), sense);
         let name = self.name.unwrap_or(self.text).to_owned();
-        resp.widget_info(|| WidgetInfo::labeled(egui::WidgetType::Button, enabled, &name));
+        resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, &name));
         if !enabled {
             mark_disabled(ui, &resp);
         }
@@ -368,7 +368,7 @@ pub fn chip(ui: &mut Ui, label: &str, tone: Tone) -> Response {
     let galley = ui.painter().layout_job(job(label, style::body_medium(11.0), fg));
     let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x + 12.0, 18.0), Sense::hover());
     let owned = label.to_owned();
-    resp.widget_info(|| WidgetInfo::labeled(egui::WidgetType::Label, true, &owned));
+    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Label, true, &owned));
     ui.painter().rect_filled(rect, CornerRadius::same(4), bg);
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, fg);
     resp
@@ -427,7 +427,7 @@ pub fn select<T: PartialEq + Clone>(ui: &mut Ui, label: &str, value: &mut T, opt
     let owned = label.to_owned();
     let cur = current.clone();
     resp.widget_info(|| {
-        let mut w = WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &owned);
+        let mut w = WidgetInfo::labeled(egui::Role::ComboBox, true, &owned);
         w.current_text_value = Some(cur.clone());
         w
     });
@@ -464,7 +464,7 @@ pub fn switch(ui: &mut Ui, label: &str, on: bool, enabled: bool) -> Response {
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(30.0, 18.0), sense);
     let owned = label.to_owned();
-    resp.widget_info(|| WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, &owned));
+    resp.widget_info(|| WidgetInfo::selected(egui::Role::CheckBox, enabled, on, &owned));
     if !enabled {
         mark_disabled(ui, &resp);
     }
@@ -499,15 +499,16 @@ pub fn segmented<T: Copy + PartialEq>(ui: &mut Ui, value: T, options: &[(T, Opti
     for ((v, ic, l), w) in options.iter().zip(widths) {
         let r = Rect::from_min_size(pos2(x, outer.top() + 2.0), vec2(w, outer.height() - 4.0));
         x += w;
-        let id = ui.id().with(("seg", *l));
+        let id = ui.scope_id().with(("seg", *l));
         let resp = ui.interact(r, id, Sense::click());
         let on = *v == value;
         let owned = (*l).to_owned();
-        resp.widget_info(|| WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, &owned));
+        resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, on, &owned));
         let ht = hover_t(ui, id, resp.hovered() && !on);
         let painter = ui.painter();
         if on {
-            painter.add(egui::epaint::RectShape::filled(r, CornerRadius::same(RADIUS_SM), t.surface).with_shadow(style::card_shadow(&t)));
+            painter.add(style::card_shadow(&t).as_shape(r, CornerRadius::same(RADIUS_SM)));
+            painter.rect_filled(r, CornerRadius::same(RADIUS_SM), t.surface);
         }
         let fg = if on { t.text } else { mix(t.text_2, t.text, ht) };
         let g = painter.layout_job(job(l, font.clone(), fg));
@@ -751,7 +752,7 @@ pub fn menu_item(
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 30.0), sense);
     let owned = label.to_owned();
-    resp.widget_info(|| WidgetInfo::labeled(egui::WidgetType::Button, enabled, &owned));
+    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, &owned));
     ui.ctx().accesskit_node_builder(resp.id, |n| n.set_role(Role::MenuItem));
     let ht = hover_t(ui, resp.id, enabled && resp.hovered());
     let fill = if danger { t.danger_soft.gamma_multiply(ht) } else { mix(Color32::TRANSPARENT, t.surface_2, ht) };
@@ -819,9 +820,9 @@ pub fn dialog(
     let screen = ctx.content_rect();
     let top = screen.top() + screen.height() * 0.12;
     let width = width.min(screen.width() - 32.0);
-    let area = egui::Modal::default_area(Id::new(("dialog", id))).anchor(Align2::CENTER_TOP, vec2(0.0, top - screen.top()));
+    let area = egui::Modal::default_area(Id::unique(("dialog", id))).anchor(Align2::CENTER_TOP, vec2(0.0, top - screen.top()));
     let mut close = false;
-    let resp = egui::Modal::new(Id::new(("dialog", id)))
+    let resp = egui::Modal::new(Id::unique(("dialog", id)))
         .area(area)
         .backdrop_color(Color32::from_black_alpha(77))
         .frame(

@@ -161,9 +161,9 @@ impl Palette {
         let mut clicked: Option<usize> = None;
         let mut close = false;
         let mut query_changed = false;
-        let area = egui::Modal::default_area(egui::Id::new("palette"))
+        let area = egui::Modal::default_area(egui::Id::unique("palette"))
             .anchor(Align2::CENTER_TOP, vec2(0.0, screen.height() * 0.14));
-        let modal = egui::Modal::new(egui::Id::new("palette"))
+        let modal = egui::Modal::new(egui::Id::unique("palette"))
             .area(area)
             .backdrop_color(Color32::from_black_alpha(64))
             .frame(
@@ -176,7 +176,7 @@ impl Palette {
             .show(ctx, |ui| {
                 ui.set_width(width);
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let id = egui::Id::new("palette-input");
+                let id = egui::Id::unique("palette-input");
                 let edit = egui::TextEdit::singleline(&mut self.query)
                     .id(id)
                     .font(style::body(14.0))
@@ -248,7 +248,7 @@ impl Palette {
             Row::Account(a) => format!("{} {}", a.alias.as_deref().unwrap_or(""), mask_email(&a.email, mask)).trim().to_owned(),
             Row::Page(p) => format!("Go to {}", page_title(*p)),
         };
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &label));
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, selected, &label));
         if resp.hovered() && ui.input(|i| i.pointer.delta() != egui::Vec2::ZERO) {
             // `onMouseEnter`: the pointer moves the highlight, a still pointer does not fight
             // the arrow keys.

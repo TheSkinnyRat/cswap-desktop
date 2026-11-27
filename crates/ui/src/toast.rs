@@ -81,7 +81,7 @@ impl Toasts {
         let screen = ctx.content_rect();
         let width = 360f32.min(screen.width() - 24.0);
         let mut dismiss = None;
-        egui::Area::new(egui::Id::new("toasts"))
+        egui::Area::new(egui::Id::unique("toasts"))
             .order(egui::Order::Foreground)
             .anchor(Align2::RIGHT_BOTTOM, vec2(-12.0, -12.0))
             .show(ctx, |ui| {

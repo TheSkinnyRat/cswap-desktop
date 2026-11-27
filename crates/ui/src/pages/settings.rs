@@ -317,7 +317,7 @@ impl SettingsPage {
                             .response
                             .interact(egui::Sense::click());
                         r.widget_info(|| {
-                            egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, self.show_locations, "Locations checked")
+                            egui::WidgetInfo::selected(egui::Role::Button, true, self.show_locations, "Locations checked")
                         });
                         if r.clicked() {
                             self.show_locations = !self.show_locations;
@@ -539,7 +539,7 @@ impl SettingsPage {
                     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), egui::Sense::hover());
                     ui.painter().rect_filled(r, CornerRadius::same(2), t.surface_3);
                     let p = u.percent.unwrap_or(0.0).clamp(0.0, 100.0) / 100.0;
-                    let target = ui.ctx().animate_value_with_time(ui.id().with("upd-pct"), p, 0.3);
+                    let target = ui.ctx().animate_value_with_time(ui.scope_id().with("upd-pct"), p, 0.3);
                     let mut f = r;
                     f.set_width(r.width() * target);
                     ui.painter().rect_filled(f, CornerRadius::same(2), t.accent);
