@@ -1551,28 +1551,19 @@ fn run_dialog(
             });
             if !mappings.is_empty() {
                 widgets::field(ui, "Or pick a mapped directory", Some("Directories you have mapped with cswap map."), false, |ui| {
-                        let current = if mappings.iter().any(|m| &m.path == dir) { dir.clone() } else { "—".into() };
-                        egui::ComboBox::from_id_salt("run-mapped")
-                            .width(ui.available_width() - 8.0)
-                            .selected_text(current)
-                            .show_ui(ui, |ui| {
-                                if ui.selectable_label(false, "—").clicked() {
-                                    dir.clear();
-                                }
-                                for m in mappings.iter() {
-                                    let label = match &m.account {
-                                        Some(x) => format!(
-                                            "{} — {}",
-                                            m.path,
-                                            x.alias.clone().unwrap_or_else(|| x.email.clone())
-                                        ),
-                                        None => m.path.clone(),
-                                    };
-                                    if ui.selectable_label(&m.path == dir, label).clicked() {
-                                        *dir = m.path.clone();
-                                    }
-                                }
-                            });
+                        let mut opts: Vec<(String, String)> = vec![(String::new(), "—".to_owned())];
+                        opts.extend(mappings.iter().map(|m| {
+                            let label = match &m.account {
+                                Some(x) => format!("{} — {}", m.path, x.alias.clone().unwrap_or_else(|| x.email.clone())),
+                                None => m.path.clone(),
+                            };
+                            (m.path.clone(), label)
+                        }));
+                        let mut v = if mappings.iter().any(|m| &m.path == dir) { dir.clone() } else { String::new() };
+                        let w = ui.available_width();
+                        if widgets::select(ui, "Or pick a mapped directory", &mut v, &opts, w) {
+                            *dir = v;
+                        }
                     });
             }
             let w = ui.available_width();

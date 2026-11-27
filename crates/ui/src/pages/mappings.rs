@@ -211,19 +211,9 @@ impl MappingsPage {
                             a.email
                         )
                     };
-                    let current =
-                        list.iter().find(|a| a.number.to_string() == st.target).map(label).unwrap_or_default();
-                    egui::ComboBox::from_id_salt("map-account")
-                        .width(ui.available_width() - 8.0)
-                        .selected_text(current)
-                        .show_ui(ui, |ui| {
-                            for a in list {
-                                let n = a.number.to_string();
-                                if ui.selectable_label(st.target == n, label(a)).clicked() {
-                                    st.target = n;
-                                }
-                            }
-                        });
+                    let opts: Vec<(String, String)> = list.iter().map(|a| (a.number.to_string(), label(a))).collect();
+                    let w = ui.available_width();
+                    widgets::select(ui, "Account", &mut st.target, &opts, w);
                 });
                 widgets::field(ui, "Directory", None, false, |ui| {
                     ui.horizontal(|ui| {

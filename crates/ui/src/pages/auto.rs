@@ -502,16 +502,11 @@ fn setting_row(
                 }
             }
             SpecKind::Select(options) => {
-                egui::ComboBox::from_id_salt(("cfg", spec.key))
-                    .width(control_w - 8.0)
-                    .selected_text(current.clone())
-                    .show_ui(ui, |ui| {
-                        for o in options {
-                            if ui.selectable_label(current == *o, *o).clicked() && current != *o {
-                                saves.push((spec.key.to_string(), Some(o.to_string())));
-                            }
-                        }
-                    });
+                let opts: Vec<(String, String)> = options.iter().map(|o| (o.to_string(), o.to_string())).collect();
+                let mut v = current.clone();
+                if widgets::select(ui, spec.label, &mut v, &opts, control_w) {
+                    saves.push((spec.key.to_string(), Some(v)));
+                }
             }
             SpecKind::Number | SpecKind::Text => {
                 let buf = edits.entry(spec.key.to_string()).or_insert_with(|| current.clone());
