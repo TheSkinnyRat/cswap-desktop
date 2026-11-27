@@ -8,6 +8,7 @@
 
 use std::path::Path;
 
+#[cfg_attr(not(windows), allow(dead_code))] // Windows and tests
 /// FNV-1a over the lower-cased path: Windows paths are case-insensitive.
 pub fn key_for(data_dir: &Path) -> String {
     let s = data_dir.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();

@@ -11,7 +11,9 @@
 use std::path::{Path, PathBuf};
 
 pub const HIDDEN_FLAG: &str = "--hidden";
+#[cfg_attr(not(windows), allow(dead_code))] // Windows and tests
 pub const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+#[cfg_attr(not(windows), allow(dead_code))] // Windows and tests
 pub const RUN_VALUE: &str = "electron.app.Claude Swap";
 pub const MAC_LABEL: &str = "id.my.reinahatsuki.cswap-desktop";
 
@@ -36,6 +38,7 @@ pub fn value_launches(value: &str, exe: &Path) -> bool {
     path.trim() == exe
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // Windows and tests
 pub fn run_value(exe: &Path) -> String {
     format!("\"{}\" {HIDDEN_FLAG}", exe.display())
 }
