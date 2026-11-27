@@ -11,7 +11,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use cswap_core::mock::{MockCswap, MockUpdates, auto_event};
-use cswap_core::{AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, UsageView};
+use cswap_core::{
+    AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, ThemeSetting, UsageView,
+};
 use cswap_ui::Services;
 use cswap_ui::cx::Cx;
 use cswap_ui::pages::{accounts::AccountsPage, auto::AutoPage, mappings::MappingsPage};
@@ -155,11 +157,10 @@ fn harness_with(world: World, width: f32) -> Harness<'static, World> {
         .with_size(vec2(width, HEIGHT))
         .with_render_cursor(false)
         .with_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light })
-        // Inputs are named by the field label painted above them, which accesskit does
-        // not see; the shared widgets (ui-shell) will link the two.
-        .with_accessibility_check(false)
-        // egui's bundled Ubuntu-Light lacks "→"; the app's Inter (ui-shell) has it.
-        .allow_missing_glyphs()
+        // The app's fonts, icons and widget style, as the real window has them.
+        .with_context_setup(move |ctx| {
+            cswap_ui::style::setup(ctx, if dark { ThemeSetting::Dark } else { ThemeSetting::Light })
+        })
         .build_ui_state(|ui, w: &mut World| w.frame(ui), world);
     h.run();
     h

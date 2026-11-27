@@ -9,8 +9,9 @@ use std::f32::consts::TAU;
 
 use egui::{Color32, CornerRadius, Id, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, pos2, vec2};
 
-use crate::pages::kit;
+use crate::style;
 use crate::theme::Tokens;
+use crate::widgets;
 use cswap_core::format::{Tone, pct};
 
 /// Grow animation of bars and rings (`duration-500 ease-out`).
@@ -85,8 +86,8 @@ pub fn bar(ui: &mut Ui, t: &Tokens, id: Id, pct: Option<f64>, tone: Tone, pace: 
 /// Width a ring cell wants.
 pub fn ring_width(ui: &Ui, label: Option<&str>, value: &str, sub: Option<&str>) -> f32 {
     let head = format!("{}{value}", label.map(|l| format!("{l} ")).unwrap_or_default());
-    let w1 = kit::measure(ui, &head, kit::font(12.0)).x;
-    let w2 = sub.map(|s| kit::measure(ui, s, kit::font(11.0)).x).unwrap_or(0.0);
+    let w1 = widgets::measure(ui, &head, style::body(12.0)).x;
+    let w2 = sub.map(|s| widgets::measure(ui, s, style::body(11.0)).x).unwrap_or(0.0);
     (4.0 + RING + 8.0 + w1.max(w2) + 4.0).max(92.0)
 }
 
@@ -150,16 +151,16 @@ pub fn ring(
     let mut y = rect.center().y - total_h / 2.0;
     let mut x = tx;
     if let Some(l) = label {
-        let g = kit::galley(ui, format!("{l} "), kit::font(12.0), t.text_3, tw);
+        let g = widgets::galley(ui, format!("{l} "), style::body(12.0), t.text_3, tw);
         let gw = g.size().x;
         p.galley(pos2(x, y), g, t.text_3);
         x += gw;
     }
-    let g = kit::galley(ui, text, kit::font(12.0), pct_color(t, tone), (tx + tw - x).max(10.0));
+    let g = widgets::galley(ui, text, style::body_medium(12.0), pct_color(t, tone), (tx + tw - x).max(10.0));
     p.galley(pos2(x, y), g, t.text);
     if let Some(s) = sub {
         y += head_h;
-        let g = kit::galley(ui, s, kit::font(11.0), t.text_3, tw);
+        let g = widgets::galley(ui, s, style::body(11.0), t.text_3, tw);
         p.galley(pos2(tx, y), g, t.text_3);
     }
     resp
