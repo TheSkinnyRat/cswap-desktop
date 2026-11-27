@@ -39,6 +39,8 @@ pub struct MockCswap {
     st: Mutex<State>,
     sink: EventSink,
     now_ms: i64,
+    /// Built with [`MockCswap::at`]: every stamp uses `now_ms`, so renders repeat exactly.
+    fixed: bool,
 }
 
 fn win(now: i64, pct: f64, secs: i64, weekly: bool) -> UsageWindow {
@@ -158,7 +160,7 @@ fn matches(a: &Account, t: &str) -> bool {
 impl MockCswap {
     /// Fixture data relative to the wall clock.
     pub fn new(sink: EventSink) -> Self {
-        Self::at(sink, now_ms())
+        Self { fixed: false, ..Self::at(sink, now_ms()) }
     }
 
     /// Fixture data relative to a fixed `now` (Unix ms), so renders are identical every
@@ -187,7 +189,7 @@ impl MockCswap {
                 Mapping { path: "D:\\Projects\\side-project".into(), email: "gone@example.com".into(), organization_uuid: None, account: None },
             ],
         };
-        Self { st: Mutex::new(st), sink, now_ms: now }
+        Self { st: Mutex::new(st), sink, now_ms: now, fixed: true }
     }
 
     /// The `now` the fixture was built against.
@@ -225,6 +227,10 @@ impl MockCswap {
         self.lock().settings = settings;
     }
 
+    fn clock(&self) -> i64 {
+        if self.fixed { self.now_ms } else { now_ms() }
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         // A panicking test thread must not wedge every later call.
         self.st.lock().unwrap_or_else(|e| e.into_inner())
@@ -233,7 +239,7 @@ impl MockCswap {
     fn record(&self, st: &mut State, args: &[&str]) {
         let e = CommandLogEntry {
             id: st.next_log_id,
-            at: iso_from_ms(now_ms()),
+            at: iso_from_ms(self.clock()),
             args: args.iter().map(|s| s.to_string()).collect(),
             exit_code: Some(0),
             duration_ms: 120,
@@ -554,11 +560,11 @@ impl Cswap for MockCswap {
             st.auto = AutoStatus {
                 running: true,
                 pid: Some(4242),
-                started_at: Some(iso_from_ms(now_ms())),
+                started_at: Some(iso_from_ms(self.clock())),
                 dry_run: Some(dry_run),
                 ..Default::default()
             };
-            let ev = poll_event(now_ms());
+            let ev = poll_event(self.clock());
             st.auto_events.push(ev.clone());
             (st.auto.clone(), ev)
         };
@@ -584,7 +590,7 @@ impl Cswap for MockCswap {
 
     fn auto_once(&self, _dry_run: bool) -> Pending<CsResult<AutoOnceResult>> {
         let ev =
-            auto_event(now_ms(), "no-switch", json!({ "reason": "below-threshold", "detail": "active headroom 55%" }));
+            auto_event(self.clock(), "no-switch", json!({ "reason": "below-threshold", "detail": "active headroom 55%" }));
         Pending::ready(Ok(AutoOnceResult { exit_code: Some(2), outcome: AutoOutcome::NoAction, events: vec![ev] }))
     }
 

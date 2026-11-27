@@ -209,8 +209,7 @@ impl AutoPage {
                 let wide = w >= 760.0;
                 let left_w = if wide { w - 340.0 - 16.0 } else { w };
                 let top = ui.cursor().min;
-                let left = ui
-                    .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))), |ui| {
+                let left = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))), |ui| {
                         ui.set_width(left_w);
                         ui.spacing_mut().item_spacing = vec2(12.0, 16.0);
                         self.stats(ui, &t, &auto, &all, now);
@@ -220,8 +219,7 @@ impl AutoPage {
                     .rect;
                 let right_top = if wide { pos2(top.x + left_w + 16.0, top.y) } else { pos2(top.x, left.max.y + 16.0) };
                 let right_w = if wide { 340.0 } else { w };
-                let right = ui
-                    .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))), |ui| {
+                let right = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))), |ui| {
                         ui.set_width(right_w);
                         self.settings_card(ui, &t, &mut saves);
                     })
@@ -397,7 +395,7 @@ fn feed_line(ui: &mut Ui, t: &Tokens, ev: &AutoEvent, last: bool, off: i64, now:
         ui.painter().rect_filled(rect, CornerRadius::ZERO, t.surface_2.gamma_multiply(0.4));
     }
     ui.painter().text(pos2(top.x + 12.0, top.y + 6.0 + 9.0), egui::Align2::LEFT_CENTER, time, kit::mono(11.5), t.text_3);
-    ui.scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))), |ui| {
+    kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))), |ui| {
         kit::chip(ui, t, &ev.event, view::event_tone(&ev.event))
     });
     ui.painter().galley(pos2(text_x, top.y + 6.0 + 1.0), g, t.text_2);
@@ -419,8 +417,7 @@ fn setting_row(
     let control_w = 120.0;
     let text_w = w - control_w - 12.0;
     let top = ui.cursor().min;
-    let label_rect = ui
-        .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(text_w, 200.0))), |ui| {
+    let label_rect = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(text_w, 200.0))), |ui| {
             ui.set_width(text_w);
             ui.spacing_mut().item_spacing.y = 2.0;
             ui.horizontal(|ui| {
@@ -445,7 +442,7 @@ fn setting_row(
         .rect;
     let current = view::config_text(&row.value);
     let crect = Rect::from_min_size(pos2(top.x + w - control_w, top.y), vec2(control_w, 32.0));
-    ui.scope_builder(UiBuilder::new().max_rect(crect).layout(Layout::right_to_left(Align::Center)), |ui| match spec.kind {
+    kit::place(ui, UiBuilder::new().max_rect(crect).layout(Layout::right_to_left(Align::Center)), |ui| match spec.kind {
         SpecKind::Bool => {
             let mut on = row.value == serde_json::Value::Bool(true) || row.value == serde_json::Value::String("true".into());
             if kit::switch(ui, t, &mut on, spec.label, true).changed() {

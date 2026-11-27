@@ -229,15 +229,15 @@ impl AccountsPage {
                 } else {
                     (Icon::Eye, "Hide email addresses (keeps the first three characters)")
                 };
-                toggles.2 = Btn::new("").variant(Variant::Ghost).icon(m_icon).a11y(m_tip).pressed(mask).show(ui, t).on_hover_text(m_tip).clicked();
+                toggles.2 = Btn::new("").variant(Variant::Ghost).icon(m_icon).a11y(m_tip).show(ui, t).on_hover_text(m_tip).clicked();
                 let (p_icon, p_tip) = if s.show_pace {
                     (Icon::Gauge, "Hide the pace marker")
                 } else {
                     (Icon::GaugeOff, "Show where an evenly-spread week would be")
                 };
-                toggles.1 = Btn::new("").variant(Variant::Ghost).icon(p_icon).a11y(p_tip).pressed(s.show_pace).show(ui, t).on_hover_text(p_tip).clicked();
+                toggles.1 = Btn::new("").variant(Variant::Ghost).icon(p_icon).a11y(p_tip).show(ui, t).on_hover_text(p_tip).clicked();
                 let (v_icon, v_tip) = if rings { (Icon::Bars, "Show usage as bars") } else { (Icon::Ring, "Show usage as rings") };
-                toggles.0 = Btn::new("").variant(Variant::Ghost).icon(v_icon).a11y(v_tip).pressed(rings).show(ui, t).on_hover_text(v_tip).clicked();
+                toggles.0 = Btn::new("").variant(Variant::Ghost).icon(v_icon).a11y(v_tip).show(ui, t).on_hover_text(v_tip).clicked();
             },
         );
         if toggles.0 {
@@ -481,7 +481,7 @@ impl AccountsPage {
             row.multiply_opacity(0.7);
         }
         let cell = |row: &mut Ui, i: usize, f: &mut dyn FnMut(&mut Ui)| -> f32 {
-            row.scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
+            kit::place(&mut row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
                 ui.set_width(cols[i]);
                 f(ui)
             })
@@ -524,12 +524,11 @@ impl AccountsPage {
         }
         let si = cols.len() - 2;
         let status_h = status_height(a);
-        row.scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))), |ui| {
+        kit::place(&mut row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))), |ui| {
             status_block(ui, t, a)
         });
         let ai = cols.len() - 1;
-        let act = row
-            .scope_builder(
+        let act = kit::place(&mut row, 
                 UiBuilder::new()
                     .max_rect(Rect::from_min_size(pos2(xs[ai], mid - 14.0), vec2(cols[ai], 28.0)))
                     .layout(Layout::right_to_left(Align::Center)),
@@ -574,8 +573,7 @@ impl AccountsPage {
         let width = ui.available_width();
         let bg = ui.painter().add(Shape::Noop);
         let mut act = None;
-        let inner = ui
-            .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0))).id_salt(("acct-card", a.number)), |ui| {
+        let inner = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0))).id_salt(("acct-card", a.number)), |ui| {
                 if a.disabled == Some(true) {
                     ui.multiply_opacity(0.7);
                 }
@@ -591,14 +589,12 @@ impl AccountsPage {
                     p.circle_filled(pos2(top.x + 3.0, top.y + 9.0), 3.0, if a.active { t.accent } else { Color32::TRANSPARENT });
                     p.text(pos2(top.x + 12.0, top.y + 9.0), egui::Align2::LEFT_CENTER, a.number.to_string(), kit::mono(12.0), t.text_3);
                     let name_w = (w - num_w - act_w).max(60.0);
-                    let nh = ui
-                        .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))), |ui| {
+                    let nh = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))), |ui| {
                             ui.set_width(name_w);
                             name_block(ui, t, a, plan, s.mask_emails, now, off)
                         })
                         .inner;
-                    act = ui
-                        .scope_builder(
+                    act = kit::place(ui, 
                             UiBuilder::new()
                                 .max_rect(Rect::from_min_size(pos2(top.x + w - act_w, top.y - 4.0), vec2(act_w, 28.0)))
                                 .layout(Layout::right_to_left(Align::Center)),
@@ -717,8 +713,7 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
             x = top.x;
             y += 24.0;
         }
-        let r = ui
-            .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| kit::chip(ui, t, label, *tone))
+        let r = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| kit::chip(ui, t, label, *tone))
             .inner;
         if let Some(tip) = tip {
             let _ = ui.interact(r.rect, Id::unique(("acct-chip", a.number, i)), Sense::hover()).on_hover_text(tip);
@@ -776,7 +771,7 @@ fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, ring
     if !c.is_model && w.ahead_of_pace == Some(true) {
         let cw = kit::chip_width(ui, "ahead");
         let cr = Rect::from_min_size(pos2(right - cw, top.center().y - 9.0), vec2(cw, 18.0));
-        ui.scope_builder(UiBuilder::new().max_rect(cr), |ui| kit::chip(ui, t, "ahead", ChipTone::Warn));
+        kit::place(ui, UiBuilder::new().max_rect(cr), |ui| kit::chip(ui, t, "ahead", ChipTone::Warn));
         right -= cw + 4.0;
     }
     let mut x = top.min.x;

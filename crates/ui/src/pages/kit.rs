@@ -204,6 +204,17 @@ pub fn paint_icon(p: &egui::Painter, c: Pos2, icon: Icon, color: Color32) {
     }
 }
 
+/// Lays `f` out in a child at the builder's rect WITHOUT taking space in `ui` (unlike
+/// `scope_builder`): the callers position cells absolutely and allocate the whole row
+/// themselves, and allocating each cell too made every row twice as tall.
+pub fn place<R>(ui: &mut Ui, b: egui::UiBuilder, f: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let mut child = ui.new_child(b);
+    let inner = f(&mut child);
+    let mut response = child.response();
+    response.rect = child.min_rect();
+    egui::InnerResponse::new(inner, response)
+}
+
 /// Hover fade, 150 ms (Purwa: 300 ms reads as slow). Never changes layout.
 fn hover_t(ui: &Ui, resp: &Response) -> f32 {
     ui.ctx().animate_bool_with_time(resp.id.with("hover"), resp.hovered() && resp.enabled(), TRANSITION_SECS)
@@ -546,8 +557,7 @@ pub fn page_header(ui: &mut Ui, t: &Tokens, title: &str, subtitle: impl FnOnce(&
         let w = ui.available_width();
         let left_w = if side_by_side { w - actions_width - 12.0 } else { w };
         let top = ui.cursor().min;
-        let left = ui
-            .scope_builder(egui::UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 400.0))), |ui| {
+        let left = place(ui, egui::UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 400.0))), |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 ui.set_width(left_w);
                 text(ui, title, 16.0, t.text);
