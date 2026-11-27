@@ -39,7 +39,13 @@ fn account(n: u32, email: &str, active: bool, five: f64, seven: f64) -> Account 
 }
 
 impl StubCswap {
-    pub fn start(_data_dir: PathBuf, sink: EventSink) -> Arc<dyn Cswap> {
+    pub fn start(data_dir: PathBuf, sink: EventSink) -> Arc<dyn Cswap> {
+        // The settings a test put in the data dir (closeToTray, autoUpdate, ...), read the
+        // tolerant way the real store does.
+        let settings: AppSettings = std::fs::read_to_string(data_dir.join("settings.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
         let payload = ListPayload {
             schema_version: 1,
             active_account_number: Some(1),
@@ -51,7 +57,7 @@ impl StubCswap {
         };
         let accounts = AccountsState { payload: Some(payload), fetched_at: Some("now".into()), ..Default::default() };
         let s =
-            Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), AppSettings::default())) });
+            Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), settings)) });
         let st = s.state.lock().unwrap().0.clone();
         s.sink.send(Event::Accounts(st));
         s
