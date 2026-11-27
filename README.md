@@ -76,7 +76,7 @@ The app never writes credentials and never talks to Anthropic. **Every read and 
 
 Python and claude-swap are deliberately **not** bundled: two cswap versions writing the same vault is how accounts go missing.
 
-Since v1 the app is written in Rust with [egui](https://github.com/emilk/egui). It used to be Electron: the installer went from about 114 MB to about 6 MB, and memory while it sits in the tray dropped accordingly.
+Since v1 the app is written in Rust with [egui](https://github.com/emilk/egui). It used to be Electron; on Windows the installer went from about 114 MB to a few MB, and the app's memory from about 250 MB to about 4 MB while it waits in the tray (about 120 MB with the window open).
 
 ```
 crates/core      pure model: cswap's --json schema, settings, the service traits, an in-memory mock
