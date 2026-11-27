@@ -14,3 +14,8 @@ workspace = true
 cswap-core = { workspace = true }
 egui = { workspace = true }
 eframe = { workspace = true }
+# Local UTC offset for reset clocks ("resets 14:30"); the core's formatting takes it as an argument.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
