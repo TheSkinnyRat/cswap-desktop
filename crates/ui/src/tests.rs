@@ -249,7 +249,7 @@ fn palette_switches_through_the_cli_and_closes_on_escape() {
     let input = h.get_by_role_and_label(Role::TextInput, "Switch to account");
     assert!(input.accesskit_node().is_focused(), "the query field takes focus");
     shot(&mut h, "palette-light");
-    input.type_text("acme");
+    h.get_by_role_and_label(Role::TextInput, "Switch to account").type_text("acme");
     settle(&mut h);
     h.key_press(Key::Enter);
     settle(&mut h);
