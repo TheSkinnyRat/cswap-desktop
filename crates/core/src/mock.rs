@@ -67,8 +67,25 @@ fn account(number: u32, email: &str) -> Account {
     Account { number, email: email.into(), usage_status: "ok".into(), ..Default::default() }
 }
 
-/// The five fixture accounts, with resets relative to `now` (Unix ms).
+/// Which model columns the fixture produces.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fixture {
+    /// Fable on accounts 1–2, Sonnet only in account 5's last-good usage: exercises the
+    /// union of models and empty cells. The default, for tests.
+    #[default]
+    TwoModels,
+    /// Fable only, what real cswap reports today: for README screenshots, where a second
+    /// model column would make the 1240 px table scroll sideways.
+    OneModel,
+}
+
+/// The five fixture accounts (two model columns), with resets relative to `now` (Unix ms).
 pub fn fixture_payload(now: i64) -> ListPayload {
+    fixture_payload_for(now, Fixture::TwoModels)
+}
+
+/// The five fixture accounts in the chosen [`Fixture`] variant.
+pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
     let iso = |s: i64| Some(iso_from_ms(now + s * 1000));
     let a1 = Account {
         organization_name: "you@example.com's Organization".into(),
@@ -117,7 +134,7 @@ pub fn fixture_payload(now: i64) -> ListPayload {
         last_good_usage: Some(Usage {
             five_hour: Some(win(now, 88.0, 3000, false)),
             seven_day: Some(win(now, 70.0, 100_000, true)),
-            scoped: Some(vec![scoped(now, "Sonnet", 34.0, 100_000)]),
+            scoped: (fixture == Fixture::TwoModels).then(|| vec![scoped(now, "Sonnet", 34.0, 100_000)]),
             ..Default::default()
         }),
         last_good_age_seconds: Some(7200.0),
@@ -166,6 +183,12 @@ impl MockCswap {
     /// Fixture data relative to a fixed `now` (Unix ms), so renders are identical every
     /// run. Pages that show countdowns must be given the same `now`.
     pub fn at(sink: EventSink, now: i64) -> Self {
+        Self::with_fixture(sink, now, Fixture::TwoModels)
+    }
+
+    /// Like [`MockCswap::at`] with a chosen [`Fixture`] (README screenshots use
+    /// [`Fixture::OneModel`]).
+    pub fn with_fixture(sink: EventSink, now: i64, fixture: Fixture) -> Self {
         let binary = CswapBinaryInfo {
             path: Some("/home/you/.local/bin/cswap".into()),
             source: BinarySource::Uv,
@@ -174,7 +197,7 @@ impl MockCswap {
             candidates: Vec::new(),
         };
         let st = State {
-            payload: Some(fixture_payload(now)),
+            payload: Some(fixture_payload_for(now, fixture)),
             error: None,
             refreshing: false,
             plans: fixture_plans(now),
@@ -782,6 +805,11 @@ mod tests {
         assert_eq!(models(&p.accounts[4]), ["Sonnet"]);
         assert!(models(&p.accounts[2]).is_empty());
         assert!(p.accounts.iter().all(|a| a.email.ends_with("@example.com") || a.email.ends_with("@token.local")));
+        let one = fixture_payload_for(0, Fixture::OneModel);
+        assert_eq!(crate::view::models(&one.accounts), ["Fable"]);
+        let (sink, _rx) = EventSink::new();
+        let m = MockCswap::with_fixture(sink, 0, Fixture::OneModel);
+        assert_eq!(crate::view::models(&m.accounts().payload.unwrap().accounts), ["Fable"]);
     }
 
     #[test]
