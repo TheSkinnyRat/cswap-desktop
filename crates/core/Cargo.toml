@@ -1,0 +1,15 @@
+[package]
+name = "cswap-core"
+description = "Pure model of Claude Swap: cswap's --json schema v1, settings, the service contracts the UI talks to, and an in-memory mock."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

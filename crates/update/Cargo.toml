@@ -1,0 +1,17 @@
+[package]
+name = "cswap-update"
+description = "Self-update from GitHub Releases, verified with the project's own ed25519 key."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+cswap-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }

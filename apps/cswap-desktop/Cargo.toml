@@ -1,0 +1,23 @@
+[package]
+name = "cswap-desktop"
+description = "Claude Swap: desktop app for claude-swap (cswap)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "claude-swap"
+path = "src/main.rs"
+
+[dependencies]
+cswap-core = { workspace = true }
+cswap-driver = { workspace = true }
+cswap-ui = { workspace = true }
+cswap-update = { workspace = true }
+eframe = { workspace = true }
+anyhow = { workspace = true }

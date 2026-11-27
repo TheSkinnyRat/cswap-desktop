@@ -1,11 +1,9 @@
-node_modules/
-out/
-dist/
+target/
 release/
 *.log
 .DS_Store
 test-results/
-playwright-report/
-test/e2e/.tmp/
-.vite/
-*.tsbuildinfo
+# egui_kittest writes these beside a snapshot that differs
+**/tests/snapshots/*.diff.png
+**/tests/snapshots/*.new.png
+**/tests/snapshots/*.old.png

@@ -1,0 +1,16 @@
+[package]
+name = "cswap-ui"
+description = "The Claude Swap window, in egui."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+cswap-core = { workspace = true }
+egui = { workspace = true }
+eframe = { workspace = true }
