@@ -32,6 +32,7 @@ struct State {
     log: Vec<CommandLogEntry>,
     next_log_id: u64,
     binary: Option<CswapBinaryInfo>,
+    mappings: Vec<Mapping>,
 }
 
 pub struct MockCswap {
@@ -181,6 +182,10 @@ impl MockCswap {
             log: Vec::new(),
             next_log_id: 1,
             binary: Some(binary),
+            mappings: vec![
+                Mapping { path: "/home/you/work/client-app".into(), email: "work@example.com".into(), organization_uuid: Some("org-2".into()), account: None },
+                Mapping { path: "D:\\Projects\\side-project".into(), email: "gone@example.com".into(), organization_uuid: None, account: None },
+            ],
         };
         Self { st: Mutex::new(st), sink, now_ms: now }
     }
@@ -433,32 +438,36 @@ impl Cswap for MockCswap {
 
     fn list_mappings(&self) -> Pending<CsResult<Vec<Mapping>>> {
         let st = self.lock();
-        let work = st.payload.as_ref().and_then(|p| p.accounts.iter().find(|a| a.email == "work@example.com").cloned());
-        Pending::ready(Ok(vec![
-            Mapping {
-                path: "/home/you/work/client-app".into(),
-                email: "work@example.com".into(),
-                organization_uuid: Some("org-2".into()),
-                account: work,
-            },
-            Mapping {
-                path: "D:\\Projects\\side-project".into(),
-                email: "gone@example.com".into(),
-                organization_uuid: None,
-                account: None,
-            },
-        ]))
+        let accounts = st.payload.as_ref().map(|p| p.accounts.as_slice()).unwrap_or_default();
+        // Joined with the current list by email, as the driver does.
+        let rows = st
+            .mappings
+            .iter()
+            .map(|m| Mapping { account: accounts.iter().find(|a| a.email == m.email).cloned(), ..m.clone() })
+            .collect();
+        Pending::ready(Ok(rows))
     }
 
     fn map_directory(&self, target: &str, path: &str) -> Pending<CsResult<PlainOutput>> {
         let mut st = self.lock();
         self.record(&mut st, &["map", target, path]);
-        ok_out("ok")
+        let Some(a) = st.payload.as_ref().and_then(|p| p.accounts.iter().find(|a| matches(a, target))).cloned() else {
+            return Pending::ready(Err(not_found(target)));
+        };
+        st.mappings.retain(|m| m.path != path);
+        st.mappings.push(Mapping {
+            path: path.into(),
+            email: a.email.clone(),
+            organization_uuid: Some(a.organization_uuid.clone()).filter(|s| !s.is_empty()),
+            account: None,
+        });
+        ok_out(&format!("Mapped {path} -> Account-{} ({})", a.number, a.email))
     }
 
     fn unmap_directory(&self, path: &str) -> Pending<CsResult<PlainOutput>> {
         let mut st = self.lock();
         self.record(&mut st, &["unmap", path]);
+        st.mappings.retain(|m| m.path != path);
         ok_out("ok")
     }
 
@@ -754,6 +763,19 @@ mod tests {
         assert_eq!(models(&p.accounts[4]), ["Sonnet"]);
         assert!(models(&p.accounts[2]).is_empty());
         assert!(p.accounts.iter().all(|a| a.email.ends_with("@example.com") || a.email.ends_with("@token.local")));
+    }
+
+    #[test]
+    fn mappings_join_accounts_and_change() {
+        let (m, _rx) = mock();
+        let rows = m.list_mappings().take().unwrap().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].account.as_ref().map(|a| a.number), Some(2));
+        assert!(rows[1].account.is_none(), "the mapped account is gone");
+        m.map_directory("main", "/tmp/picked-project").take().unwrap().unwrap();
+        assert_eq!(m.list_mappings().take().unwrap().unwrap().len(), 3);
+        m.unmap_directory("/tmp/picked-project").take().unwrap().unwrap();
+        assert_eq!(m.list_mappings().take().unwrap().unwrap().len(), 2);
     }
 
     #[test]

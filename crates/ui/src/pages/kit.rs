@@ -367,7 +367,7 @@ pub fn input(ui: &mut Ui, t: &Tokens, value: &mut String, id: &str, hint: &str, 
         .corner_radius(CornerRadius::same(RADIUS_MD))
         .inner_margin(egui::Margin::symmetric(9, 7));
     let edit = egui::TextEdit::singleline(value)
-        .id(Id::new(("kit-input", id)))
+        .id(Id::unique(("kit-input", id)))
         .hint_text(egui::RichText::new(hint).color(t.text_3))
         .font(f)
         .text_color(t.text)
@@ -475,9 +475,9 @@ pub fn dialog(
         .shadow(egui::Shadow { offset: [0, 16], blur: 40, spread: 0, color: Color32::from_black_alpha(if t.dark { 120 } else { 45 }) });
     let width = width.min(ctx.content_rect().width() - 32.0);
     let mut close = false;
-    let area = egui::Modal::default_area(Id::new(("kit-dialog", id)))
+    let area = egui::Modal::default_area(Id::unique(("kit-dialog", id)))
         .anchor(Align2::CENTER_TOP, vec2(0.0, ctx.content_rect().height() * 0.12));
-    let resp = egui::Modal::new(Id::new(("kit-dialog", id)))
+    let resp = egui::Modal::new(Id::unique(("kit-dialog", id)))
         .area(area)
         .frame(frame)
         .backdrop_color(Color32::from_black_alpha(76))
@@ -490,7 +490,7 @@ pub fn dialog(
             ui.painter().galley(pos2(hr.min.x + 16.0, hr.center().y - g.size().y / 2.0), g, t.text);
             ui.painter().hline(hr.x_range(), hr.max.y, Stroke::new(1.0, t.border));
             let close_rect = Rect::from_center_size(pos2(hr.max.x - 26.0, hr.center().y), vec2(28.0, 28.0));
-            let cr = ui.interact(close_rect, Id::new(("kit-dialog-close", id)), Sense::click());
+            let cr = ui.interact(close_rect, Id::unique(("kit-dialog-close", id)), Sense::click());
             cr.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Close"));
             let k = hover_t(ui, &cr);
             ui.painter().rect_filled(close_rect, CornerRadius::same(RADIUS_MD), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, k));

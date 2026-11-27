@@ -672,7 +672,7 @@ fn header_row(ui: &mut Ui, t: &Tokens, cols: &[f32], models: &[String]) {
     for (i, (l, cw)) in labels.iter().zip(cols).enumerate() {
         let lx = if i == 0 { x + 13.0 } else { x };
         let g = kit::galley(ui, l.clone(), kit::font(11.0), t.text_3, *cw);
-        let resp = ui.interact(Rect::from_min_size(pos2(lx, r.min.y), vec2(g.size().x, 30.0)), Id::new(("col-head", i)), Sense::hover());
+        let resp = ui.interact(Rect::from_min_size(pos2(lx, r.min.y), vec2(g.size().x, 30.0)), Id::unique(("col-head", i)), Sense::hover());
         if i >= 4 && i < 4 + models.len() {
             let _ = resp.on_hover_text(format!("{} window", models[i - 4]));
         }
@@ -702,7 +702,7 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
     let name_rect = Rect::from_min_size(top, vec2(g.size().x, 18.0));
     ui.painter().galley(pos2(top.x, top.y + 9.0 - g.size().y / 2.0), g, t.text);
     if !mask {
-        let _ = ui.interact(name_rect, Id::new(("acct-name", a.number)), Sense::hover()).on_hover_text(&a.email);
+        let _ = ui.interact(name_rect, Id::unique(("acct-name", a.number)), Sense::hover()).on_hover_text(&a.email);
     }
     let (mut x, mut y) = (name_rect.max.x + 6.0, top.y);
     for (i, (label, tone, tip)) in chips.iter().enumerate() {
@@ -715,7 +715,7 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
             .scope_builder(UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| kit::chip(ui, t, label, *tone))
             .inner;
         if let Some(tip) = tip {
-            let _ = ui.interact(r.rect, Id::new(("acct-chip", a.number, i)), Sense::hover()).on_hover_text(tip);
+            let _ = ui.interact(r.rect, Id::unique(("acct-chip", a.number, i)), Sense::hover()).on_hover_text(tip);
         }
         x += cw + 6.0;
     }
@@ -737,7 +737,7 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
 /// A filled window cell: bars (percentage, reset, track) or a ring.
 #[allow(clippy::too_many_arguments)]
 fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, rings: bool, pace: bool, now: i64, off: i64) {
-    let id = Id::new(("window", n, &c.key));
+    let id = Id::unique(("window", n, &c.key));
     let Some(w) = &c.window else {
         kit::text(ui, "-", 12.0, t.text_3);
         return;

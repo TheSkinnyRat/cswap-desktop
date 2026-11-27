@@ -194,6 +194,13 @@ pub fn clock_of(iso: Option<&str>, now_ms: i64, offset_secs: i64) -> String {
     }
 }
 
+/// `14:30:05`, local 24-hour time of a stamp (the Auto feed's first column).
+pub fn time_of(iso: &str, offset_secs: i64) -> String {
+    let Some(t) = parse_iso_ms(iso) else { return String::new() };
+    let sod = (t.div_euclid(1000) + offset_secs).rem_euclid(86_400);
+    format!("{:02}:{:02}:{:02}", sod / 3600, sod % 3600 / 60, sod % 60)
+}
+
 /// Label of cswap's `usageStatus`; unknown statuses (upstream adds them) show raw.
 pub fn status_label(s: &str) -> String {
     match s {
@@ -360,6 +367,7 @@ mod tests {
         // In UTC the same instant +1h is still the 27th: the offset decides "today".
         assert_eq!(clock_of(Some(&iso_from_ms(NOW + 7 * 3_600_000)), NOW, 0), "Nov 28 00:20");
         assert_eq!(clock_of(Some("x"), NOW, 0), "");
+        assert_eq!(time_of(&iso_from_ms(NOW + 5_000), wib), "00:20:05");
     }
 
     #[test]
