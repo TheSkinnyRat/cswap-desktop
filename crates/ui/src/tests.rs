@@ -118,7 +118,8 @@ fn shot(h: &mut Harness<'_, World>, name: &str) {
             n.accesskit_node().value().is_some_and(|v| is_clock(&v))
                 || n.accesskit_node().label().is_some_and(|v| is_clock(&v))
         })
-        .map(|n| n.rect())
+        // the whole time column, whatever the digits' widths
+        .map(|n| egui::Rect::from_min_size(n.rect().min, vec2(crate::pages::log::TIME_W, n.rect().height())))
         .collect();
     for r in clocks {
         h.mask(r);

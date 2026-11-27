@@ -10,6 +10,9 @@ use crate::cx::Cx;
 use crate::style::{self, mix};
 use crate::widgets::{self, Button, Tone, icon};
 
+/// Width of the time column, enough for "88:88:88" at 11.5 px.
+pub const TIME_W: f32 = 50.0;
+
 /// Entries kept in the window (0.1.23's store kept the last 300).
 pub const LOG_CAP: usize = 300;
 
@@ -141,7 +144,12 @@ fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::them
         child.spacing_mut().item_spacing.x = 12.0;
         // chevron (13) + gap (12); `add_space` adds no item spacing of its own
         child.add_space(25.0);
-        widgets::text(&mut child, local_hms(&e.at), style::body(11.5), t.text_3);
+        // A fixed column (0.1.23 used tabular figures): proportional digits would shift the
+        // command a pixel or two from row to row.
+        child.allocate_ui_with_layout(vec2(TIME_W, 20.0), Layout::left_to_right(Align::Center), |ui| {
+            ui.set_width(TIME_W);
+            widgets::text(ui, local_hms(&e.at), style::body(11.5), t.text_3);
+        });
         child.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 12.0;
             let (label, tone) = if e.error.is_some() {

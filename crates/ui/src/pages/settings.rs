@@ -13,7 +13,7 @@ use egui::{Align, CornerRadius, Frame, Layout, Margin, Stroke, Ui, text::LayoutJ
 
 use crate::cx::Cx;
 use crate::style;
-use crate::widgets::{self, Button, Tone, icon};
+use crate::widgets::{self, Button, Size, Tone, icon};
 
 const GITHUB: &str = "https://github.com/TheSkinnyRat/cswap-desktop";
 const UPSTREAM: &str = "https://github.com/realiti4/claude-swap";
@@ -428,6 +428,9 @@ impl SettingsPage {
                                     .show(ui, |ui| {
                                         ui.set_width(ui.available_width());
                                         ui.horizontal(|ui| {
+                                            // as tall as the Purge button from the start, so every
+                                            // part of the row centres on the same line
+                                            ui.set_min_height(Size::Sm.height());
                                             widgets::text(ui, &u.id, style::mono(12.0), t.text);
                                             widgets::text(ui, format!("slot {}", u.slot), style::body(12.5), t.text_3);
                                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
