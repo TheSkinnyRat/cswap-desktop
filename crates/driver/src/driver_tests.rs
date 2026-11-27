@@ -558,7 +558,10 @@ fn native_trait_methods_work_from_a_plain_thread() {
         }
         assert!(wait(native.auto_start(true)).running);
         assert!(!wait(native.auto_stop()).running);
-        assert_eq!(wait(native.auto_once(true)).unwrap().outcome, AutoOutcome::NoAction);
+        // Account 2 (active since the switch above) is at 100%: the fake would switch.
+        let once = wait(native.auto_once(true)).unwrap();
+        assert_eq!(once.outcome, AutoOutcome::Switched);
+        assert!(once.events.iter().any(|e| e.event == "switch"));
         native.shutdown();
     })
     .join()
