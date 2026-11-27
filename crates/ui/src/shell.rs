@@ -7,10 +7,10 @@
 use cswap_core::{AccountsState, AppSettings, AutoStatus, CswapBinaryInfo, Page, UpdaterState, UpdaterStatus};
 use egui::{Align, Align2, Color32, CornerRadius, Layout, Rect, Sense, Stroke, Ui, pos2, vec2};
 
-use cswap_core::format::{age_seconds, mask_email, parse_iso_ms};
 use crate::style::{self, mix};
 use crate::theme::{RADIUS_MD, Tokens};
 use crate::widgets::{self, Side, icon};
+use cswap_core::format::{age_seconds, mask_email, parse_iso_ms};
 
 /// Under this window width the sidebar is icons only and the Collapse button goes away.
 pub const FORCE_NARROW_BELOW: f32 = 860.0;
@@ -73,7 +73,12 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 12.0;
         // refresh, with the age of the list beside it
-        let age = view.accounts.fetched_at.as_deref().and_then(parse_iso_ms).map(|at| age_seconds(Some((view.now_ms - at) as f64 / 1000.0)));
+        let age = view
+            .accounts
+            .fetched_at
+            .as_deref()
+            .and_then(parse_iso_ms)
+            .map(|at| age_seconds(Some((view.now_ms - at) as f64 / 1000.0)));
         let age_g = age.as_ref().map(|a| ui.painter().layout_job(widgets::job(a, style::body(11.0), t.text_3)));
         let w = 6.0 + 13.0 + age_g.as_ref().map_or(0.0, |g| g.size().x + 6.0) + 6.0;
         let (r, resp) = ui.allocate_exact_size(vec2(w, 26.0), Sense::click());
