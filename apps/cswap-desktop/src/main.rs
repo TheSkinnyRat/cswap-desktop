@@ -177,10 +177,9 @@ fn spawn_router(
                         if s.launch_at_login != last.launch_at_login
                             && packaged
                             && autostart::is_enabled() != s.launch_at_login
+                            && let Err(e) = autostart::set_enabled(s.launch_at_login)
                         {
-                            if let Err(e) = autostart::set_enabled(s.launch_at_login) {
-                                tracing::warn!("launch at login: {e}");
-                            }
+                            tracing::warn!("launch at login: {e}");
                         }
                         if s.auto_update != last.auto_update {
                             updater.set_auto(s.auto_update);
