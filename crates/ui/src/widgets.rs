@@ -12,6 +12,7 @@ use egui::{
 
 use crate::style::{self, mix};
 use crate::theme::{self, RADIUS_LG, RADIUS_MD, RADIUS_SM, Tokens};
+use cswap_core::view::ChipTone;
 
 /// Lucide glyphs in the embedded icon font (codepoints of lucide-static 1.82). Draw them
 /// with [`icon`] / [`style::icon`]; only these exist in the subset.
@@ -187,8 +188,8 @@ impl Size {
     }
 }
 
-/// `Button` of ui.tsx. The label is also the accessible name; an icon-only button gets its
-/// name from [`Button::label`] while drawing nothing but the icon.
+/// `Button` of ui.tsx. The label is also the accessible name; an icon-only button (empty
+/// text) is square and gets its name from [`Button::label`].
 #[must_use]
 pub struct Button<'a> {
     text: &'a str,
@@ -196,6 +197,7 @@ pub struct Button<'a> {
     variant: Variant,
     size: Size,
     icon: Option<&'a str>,
+    trailing: Option<&'a str>,
     loading: bool,
     enabled: bool,
     square: bool,
@@ -210,6 +212,7 @@ impl<'a> Button<'a> {
             variant: Variant::Default,
             size: Size::Md,
             icon: None,
+            trailing: None,
             loading: false,
             enabled: true,
             square: false,
@@ -247,6 +250,11 @@ impl<'a> Button<'a> {
         self.icon = Some(glyph);
         self
     }
+    /// A small glyph after the text (the chevron of a menu button).
+    pub fn trailing(mut self, glyph: &'a str) -> Self {
+        self.trailing = Some(glyph);
+        self
+    }
     /// Spinner instead of the icon, and not clickable (`disabled || loading`).
     pub fn loading(mut self, on: bool) -> Self {
         self.loading = on;
@@ -256,6 +264,7 @@ impl<'a> Button<'a> {
         self.enabled = on;
         self
     }
+    /// The accessible name, when it differs from the visible text (icon-only buttons).
     pub fn label(mut self, name: &'a str) -> Self {
         self.name = Some(name);
         self
@@ -265,22 +274,46 @@ impl<'a> Button<'a> {
         self
     }
 
+    fn is_square(&self) -> bool {
+        self.square || (self.text.is_empty() && self.trailing.is_none())
+    }
+
+    fn icon_size(&self) -> f32 {
+        if self.size == Size::Sm { 13.0 } else { 14.0 }
+    }
+
+    /// Content width (icon, text, trailing glyph, gaps), without padding.
+    fn content_width(&self, ui: &Ui) -> f32 {
+        let gap = self.size.gap();
+        let mut parts: Vec<f32> = Vec::new();
+        if self.icon.is_some() || self.loading {
+            parts.push(self.icon_size());
+        }
+        if !self.text.is_empty() {
+            let font = style::body_medium(self.size.font());
+            parts.push(ui.painter().layout_job(job(self.text, font, Color32::PLACEHOLDER)).size().x);
+        }
+        if self.trailing.is_some() {
+            parts.push(12.0);
+        }
+        parts.iter().sum::<f32>() + gap * parts.len().saturating_sub(1) as f32
+    }
+
+    /// The width [`Button::show`] will take, for laying out a row before drawing it.
+    pub fn width(&self, ui: &Ui) -> f32 {
+        if self.is_square() {
+            self.size.height()
+        } else {
+            (self.size.pad() * 2.0 + self.content_width(ui)).max(self.min_width)
+        }
+    }
+
     pub fn show(self, ui: &mut Ui) -> Response {
         let t = tokens(ui);
         let h = self.size.height();
-        let font = style::body_medium(self.size.font());
-        let galley =
-            (!self.text.is_empty()).then(|| ui.painter().layout_job(job(self.text, font, Color32::PLACEHOLDER)));
-        let icon_sz = if self.size == Size::Sm { 13.0 } else { 14.0 };
-        let has_icon = self.icon.is_some() || self.loading;
-        let width = if self.square {
-            h
-        } else {
-            let text_w = galley.as_ref().map_or(0.0, |g| g.size().x);
-            let gap = if has_icon && galley.is_some() { self.size.gap() } else { 0.0 };
-            let icon_w = if has_icon { icon_sz } else { 0.0 };
-            (self.size.pad() * 2.0 + icon_w + gap + text_w).max(self.min_width)
-        };
+        let width = self.width(ui);
+        let content_w = self.content_width(ui);
+        let icon_sz = self.icon_size();
         let enabled = self.enabled && !self.loading;
         let sense = if enabled { Sense::click() } else { Sense::hover() };
         let (rect, resp) = ui.allocate_exact_size(vec2(width, h), sense);
@@ -321,27 +354,24 @@ impl<'a> Button<'a> {
         if resp.has_focus() {
             focus_ring(ui, rect, &t);
         }
-        let mut x = if self.square {
-            rect.center().x - icon_sz / 2.0
-        } else {
-            rect.center().x - (width.min(rect.width()) - self.size.pad() * 2.0) / 2.0
-        };
-        if self.min_width > 0.0 && !self.square {
-            let text_w = galley.as_ref().map_or(0.0, |g| g.size().x);
-            let content =
-                if has_icon { icon_sz + if galley.is_some() { self.size.gap() } else { 0.0 } } else { 0.0 } + text_w;
-            x = rect.center().x - content / 2.0;
-        }
+        let gap = self.size.gap();
+        let cy = rect.center().y;
+        let mut x = rect.center().x - content_w / 2.0;
         if self.loading {
-            paint_spinner(ui, pos2(x + icon_sz / 2.0, rect.center().y), icon_sz, fade(fg));
-            x += icon_sz + self.size.gap();
+            paint_spinner(ui, pos2(x + icon_sz / 2.0, cy), icon_sz, fade(fg));
+            x += icon_sz + gap;
         } else if let Some(g) = self.icon {
-            paint_icon(ui, g, pos2(x + icon_sz / 2.0, rect.center().y), icon_sz, fade(fg));
-            x += icon_sz + self.size.gap();
+            paint_icon(ui, g, pos2(x + icon_sz / 2.0, cy), icon_sz, fade(fg));
+            x += icon_sz + gap;
         }
-        if let Some(g) = galley {
-            let y = rect.center().y - g.size().y / 2.0;
-            ui.painter().galley(pos2(x, y), g, fade(fg));
+        if !self.text.is_empty() {
+            let g = ui.painter().layout_job(job(self.text, style::body_medium(self.size.font()), fade(fg)));
+            let gw = g.size().x;
+            ui.painter().galley(pos2(x, cy - g.size().y / 2.0), g, fade(fg));
+            x += gw + gap;
+        }
+        if let Some(g) = self.trailing {
+            paint_icon(ui, g, pos2(x + 6.0, cy), 12.0, fade(fg).gamma_multiply(0.7));
         }
         resp
     }
@@ -368,6 +398,23 @@ pub enum Tone {
     Accent,
 }
 
+impl From<ChipTone> for Tone {
+    fn from(c: ChipTone) -> Self {
+        match c {
+            ChipTone::Ok => Tone::Ok,
+            ChipTone::Warn => Tone::Warn,
+            ChipTone::Danger => Tone::Danger,
+            ChipTone::Muted => Tone::Muted,
+            ChipTone::Accent => Tone::Accent,
+        }
+    }
+}
+
+/// Width [`chip`] takes for `label`.
+pub fn chip_width(ui: &Ui, label: &str) -> f32 {
+    measure(ui, label, style::body_medium(11.0)).x + 12.0
+}
+
 impl Tone {
     pub fn colors(self, t: &Tokens) -> (Color32, Color32) {
         match self {
@@ -381,9 +428,9 @@ impl Tone {
 }
 
 /// `Chip`: an 18 px pill, 11 px medium text on a soft fill.
-pub fn chip(ui: &mut Ui, label: &str, tone: Tone) -> Response {
+pub fn chip(ui: &mut Ui, label: &str, tone: impl Into<Tone>) -> Response {
     let t = tokens(ui);
-    let (bg, fg) = tone.colors(&t);
+    let (bg, fg) = tone.into().colors(&t);
     let galley = ui.painter().layout_job(job(label, style::body_medium(11.0), fg));
     let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x + 12.0, 18.0), Sense::hover());
     let owned = label.to_owned();
@@ -410,8 +457,33 @@ pub fn kbd(ui: &mut Ui, label: &str) -> Response {
 /// `Input`: a 32 px framed single-line field, accent border on focus. `label` is its
 /// accessible name (0.1.23's `aria-label`, or the Field label it sits under).
 pub fn input(ui: &mut Ui, label: &str, value: &mut String, placeholder: &str, mono: bool, width: f32) -> Response {
+    input_opts(ui, label, value, placeholder, mono, width, false)
+}
+
+/// Where [`field`] leaves its label for the control it wraps, so an input inside it is
+/// named by the label the user reads (`<label>` wrapping `<input>` in 0.1.23).
+fn field_label_key() -> Id {
+    Id::unique("cswap-field-label")
+}
+
+/// [`input`] with every option. An empty `label` takes the enclosing [`field`]'s label as
+/// the accessible name; `password` hides the text (tokens).
+pub fn input_opts(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut String,
+    placeholder: &str,
+    mono: bool,
+    width: f32,
+    password: bool,
+) -> Response {
     let t = tokens(ui);
-    let id = ui.make_persistent_id(("input", label));
+    let name = if label.is_empty() {
+        ui.data(|d| d.get_temp::<String>(field_label_key())).unwrap_or_default()
+    } else {
+        label.to_owned()
+    };
+    let id = ui.make_persistent_id(("input", &name, placeholder));
     let focused = ui.memory(|m| m.has_focus(id));
     let hovered = ui.rect_contains_pointer(Rect::from_min_size(ui.cursor().min, vec2(width, 32.0)));
     let ht = hover_t(ui, id, hovered);
@@ -427,13 +499,13 @@ pub fn input(ui: &mut Ui, label: &str, value: &mut String, placeholder: &str, mo
         .id(id)
         .font(font.clone())
         .text_color(t.text)
+        .password(password)
         .hint_text(RichText::new(placeholder).font(font).color(t.text_3))
         .frame(frame)
         .min_size(vec2(width, 32.0))
         .desired_width(width - 20.0);
     let resp = ui.add(edit);
-    let owned = label.to_owned();
-    ui.ctx().accesskit_node_builder(resp.id, |n| n.set_label(owned));
+    ui.ctx().accesskit_node_builder(resp.id, |n| n.set_label(name));
     resp
 }
 
@@ -505,6 +577,16 @@ pub fn switch(ui: &mut Ui, label: &str, on: bool, enabled: bool) -> Response {
     let x = rect.left() + 2.0 + 6.0 + 12.0 * k;
     painter.circle_filled(pos2(x + 1.0, rect.center().y), 6.0, fade(Color32::WHITE));
     resp
+}
+
+/// [`switch`] that flips `on` itself when clicked (and marks the response changed).
+pub fn toggle(ui: &mut Ui, on: &mut bool, label: &str, enabled: bool) -> Response {
+    let mut r = switch(ui, label, *on, enabled);
+    if r.clicked() {
+        *on = !*on;
+        r.mark_changed();
+    }
+    r
 }
 
 /// `Segmented`: a few options in a sunken track; the picked one is a raised chip. Each option
@@ -581,7 +663,7 @@ pub fn field<R>(ui: &mut Ui, label: &str, hint: Option<&str>, inline: bool, cont
         let mut out = None;
         let mut measured = (0.0, 0.0);
         ui.allocate_ui_with_layout(vec2(full, row_h.max(1.0)), Layout::right_to_left(Align::Center), |ui| {
-            let ctrl = ui.scope(|ui| control(ui));
+            let ctrl = ui.scope(|ui| with_field_label(ui, label, control));
             let ctrl_h = ctrl.response.rect.height();
             let rest = (full - ctrl.response.rect.width() - 16.0).max(80.0);
             out = Some(ctrl.inner);
@@ -604,10 +686,21 @@ pub fn field<R>(ui: &mut Ui, label: &str, hint: Option<&str>, inline: bool, cont
         ui.vertical(|ui| {
             labels(ui);
             ui.add_space(4.0);
-            control(ui)
+            with_field_label(ui, label, control)
         })
         .inner
     }
+}
+
+fn with_field_label<R>(ui: &mut Ui, label: &str, control: impl FnOnce(&mut Ui) -> R) -> R {
+    let prev = ui.data_mut(|d| d.remove_temp::<String>(field_label_key()));
+    ui.data_mut(|d| d.insert_temp(field_label_key(), label.to_owned()));
+    let r = control(ui);
+    ui.data_mut(|d| match prev {
+        Some(p) => d.insert_temp(field_label_key(), p),
+        None => d.remove::<String>(field_label_key()),
+    });
+    r
 }
 
 // ---- Card / Empty / PageHeader -----------------------------------------------------------
@@ -656,23 +749,28 @@ pub fn card<R>(
 }
 
 /// `Empty`: a dashed box with an icon, a title and a line of explanation.
-pub fn empty(ui: &mut Ui, glyph: &str, title: &str, body: &str) {
+pub fn empty(ui: &mut Ui, glyph: Option<&str>, title: &str, body: &str, action: impl FnOnce(&mut Ui)) {
     let t = tokens(ui);
     let w = ui.available_width();
     let r = Frame::new().inner_margin(Margin::symmetric(24, 56)).show(ui, |ui| {
         ui.set_width(w - 48.0);
         ui.vertical_centered(|ui| {
-            icon(ui, glyph, 28.0, t.text_3);
-            ui.add_space(10.0);
-            text(ui, title, style::body_medium(14.0), t.text);
-            ui.add_space(2.0);
-            ui.set_max_width(420.0);
-            ui.add(egui::Label::new(RichText::new(body).font(style::body(12.5)).color(t.text_2)).selectable(false));
+            ui.spacing_mut().item_spacing.y = 0.0;
+            if let Some(g) = glyph {
+                icon(ui, g, 28.0, t.text_3);
+                ui.add_space(12.0);
+            }
+            line(ui, title, style::body_medium(14.0), t.text);
+            ui.add_space(4.0);
+            let g = wrapped(ui, body, style::body(12.5), t.text_2, (w - 48.0).min(420.0));
+            let (rr, _) = ui.allocate_exact_size(g.size(), Sense::hover());
+            ui.painter().galley(rr.min, g, t.text_2);
+            ui.add_space(16.0);
+            action(ui);
         });
     });
     dashed_rect(ui, r.response.rect, &t);
 }
-
 fn dashed_rect(ui: &Ui, rect: Rect, t: &Tokens) {
     let rect = rect.shrink(0.5);
     let stroke = Stroke::new(1.0, t.border);
@@ -684,27 +782,46 @@ fn dashed_rect(ui: &Ui, rect: Rect, t: &Tokens) {
 
 /// `PageHeader`: 16 px semibold title, optional subtitle, actions on the right. Padding
 /// 24 px sides, 20 top, 12 bottom.
-pub fn page_header(ui: &mut Ui, title: &str, subtitle: Option<&dyn Fn(&mut Ui)>, actions: impl FnOnce(&mut Ui)) {
+pub fn page_header(
+    ui: &mut Ui,
+    title: &str,
+    subtitle: impl FnOnce(&mut Ui),
+    actions_width: f32,
+    actions: impl FnOnce(&mut Ui),
+) {
+    // `flex-wrap`: the actions sit beside the title while there is room, under it otherwise.
     let t = tokens(ui);
+    let full = ui.available_width();
+    let side_by_side = full - 48.0 - actions_width >= 220.0;
     Frame::new().inner_margin(Margin { left: 24, right: 24, top: 20, bottom: 12 }).show(ui, |ui| {
-        ui.horizontal_top(|ui| {
-            let full = ui.available_width();
-            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                let a = ui.horizontal(|ui| actions(ui)).response.rect.width();
-                ui.with_layout(Layout::top_down(Align::Min), |ui| {
-                    ui.set_max_width((full - a - 12.0).max(120.0));
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    let r = text(ui, title, style::body_semibold(16.0), t.text);
-                    ui.ctx().accesskit_node_builder(r.id, |n| n.set_role(Role::Heading));
-                    if let Some(s) = subtitle {
-                        s(ui);
-                    }
-                });
+        let w = ui.available_width();
+        let left_w = if side_by_side { w - actions_width - 12.0 } else { w };
+        let top = ui.cursor().min;
+        let left = place(ui, egui::UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 400.0))), |ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.set_width(left_w);
+            let r = line(ui, title, style::body_semibold(16.0), t.text);
+            let owned = title.to_owned();
+            ui.ctx().accesskit_node_builder(r.id, |n| {
+                n.set_role(Role::Heading);
+                n.set_label(owned);
             });
-        });
+            subtitle(ui);
+        })
+        .response
+        .rect;
+        let act_rect = if side_by_side {
+            Rect::from_min_size(pos2(top.x + w - actions_width, top.y), vec2(actions_width, 32.0))
+        } else {
+            Rect::from_min_size(pos2(top.x, left.max.y + 12.0), vec2(actions_width.min(w), 32.0))
+        };
+        let mut a = ui.new_child(egui::UiBuilder::new().max_rect(act_rect).layout(Layout::right_to_left(Align::Center)));
+        a.spacing_mut().item_spacing.x = 8.0;
+        actions(&mut a);
+        let bottom = left.max.y.max(act_rect.max.y);
+        ui.allocate_space(vec2(w, bottom - top.y));
     });
 }
-
 // ---- Tooltip -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -860,17 +977,24 @@ pub fn menu<R>(trigger: &Response, min_width: f32, add: impl FnOnce(&mut Ui) -> 
 
 // ---- Dialog ------------------------------------------------------------------------------
 
+/// What a [`dialog`] asks of its caller this frame.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DialogOut {
+    /// Escape, the close button or a click on the backdrop: the caller closes it.
+    pub close: bool,
+}
+
 /// `Dialog`: a modal card 12 % from the top over a dimmed backdrop. Escape, the close button
-/// or a click on the backdrop call `on_close` (by returning `true`). `footer` sits in a
-/// tinted strip at the bottom with its buttons on the right.
+/// or a click on the backdrop set [`DialogOut::close`]. `footer` sits in a tinted strip at
+/// the bottom, laid out right to left (put the primary button first).
 pub fn dialog(
     ctx: &egui::Context,
     id: &str,
     title: &str,
     width: f32,
     body: impl FnOnce(&mut Ui),
-    footer: Option<&mut dyn FnMut(&mut Ui)>,
-) -> bool {
+    footer: impl FnOnce(&mut Ui),
+) -> DialogOut {
     let t = style::tokens(ctx);
     let screen = ctx.content_rect();
     let top = screen.top() + screen.height() * 0.12;
@@ -912,7 +1036,8 @@ pub fn dialog(
                     body(ui);
                 });
             });
-            if let Some(f) = footer {
+            {
+                let f = footer;
                 let r = ui.available_rect_before_wrap();
                 let strip = Rect::from_min_size(r.min, vec2(width, 54.0));
                 ui.painter().rect_filled(
@@ -930,7 +1055,7 @@ pub fn dialog(
                 });
             }
         });
-    close || resp.should_close()
+    DialogOut { close: close || resp.should_close() }
 }
 
 /// What [`confirm`] returned this frame.
@@ -945,7 +1070,7 @@ pub enum Confirm {
 pub fn confirm(ctx: &egui::Context, id: &str, title: &str, body: &str, yes: &str, danger: bool) -> Confirm {
     let mut out = Confirm::Pending;
     let t = style::tokens(ctx);
-    let mut footer = |ui: &mut Ui| {
+    let footer = |ui: &mut Ui| {
         let b = Button::new(yes).variant(if danger { Variant::Danger } else { Variant::Primary });
         if b.show(ui).clicked() {
             out = Confirm::Yes;
@@ -962,12 +1087,142 @@ pub fn confirm(ctx: &egui::Context, id: &str, title: &str, body: &str, yes: &str
         |ui| {
             para(ui, body, style::body(13.0), t.text_2);
         },
-        Some(&mut footer),
-    );
+        footer,
+    )
+    .close;
     if closed && out == Confirm::Pending {
         out = Confirm::No;
     }
     out
+}
+
+// ---- Painted text and layout helpers --------------------------------------------------------
+//
+// Text the pages position themselves (table cells, cards): painted galleys that take exactly
+// their size and add no accesskit node, so a page's own `widget_info` names stay unique.
+
+/// One line cut to `width` with an ellipsis.
+pub fn galley(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+    let mut job = LayoutJob::simple_singleline(text.into(), font, color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(1.0));
+    ui.painter().layout_job(job)
+}
+
+/// Text wrapped at `width`.
+pub fn wrapped(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+    ui.painter().layout(text.into(), font, color, width.max(1.0))
+}
+
+/// Size of a run of text, for laying a row out before painting it.
+pub fn measure(ui: &Ui, s: &str, font: FontId) -> Vec2 {
+    ui.painter().layout_no_wrap(s.to_owned(), font, Color32::WHITE).size()
+}
+
+/// One painted line, truncated to the available width.
+pub fn line(ui: &mut Ui, s: impl Into<String>, font: FontId, color: Color32) -> Response {
+    let g = galley(ui, s, font, color, ui.available_width());
+    let (rect, resp) = ui.allocate_exact_size(g.size(), Sense::hover());
+    ui.painter().galley(rect.min, g, color);
+    resp
+}
+
+/// A painted paragraph wrapped at the available width.
+pub fn wrap_text(ui: &mut Ui, s: impl Into<String>, font: FontId, color: Color32) -> Response {
+    let g = wrapped(ui, s, font, color, ui.available_width());
+    let (rect, resp) = ui.allocate_exact_size(g.size(), Sense::hover());
+    ui.painter().galley(rect.min, g, color);
+    resp
+}
+
+/// Lays `f` out in a child at the builder's rect WITHOUT taking space in `ui` (unlike
+/// `scope_builder`): callers that position cells absolutely allocate the whole row
+/// themselves, and allocating each cell too made every row twice as tall.
+pub fn place<R>(ui: &mut Ui, b: egui::UiBuilder, f: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let mut child = ui.new_child(b);
+    let inner = f(&mut child);
+    let mut response = child.response();
+    response.rect = child.min_rect();
+    egui::InnerResponse::new(inner, response)
+}
+
+/// A tinted notice strip (errors, stale data).
+pub fn notice(ui: &mut Ui, msg: &str, tone: impl Into<Tone>) {
+    let t = tokens(ui);
+    let (bg, fg) = tone.into().colors(&t);
+    let w = ui.available_width();
+    Frame::new()
+        .fill(bg)
+        .stroke(Stroke::new(1.0, fg.gamma_multiply(0.3)))
+        .corner_radius(CornerRadius::same(RADIUS_LG - 2))
+        .inner_margin(Margin::symmetric(12, 8))
+        .show(ui, |ui| {
+            // inner width + margins + the 1 px stroke on both sides = the row's width
+            ui.set_width(w - 26.0);
+            wrap_text(ui, msg, style::body(12.5), fg);
+        });
+}
+
+/// An inline code span (`mono rounded bg-surface-2`).
+pub fn code(ui: &mut Ui, s: &str) -> Response {
+    let t = tokens(ui);
+    let g = ui.painter().layout_no_wrap(s.to_owned(), style::mono(12.0), t.text);
+    let (r, resp) = ui.allocate_exact_size(g.size() + vec2(8.0, 2.0), Sense::hover());
+    ui.painter().rect_filled(r, CornerRadius::same(RADIUS_SM - 1), t.surface_2);
+    ui.painter().galley(r.min + vec2(4.0, 1.0), g, t.text);
+    resp
+}
+
+/// The frame of [`card`] without its header, for lists that lay out their own rows.
+pub fn card_frame(t: &Tokens) -> Frame {
+    Frame::new()
+        .fill(t.surface)
+        .stroke(Stroke::new(1.0, t.border))
+        .corner_radius(CornerRadius::same(RADIUS_LG))
+        .shadow(style::card_shadow(t))
+}
+
+// ---- Menu from a list ------------------------------------------------------------------------
+
+/// One entry of [`menu_list`]; `None` in the list is a separator.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MenuItem<'a> {
+    pub label: &'a str,
+    pub hint: Option<&'a str>,
+    pub danger: bool,
+    pub icon: Option<&'a str>,
+}
+
+pub fn item(label: &str) -> Option<MenuItem<'_>> {
+    Some(MenuItem { label, ..Default::default() })
+}
+
+pub fn item_hint<'a>(label: &'a str, hint: &'a str) -> Option<MenuItem<'a>> {
+    Some(MenuItem { label, hint: Some(hint), ..Default::default() })
+}
+
+impl<'a> MenuItem<'a> {
+    pub fn with_icon(mut self, glyph: &'a str) -> Self {
+        self.icon = Some(glyph);
+        self
+    }
+}
+
+/// A dropdown under `anchor` built from a list; returns the index picked this frame.
+pub fn menu_list(anchor: &Response, width: f32, items: &[Option<MenuItem<'_>>]) -> Option<usize> {
+    let mut picked = None;
+    menu(anchor, width, |ui| {
+        for (i, it) in items.iter().enumerate() {
+            match it {
+                None => menu_separator(ui),
+                Some(it) => {
+                    if menu_item(ui, it.label, it.icon, false, it.danger, true, it.hint).clicked() {
+                        picked = Some(i);
+                    }
+                }
+            }
+        }
+    });
+    picked
 }
 
 /// Accessible text for screen readers and tests that a painted region otherwise lacks.

@@ -84,8 +84,10 @@ impl LogPage {
         };
         let mut clear = false;
         let empty = self.log.is_empty();
-        widgets::page_header(ui, "Command log", Some(&sub), |ui| {
-            clear = Button::new("Clear").ghost().icon(icon::TRASH_2).enabled(!empty).show(ui).clicked();
+        let clear_btn = Button::new("Clear").ghost().icon(icon::TRASH_2).enabled(!empty);
+        let clear_w = clear_btn.width(ui);
+        widgets::page_header(ui, "Command log", sub, clear_w, |ui| {
+            clear = clear_btn.show(ui).clicked();
         });
         if clear {
             cx.services.cswap.clear_command_log();
@@ -96,9 +98,10 @@ impl LogPage {
             if self.log.is_empty() {
                 widgets::empty(
                     ui,
-                    icon::SCROLL_TEXT,
+                    Some(icon::SCROLL_TEXT),
                     "Nothing yet",
                     "Commands will show up here as the app talks to cswap.",
+                    |_| {},
                 );
                 return;
             }

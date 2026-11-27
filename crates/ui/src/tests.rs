@@ -484,9 +484,10 @@ fn gallery(theme: egui::Theme, name: &str) {
                 );
                 widgets::empty(
                     ui,
-                    icon::SCROLL_TEXT,
+                    Some(icon::SCROLL_TEXT),
                     "Nothing yet",
                     "Commands will show up here as the app talks to cswap.",
+                    |_| {},
                 );
             });
         h.run_steps(4);
@@ -508,8 +509,10 @@ fn confirm_dialog() {
         .build_ui(|ui| {
             let t = widgets::tokens(ui);
             ui.painter().rect_filled(ui.ctx().content_rect(), 0.0, t.bg);
-            widgets::page_header(ui, "Accounts", None, |ui| {
-                Button::new("Add account").primary().icon(icon::PLUS).show(ui);
+            let add = Button::new("Add account").primary().icon(icon::PLUS);
+            let w = add.width(ui);
+            widgets::page_header(ui, "Accounts", |_| {}, w, |ui| {
+                add.show(ui);
             });
             widgets::confirm(
                 ui.ctx(),

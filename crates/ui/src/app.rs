@@ -14,7 +14,10 @@ use egui::{Frame, Key, KeyboardShortcut, Modifiers, Ui};
 
 use crate::Services;
 use crate::cx::Cx;
-use crate::pages::{log::LogPage, onboarding::OnboardingPage, settings::SettingsPage};
+use crate::pages::{
+    accounts::AccountsPage, auto::AutoPage, log::LogPage, mappings::MappingsPage, onboarding::OnboardingPage,
+    settings::SettingsPage,
+};
 use crate::palette::Palette;
 use crate::shell::{self, ShellAction, ShellView};
 use crate::style;
@@ -48,6 +51,9 @@ pub struct CswapApp {
     updater: UpdaterState,
     pub toasts: Toasts,
     pub palette: Palette,
+    accounts_page: AccountsPage,
+    auto_page: AutoPage,
+    mappings_page: MappingsPage,
     settings_page: SettingsPage,
     log_page: LogPage,
     onboarding: OnboardingPage,
@@ -84,6 +90,9 @@ impl CswapApp {
             events,
             toasts: Toasts::default(),
             palette: Palette::default(),
+            accounts_page: AccountsPage::new(),
+            auto_page: AutoPage::new(),
+            mappings_page: MappingsPage::new(),
             settings_page: SettingsPage::new(),
             log_page: LogPage::new(),
             onboarding: OnboardingPage::new(),
@@ -120,7 +129,9 @@ impl CswapApp {
         self.settings_page.on_event(&ev);
         self.log_page.on_event(&ev);
         self.onboarding.on_event(&ev);
-        // ui-accounts' pages get `on_event` here once merged.
+        self.accounts_page.on_event(&ev);
+        self.auto_page.on_event(&ev);
+        self.mappings_page.on_event(&ev);
     }
 
     fn refresh(&mut self) {
@@ -247,11 +258,9 @@ impl CswapApp {
                 match page {
                     Page::Settings => self.settings_page.ui(ui, &mut cx),
                     Page::Log => self.log_page.ui(ui, &mut cx),
-                    // ui-accounts' pages (`pages::{accounts, auto, mappings}`) take these
-                    // arms when merged: `self.accounts_page.ui(ui, &mut cx)` and so on.
-                    Page::Accounts => not_yet(ui, "Accounts"),
-                    Page::Auto => not_yet(ui, "Auto-switch"),
-                    Page::Mappings => not_yet(ui, "Mappings"),
+                    Page::Accounts => self.accounts_page.ui(ui, &mut cx),
+                    Page::Auto => self.auto_page.ui(ui, &mut cx),
+                    Page::Mappings => self.mappings_page.ui(ui, &mut cx),
                 }
             }
             self.palette.poll(&mut cx);
@@ -274,14 +283,6 @@ impl CswapApp {
         }
         self.toasts.show(&ctx);
     }
-}
-
-/// Stand-in for the pages ui-accounts owns, until they are merged.
-fn not_yet(ui: &mut Ui, title: &str) {
-    widgets::page_header(ui, title, None, |_| {});
-    Frame::new().inner_margin(egui::Margin::symmetric(24, 0)).show(ui, |ui| {
-        widgets::empty(ui, widgets::icon::SPARKLES, title, "This page arrives with the ui-accounts part.");
-    });
 }
 
 impl eframe::App for CswapApp {

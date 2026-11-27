@@ -10,7 +10,8 @@ use cswap_core::view::ChipTone;
 use cswap_core::{Account, CsResult, Event, LaunchedSession, Mapping, Pending, PlainOutput};
 
 use super::accounts::notify;
-use super::kit::{self, Btn, Icon, Variant};
+use crate::style;
+use crate::widgets::{self, Button, Variant, icon};
 use crate::cx::Cx;
 use crate::theme::Tokens;
 use crate::toast::ToastKind;
@@ -126,43 +127,30 @@ impl MappingsPage {
         let mut unmap: Option<String> = None;
         egui::ScrollArea::vertical().id_salt("mappings-page").auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-            let b = Btn::new("Map a directory").variant(Variant::Primary).icon(Icon::Plus).enabled(!list.is_empty());
+            let b = Button::new("Map a directory").variant(Variant::Primary).icon(icon::PLUS).enabled(!list.is_empty());
             let bw = b.width(ui);
-            kit::page_header(
-                ui,
-                &t,
-                "Directory mappings",
-                |ui| {
+            widgets::page_header(ui, "Directory mappings", |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
-                        kit::mono_text(ui, "cswap run", 12.0, t.text_2);
-                        kit::text(ui, " ", 12.5, t.text_2);
+                        widgets::line(ui, "cswap run", style::mono(12.0), t.text_2);
+                        widgets::line(ui, " ", style::body(12.5), t.text_2);
                         let rest = "with no account launches the account mapped to the current directory — session mode, this terminal only. Open one straight from a row.";
                         for w in rest.split(' ') {
-                            kit::text(ui, format!("{w} "), 12.5, t.text_2);
+                            widgets::line(ui, format!("{w} "), style::body(12.5), t.text_2);
                         }
                     });
-                },
-                bw,
-                |ui| add = b.show(ui, &t).clicked(),
-            );
+                }, bw, |ui| add = b.show(ui).clicked());
             egui::Frame::new().inner_margin(Margin { left: 24, right: 24, top: 0, bottom: 32 }).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing = vec2(8.0, 12.0);
                 match &self.rows {
-                    Some(Err(e)) => kit::notice(ui, &t, e, ChipTone::Danger),
+                    Some(Err(e)) => widgets::notice(ui, e, ChipTone::Danger),
                     Some(Ok(rows)) if rows.is_empty() => {
-                        kit::empty(
-                            ui,
-                            &t,
-                            "No directory mappings",
-                            "Map a project folder to an account, then `cswap run` inside it picks that account automatically.",
-                            |ui| add |= Btn::new("Map a directory").enabled(!list.is_empty()).show(ui, &t).clicked(),
-                        );
+                        widgets::empty(ui, None, "No directory mappings", "Map a project folder to an account, then `cswap run` inside it picks that account automatically.", |ui| add |= Button::new("Map a directory").enabled(!list.is_empty()).show(ui).clicked());
                     }
                     Some(Ok(rows)) => {
                         let w = ui.available_width();
-                        kit::card_frame(&t).show(ui, |ui| {
+                        widgets::card_frame(&t).show(ui, |ui| {
                             ui.set_width(w - 2.0);
                             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                             for (i, m) in rows.iter().enumerate() {
@@ -213,14 +201,8 @@ impl MappingsPage {
         let busy = st.run.is_some();
         let can = !st.path.trim().is_empty() && !st.target.is_empty();
         let (mut go, mut cancel, mut browse) = (false, false, false);
-        let out = kit::dialog(
-            ctx,
-            t,
-            "map",
-            "Map a directory to an account",
-            440.0,
-            |ui| {
-                kit::field(ui, t, "Account", None, |ui| {
+        let out = widgets::dialog(ctx, "map", "Map a directory to an account", 440.0, |ui| {
+                widgets::field(ui, "Account", None, false, |ui| {
                     let label = |a: &Account| {
                         format!(
                             "{}. {}{}",
@@ -243,20 +225,18 @@ impl MappingsPage {
                             }
                         });
                 });
-                kit::field(ui, t, "Directory", None, |ui| {
+                widgets::field(ui, "Directory", None, false, |ui| {
                     ui.horizontal(|ui| {
-                        let b = Btn::new("Browse").icon(Icon::Folder);
+                        let b = Button::new("Browse").icon(icon::FOLDER_OPEN);
                         let w = ui.available_width() - b.width(ui) - 8.0;
-                        kit::input(ui, t, &mut st.path, "map-path", "/path/to/project", w, true, false);
-                        browse = b.show(ui, t).clicked();
+                        widgets::input_opts(ui, "", &mut st.path, "/path/to/project", true, w, false);
+                        browse = b.show(ui).clicked();
                     });
                 });
-            },
-            |ui| {
-                go = Btn::new("Map").variant(Variant::Primary).loading(busy).enabled(can).show(ui, t).clicked();
-                cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
-            },
-        );
+            }, |ui| {
+                go = Button::new("Map").variant(Variant::Primary).loading(busy).enabled(can).show(ui).clicked();
+                cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
+            });
         if browse && let Some(p) = cx.services.host.pick_directory("Map a directory") {
             st.path = p;
         }
@@ -282,55 +262,47 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
         Some(a) => format!("cswap run {} in {}", a.number, m.path),
         None => "The mapped account is no longer managed".into(),
     };
-    let open_b = Btn::new("Open terminal").small().icon(Icon::Terminal).enabled(m.account.is_some());
+    let open_b = Button::new("Open terminal").small().icon(icon::SQUARE_TERMINAL).enabled(m.account.is_some());
     let unmap_label = format!("Unmap {}", m.path);
-    let unmap_b = Btn::new("Unmap").small().variant(Variant::Ghost).icon(Icon::Trash).a11y(&unmap_label);
+    let unmap_b = Button::new("Unmap").small().variant(Variant::Ghost).icon(icon::TRASH_2).label(&unmap_label);
     let buttons_w = open_b.width(ui) + unmap_b.width(ui) + 8.0;
-    kit::paint_icon(ui.painter(), pos2(top_left.x + 12.0 + 7.5, rect.center().y), Icon::Folder, t.text_3);
+    widgets::paint_icon(ui, icon::FOLDER_OPEN, pos2(top_left.x + 12.0 + 7.5, rect.center().y), 15.0, t.text_3);
     let text_x = top_left.x + 12.0 + 15.0 + 12.0;
     let text_w = (rect.max.x - 12.0 - buttons_w - 12.0 - text_x).max(40.0);
-    let g = kit::galley(ui, m.path.clone(), kit::mono(12.0), t.text, text_w);
+    let g = widgets::galley(ui, m.path.clone(), style::mono(12.0), t.text, text_w);
     let path_rect = Rect::from_min_size(pos2(text_x, rect.min.y + 10.0), g.size());
     ui.painter().galley(path_rect.min, g, t.text);
     let _ = ui.interact(path_rect, ui.scope_id().with(("map-path", &m.path)), Sense::hover()).on_hover_text(&m.path);
-    kit::place(
-        ui,
-        UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))),
-        |ui| {
+    widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))), |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 match &m.account {
                     Some(a) => {
-                        kit::text(ui, "→", 11.5, t.text_3);
+                        widgets::line(ui, "→", style::body(11.5), t.text_3);
                         let who = a.alias.clone().unwrap_or_else(|| a.email.clone());
-                        kit::text(ui, format!("Account-{} · {who}", a.number), 11.5, t.text_2);
+                        widgets::line(ui, format!("Account-{} · {who}", a.number), style::body(11.5), t.text_2);
                     }
                     None => {
-                        kit::text(ui, format!("→ {}", m.email), 11.5, t.text_3);
-                        kit::chip(ui, t, "account removed", ChipTone::Warn);
+                        widgets::line(ui, format!("→ {}", m.email), style::body(11.5), t.text_3);
+                        widgets::chip(ui, "account removed", ChipTone::Warn);
                     }
                 }
             });
-        },
-    );
-    kit::place(
-        ui,
-        UiBuilder::new()
+        });
+    widgets::place(ui, UiBuilder::new()
             .max_rect(Rect::from_min_max(
                 pos2(rect.max.x - 12.0 - buttons_w, rect.min.y),
                 pos2(rect.max.x - 12.0, rect.max.y),
             ))
-            .layout(Layout::right_to_left(Align::Center)),
-        |ui| {
+            .layout(Layout::right_to_left(Align::Center)), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            if unmap_b.show(ui, t).clicked() {
+            if unmap_b.show(ui).clicked() {
                 out = Some(false);
             }
-            if open_b.show(ui, t).on_hover_text(open_tip).clicked() {
+            if open_b.show(ui).on_hover_text(open_tip).clicked() {
                 out = Some(true);
             }
-        },
-    );
+        });
     if !last {
         ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border));
     }

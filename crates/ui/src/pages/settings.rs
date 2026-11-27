@@ -176,7 +176,7 @@ impl SettingsPage {
 
     fn body(&mut self, ui: &mut Ui, cx: &mut Cx) {
         self.poll(cx);
-        widgets::page_header(ui, "Settings", None, |_| {});
+        widgets::page_header(ui, "Settings", |_| {}, 0.0, |_| {});
         let two = ui.ctx().content_rect().width() >= TWO_COLUMNS_FROM;
         let mut heights = self.heights;
         Frame::new().inner_margin(Margin { left: 24, right: 24, top: 0, bottom: 32 }).show(ui, |ui| {
