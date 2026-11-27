@@ -10,10 +10,7 @@ use crate::types::{Account, UsageWindow};
 /// Wall clock in Unix milliseconds. The one impure helper here; callers that need
 /// stable output pass their own `now_ms` to everything else.
 pub fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 // Howard Hinnant's days-from-civil and back: exact for the proleptic Gregorian calendar,
@@ -367,7 +364,11 @@ mod tests {
 
     #[test]
     fn org_tag_hides_personal_workspaces_and_masks_names() {
-        let mut a = Account { is_organization: true, organization_name: "you@example.com's Organization".into(), ..Default::default() };
+        let mut a = Account {
+            is_organization: true,
+            organization_name: "you@example.com's Organization".into(),
+            ..Default::default()
+        };
         assert_eq!(org_tag(&a, false), "personal");
         a.organization_name = "Company Inc".into();
         assert_eq!(org_tag(&a, false), "Company Inc");

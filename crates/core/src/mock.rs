@@ -511,7 +511,11 @@ impl Cswap for MockCswap {
     }
 
     fn list_unclaimed(&self) -> Pending<CsResult<Vec<UnclaimedEntry>>> {
-        Pending::ready(Ok(vec![UnclaimedEntry { id: "a1b2c3".into(), slot: "2".into(), reason: "keychain locked".into() }]))
+        Pending::ready(Ok(vec![UnclaimedEntry {
+            id: "a1b2c3".into(),
+            slot: "2".into(),
+            reason: "keychain locked".into(),
+        }]))
     }
 
     fn purge_unclaimed(&self, _id: &str) -> Pending<CsResult<PlainOutput>> {
@@ -529,7 +533,10 @@ impl Cswap for MockCswap {
     }
 
     fn launch_session(&self, target: &str, cwd: Option<&str>) -> Pending<CsResult<LaunchedSession>> {
-        Pending::ready(Ok(LaunchedSession { command: format!("cswap run {target}"), cwd: cwd.unwrap_or("/home/you").into() }))
+        Pending::ready(Ok(LaunchedSession {
+            command: format!("cswap run {target}"),
+            cwd: cwd.unwrap_or("/home/you").into(),
+        }))
     }
 
     fn auto_start(&self, dry_run: bool) -> Pending<AutoStatus> {
@@ -567,11 +574,8 @@ impl Cswap for MockCswap {
     }
 
     fn auto_once(&self, _dry_run: bool) -> Pending<CsResult<AutoOnceResult>> {
-        let ev = auto_event(
-            now_ms(),
-            "no-switch",
-            json!({ "reason": "below-threshold", "detail": "active headroom 55%" }),
-        );
+        let ev =
+            auto_event(now_ms(), "no-switch", json!({ "reason": "below-threshold", "detail": "active headroom 55%" }));
         Pending::ready(Ok(AutoOnceResult { exit_code: Some(2), outcome: AutoOutcome::NoAction, events: vec![ev] }))
     }
 
@@ -681,7 +685,11 @@ mod tests {
         let s = m.accounts();
         assert_eq!(s.payload.as_ref().unwrap().active_account_number, Some(2));
         let evs: Vec<Event> = rx.try_iter().collect();
-        assert!(evs.iter().any(|e| matches!(e, Event::Accounts(a) if a.payload.as_ref().unwrap().active_account_number == Some(2))));
+        assert!(
+            evs.iter().any(
+                |e| matches!(e, Event::Accounts(a) if a.payload.as_ref().unwrap().active_account_number == Some(2))
+            )
+        );
         assert_eq!(m.command_log()[0].args, ["switch", "2", "--json"]);
         assert_eq!(m.switch_to("nobody", false).take().unwrap().unwrap_err().kind, "AccountNotFoundError");
     }
@@ -733,7 +741,14 @@ mod tests {
     fn fixture_has_models_in_some_accounts_only() {
         let p = fixture_payload(0);
         let models = |a: &Account| -> Vec<String> {
-            a.usage.as_ref().or(a.last_good_usage.as_ref()).and_then(|u| u.scoped.clone()).unwrap_or_default().into_iter().map(|s| s.name).collect()
+            a.usage
+                .as_ref()
+                .or(a.last_good_usage.as_ref())
+                .and_then(|u| u.scoped.clone())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| s.name)
+                .collect()
         };
         assert_eq!(models(&p.accounts[0]), ["Fable"]);
         assert_eq!(models(&p.accounts[4]), ["Sonnet"]);
