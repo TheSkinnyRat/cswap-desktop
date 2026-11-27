@@ -174,8 +174,8 @@ mod tests {
     #[test]
     fn key_ignores_case_and_trailing_separator() {
         assert_eq!(
-            key_for(Path::new(r"C:\Users\P\AppData\Roaming\cswap-desktop")),
-            key_for(Path::new(r"c:\users\p\appdata\roaming\CSWAP-DESKTOP\"))
+            key_for(Path::new(r"C:\Users\U\AppData\Roaming\cswap-desktop")),
+            key_for(Path::new(r"c:\users\u\appdata\roaming\CSWAP-DESKTOP\"))
         );
         assert_ne!(key_for(Path::new("/a")), key_for(Path::new("/b")));
     }
