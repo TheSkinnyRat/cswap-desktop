@@ -533,6 +533,8 @@ fn readme_screenshots() {
     let (f, rx) = fixture();
     // ONE scoped model, as real cswap reports today, so the floor shows the whole table
     f.cswap.set_list(Some(crate::testing::one_model_payload(f.cswap.now_ms())), None);
+    // the README shows the settings a new user gets
+    f.cswap.set_settings(AppSettings::default());
     let mut h = harness(&f, rx, 1240.0);
     settle(&mut h);
     save(&mut h, "accounts-light");
