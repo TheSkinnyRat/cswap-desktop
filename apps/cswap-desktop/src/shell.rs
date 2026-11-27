@@ -160,7 +160,7 @@ impl Core {
             tray: None,
             visible: false,
             exiting: false,
-            renderer,
+            renderer: eframe::Renderer::Glow,
             started: false,
         };
         // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
