@@ -188,8 +188,8 @@ impl SettingsPage {
                     ui.add_space(gap);
                 }
             } else {
-                for i in 0..4 {
-                    heights[i] = self.card(i, ui, cx, 0.0);
+                for (i, h) in heights.iter_mut().enumerate() {
+                    *h = self.card(i, ui, cx, 0.0);
                     ui.add_space(gap);
                 }
             }
