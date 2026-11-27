@@ -131,23 +131,3 @@ impl Updates for DisabledUpdates {
         *self.installs.lock().unwrap_or_else(|e| e.into_inner()) += 1;
     }
 }
-
-// ---- fixtures ------------------------------------------------------------------------------
-
-/// The mock's fixture with ONE scoped model (`Fable`), as real cswap reports today: the
-/// README screenshots use it so the 1240 px floor still shows the whole table. Tests keep
-/// the mock's two-model fixture, which exercises the generated columns harder.
-pub fn one_model_payload(now_ms: i64) -> ListPayload {
-    let mut p = cswap_core::mock::fixture_payload(now_ms);
-    for a in &mut p.accounts {
-        for u in [a.usage.as_mut(), a.last_good_usage.as_mut()].into_iter().flatten() {
-            if let Some(sc) = u.scoped.as_mut() {
-                sc.retain(|w| w.name == "Fable");
-                if sc.is_empty() {
-                    u.scoped = None;
-                }
-            }
-        }
-    }
-    p
-}

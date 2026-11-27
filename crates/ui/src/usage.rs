@@ -156,7 +156,7 @@ pub fn ring(
         p.galley(pos2(x, y), g, t.text_3);
         x += gw;
     }
-    let g = widgets::galley(ui, text, style::body(12.0), pct_color(t, tone), (tx + tw - x).max(10.0));
+    let g = widgets::galley(ui, text, style::body_medium(12.0), pct_color(t, tone), (tx + tw - x).max(10.0));
     p.galley(pos2(x, y), g, t.text);
     if let Some(s) = sub {
         y += head_h;

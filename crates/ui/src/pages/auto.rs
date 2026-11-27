@@ -299,7 +299,7 @@ impl AutoPage {
                 pos2(hr.min.x + 16.0, hr.center().y),
                 egui::Align2::LEFT_CENTER,
                 "Event feed",
-                style::body(13.0),
+                style::body_semibold(13.0),
                 t.text,
             );
             ui.painter().hline(hr.x_range(), hr.max.y - 0.5, Stroke::new(1.0, t.border));
@@ -370,7 +370,7 @@ impl AutoPage {
             ui.set_width(w - 2.0);
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             let (hr, _) = ui.allocate_exact_size(vec2(w - 2.0, 44.0), Sense::hover());
-            ui.painter().text(pos2(hr.min.x + 16.0, hr.center().y), egui::Align2::LEFT_CENTER, "cswap settings", style::body(13.0), t.text);
+            ui.painter().text(pos2(hr.min.x + 16.0, hr.center().y), egui::Align2::LEFT_CENTER, "cswap settings", style::body_semibold(13.0), t.text);
             ui.painter().text(pos2(hr.max.x - 16.0, hr.center().y), egui::Align2::RIGHT_CENTER, "settings.json", style::body(11.0), t.text_3);
             ui.painter().hline(hr.x_range(), hr.max.y - 0.5, Stroke::new(1.0, t.border));
             egui::Frame::new().inner_margin(Margin::symmetric(16, 12)).show(ui, |ui| {
@@ -416,7 +416,7 @@ fn stat(ui: &mut Ui, t: &Tokens, w: f32, label: &str, value: &str, sub: Option<&
                     let (r, _) = ui.allocate_exact_size(vec2(7.0, 20.0), Sense::hover());
                     ui.painter().circle_filled(r.center(), 3.5, t.ok);
                 }
-                widgets::line(ui, value, style::body(15.0), color);
+                widgets::line(ui, value, style::body_semibold(15.0), color);
             });
             widgets::line(ui, sub.unwrap_or(" "), style::body(11.5), t.text_3);
         });
@@ -470,7 +470,7 @@ fn setting_row(
         ui.spacing_mut().item_spacing.y = 2.0;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            widgets::line(ui, spec.label, style::body(12.5), t.text);
+            widgets::line(ui, spec.label, style::body_medium(13.0), t.text);
             if row.is_set {
                 let g = widgets::galley(ui, "reset", style::body(10.5), t.text_3, 60.0);
                 let (r, resp) = ui.allocate_exact_size(g.size(), Sense::click());

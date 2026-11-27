@@ -231,7 +231,7 @@ impl AccountsPage {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         widgets::line(ui, "Active: ", style::body(12.5), t.text_2);
                         let name = a.alias.clone().unwrap_or_else(|| mask_email(&a.email, mask));
-                        widgets::line(ui, name, style::body(12.5), t.text);
+                        widgets::line(ui, name, style::body_medium(12.5), t.text);
                         if a.is_organization {
                             widgets::line(ui, format!(" · {}", org_tag(a, mask)), style::body(12.5), t.text_3);
                         }
@@ -788,7 +788,8 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
     }
     // flex-wrap: the name keeps its width and the badges wrap under it; only a name wider
     // than the cell is truncated.
-    let g = widgets::galley(ui, name, style::body(13.0), t.text, w);
+    // `font-medium`, as 0.1.23's account name
+    let g = widgets::galley(ui, name, style::body_medium(13.0), t.text, w);
     let name_rect = Rect::from_min_size(top, vec2(g.size().x, 18.0));
     ui.painter().galley(pos2(top.x, top.y + 9.0 - g.size().y / 2.0), g, t.text);
     if !mask {
@@ -1321,7 +1322,7 @@ fn switch_row(ui: &mut Ui, t: &Tokens, title: &str, sub: &str, on: &mut bool, la
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
                     ui.set_width(w - 24.0 - 44.0);
-                    widgets::line(ui, title, style::body(13.0), t.text);
+                    widgets::line(ui, title, style::body_medium(13.0), t.text);
                     widgets::wrap_text(ui, sub, style::body(12.0), t.text_3);
                 });
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| widgets::toggle(ui, on, label, true));

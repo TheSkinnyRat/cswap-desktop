@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
-use cswap_core::mock::MockCswap;
+use cswap_core::mock::{Fixture as MockFixture, MockCswap};
 use cswap_core::{
     AppSettings, CommandLogEntry, Cswap, CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState,
     UpdaterStatus,
@@ -32,8 +32,12 @@ struct Fixture {
 }
 
 fn fixture() -> (Fixture, Receiver<Event>) {
+    fixture_of(MockFixture::TwoModels)
+}
+
+fn fixture_of(which: MockFixture) -> (Fixture, Receiver<Event>) {
     let (sink, rx) = EventSink::new();
-    let cswap = Arc::new(MockCswap::new(sink.clone()));
+    let cswap = Arc::new(MockCswap::with_fixture(sink.clone(), cswap_core::format::now_ms(), which));
     // Off, so a test's command log does not depend on whether another test in this process
     // already spent the process-wide focus refresh.
     cswap.set_settings(AppSettings { refresh_on_focus: false, ..Default::default() });
@@ -544,9 +548,8 @@ fn readme_screenshots() {
         let img = h.render().expect("render");
         img.save(dir.join(format!("{name}.png"))).expect("save png");
     };
-    let (f, rx) = fixture();
     // ONE scoped model, as real cswap reports today, so the floor shows the whole table
-    f.cswap.set_list(Some(crate::testing::one_model_payload(f.cswap.now_ms())), None);
+    let (f, rx) = fixture_of(MockFixture::OneModel);
     // the README shows the settings a new user gets
     f.cswap.set_settings(AppSettings::default());
     let mut h = harness(&f, rx, 1240.0);
@@ -559,8 +562,17 @@ fn readme_screenshots() {
     h.key_press(Key::Escape);
     settle(&mut h);
 
+    // auto-switch running, every event shown, as docs.spec.ts staged it
     nav(&mut h, "Auto-switch");
+    h.get_by_role_and_label(Role::Button, "Start").click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::Button, "All").click();
+    settle(&mut h);
     save(&mut h, "auto");
+    h.get_by_role_and_label(Role::Button, "Stop").click();
+    settle(&mut h);
+    // the toasts of start/stop must not land in the next frames
+    h.state_mut().app.as_mut().expect("app").toasts.items.clear();
 
     nav(&mut h, "Settings");
     save(&mut h, "settings-light");
