@@ -130,6 +130,9 @@ jobs:
         run: |
           $req = @{}; if ($env:MODE -eq 'publish') { $req.RequireSignature = $true }
           ./packaging/windows/build.ps1 @req
+          # The takeover of a 0.1.x install, checked on the installer about to ship
+          # (a fake old install, test GUID: nothing real on the runner is touched).
+          pwsh -NoProfile -File packaging/windows/test-installer.ps1 -Exe target/release/claude-swap.exe
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: packaging/linux/build.sh $([ "$MODE" = publish ] && echo --require-signature)

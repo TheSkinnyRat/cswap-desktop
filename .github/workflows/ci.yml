@@ -49,10 +49,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - run: cargo clippy --workspace --all-targets --locked --features cswap-desktop/stub-driver -- -D warnings  # TEMP-STUB
-      - run: cargo test --workspace --locked --features cswap-desktop/stub-driver  # TEMP-STUB
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
       # The release tool and the app build in release mode as release.yml does.
-      - run: cargo build --release --locked -p cswap-desktop -p cswap-update --features cswap-desktop/stub-driver  # TEMP-STUB
+      - run: cargo build --release --locked -p cswap-desktop -p cswap-update
       - name: The app starts and answers --version
         shell: bash
         run: |
@@ -60,60 +60,3 @@ jobs:
           [ -f "$bin.exe" ] && bin="$bin.exe"
           "$bin" --version
 
-  # TEMP-STUB: packaging dry run on the v1-platform branch (release.yml can only be
-  # dispatched from main). Builds with the stub driver until the driver is merged.
-  package-dry:
-    name: package dry run (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
-    steps:
-      - uses: actions/checkout@v5
-      - name: Build (stub driver)
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = macOS ]; then
-            rustup target add aarch64-apple-darwin
-            cargo build --release --locked -p cswap-desktop --features cswap-desktop/stub-driver --target aarch64-apple-darwin
-            cargo build --release --locked -p cswap-update --bin cswap-release
-          else
-            cargo build --release --locked -p cswap-desktop -p cswap-update --features cswap-desktop/stub-driver
-          fi
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { choco install nsis -y --no-progress }
-          ./packaging/windows/build.ps1 -SkipBuild
-          # TEMP probe: does the window open on a GPU-less runner?
-          $env:CSWAP_DESKTOP_USERDATA = "$env:RUNNER_TEMP\probe"
-          cargo build -p cswap-desktop --features cswap-desktop/stub-driver
-          $p = Start-Process target\debug\claude-swap.exe -PassThru -RedirectStandardError probe-err.txt
-          Start-Sleep 8; "probe exited=$($p.HasExited) code=$($p.ExitCode)"; Get-Content probe-err.txt -ErrorAction SilentlyContinue | Select-Object -Last 20
-          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
-          Remove-Item Env:\CSWAP_DESKTOP_USERDATA
-          pwsh -NoProfile -File packaging/windows/test-installer.ps1 -Exe target/release/claude-swap.exe
-      - name: Package (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          packaging/linux/build.sh --skip-build
-          dpkg-deb --info packaging/linux/out/claude-swap-desktop-linux-amd64.deb
-          dpkg-deb --contents packaging/linux/out/claude-swap-desktop-linux-amd64.deb
-          APPIMAGE_EXTRACT_AND_RUN=1 packaging/linux/out/claude-swap-desktop-linux-x86_64.AppImage --version
-          head -3 packaging/linux/out/latest-linux.yml
-      - name: Package and launch (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          packaging/macos/build.sh --skip-build --arch arm64
-          hdiutil attach -nobrowse -mountpoint /tmp/dmg packaging/macos/out/claude-swap-desktop-mac-arm64.dmg
-          ditto /tmp/dmg/"Claude Swap.app" "$RUNNER_TEMP/Claude Swap.app"
-          hdiutil detach /tmp/dmg
-          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/Claude Swap.app"
-          export CSWAP_DESKTOP_USERDATA="$RUNNER_TEMP/userdata"
-          "$RUNNER_TEMP/Claude Swap.app/Contents/MacOS/Claude Swap" > launch.log 2>&1 &
-          pid=$!
-          sleep 20
-          kill -0 $pid && echo "still running after 20 s" && kill $pid
-          cat launch.log
