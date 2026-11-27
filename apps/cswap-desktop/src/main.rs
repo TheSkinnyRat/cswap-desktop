@@ -37,7 +37,6 @@ fn start_driver(data_dir: PathBuf, sink: EventSink) -> (Arc<dyn Cswap>, Box<dyn 
     (native, Box::new(move || n.shutdown()))
 }
 
-
 /// A copy the app may let rewire the user's login items: not a cargo build, not a test run
 /// with its own data dir (0.1.23 checked `app.isPackaged`).
 fn packaged() -> bool {
