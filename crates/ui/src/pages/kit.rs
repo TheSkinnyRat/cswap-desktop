@@ -230,7 +230,6 @@ pub struct Btn<'a> {
     pub loading: bool,
     /// Accessible name when `label` is empty (icon-only buttons).
     pub a11y: Option<&'a str>,
-    pub pressed: bool,
     pub min_width: f32,
 }
 
@@ -245,7 +244,6 @@ impl<'a> Btn<'a> {
             enabled: true,
             loading: false,
             a11y: None,
-            pressed: false,
             min_width: 0.0,
         }
     }
@@ -277,10 +275,6 @@ impl<'a> Btn<'a> {
         self.a11y = Some(s);
         self
     }
-    pub fn pressed(mut self, p: bool) -> Self {
-        self.pressed = p;
-        self
-    }
 
     /// Width the button will take.
     pub fn width(&self, ui: &Ui) -> f32 {
@@ -310,10 +304,7 @@ impl<'a> Btn<'a> {
         };
         let mix = |a: Color32, b: Color32| a.lerp_to_gamma(b, k);
         let (mut fill, mut stroke, mut fg) = (mix(fill, fill_h), mix(stroke, stroke_h), mix(fg, fg_h));
-        if self.pressed {
-            fill = t.surface_2;
-            fg = t.text;
-        }
+
         if !enabled && !self.loading {
             fill = fill.gamma_multiply(0.5);
             stroke = stroke.gamma_multiply(0.5);
