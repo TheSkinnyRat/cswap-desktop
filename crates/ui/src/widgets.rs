@@ -601,7 +601,8 @@ pub fn card<R>(
             ui.spacing_mut().item_spacing.y = 6.0;
             let inner = body(ui);
             let natural = ui.min_rect().bottom() - top;
-            ui.set_min_height((min_height - 2.0).max(0.0));
+            // `set_min_height` would add the height after the cursor, not from the top.
+            ui.expand_to_include_y(top + min_height - 2.0);
             (inner, natural + 2.0)
         });
     r.inner

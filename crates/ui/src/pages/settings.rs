@@ -194,9 +194,6 @@ impl SettingsPage {
                 }
             }
         });
-        if std::env::var_os("CSWAP_DEBUG_LAYOUT").is_some() {
-            eprintln!("heights {heights:?} prev {:?}", self.heights);
-        }
         if heights != self.heights {
             self.heights = heights;
             ui.ctx().request_repaint();

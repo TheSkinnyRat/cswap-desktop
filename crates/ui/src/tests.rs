@@ -34,11 +34,15 @@ fn fixture() -> (Fixture, Receiver<Event>) {
 }
 
 fn harness(f: &Fixture, rx: Receiver<Event>, width: f32) -> Harness<'static, World> {
+    harness_sized(f, rx, width, 780.0)
+}
+
+fn harness_sized(f: &Fixture, rx: Receiver<Event>, width: f32, height: f32) -> Harness<'static, World> {
     let services = Services { cswap: f.cswap.clone(), updates: f.updates.clone(), host: f.host.clone() };
     let theme = f.cswap.st().settings.theme;
     let world = World { app: None, init: Some((services, rx)) };
     Harness::builder()
-        .with_size(vec2(width, 780.0))
+        .with_size(vec2(width, height))
         .with_render_cursor(false)
         .with_step_dt(1.0 / 30.0)
         .with_max_steps(30)
@@ -49,7 +53,11 @@ fn harness(f: &Fixture, rx: Receiver<Event>, width: f32) -> Harness<'static, Wor
                     let (s, rx) = w.init.take().expect("services");
                     w.app = Some(CswapApp::with_context(ui.ctx(), s, rx));
                 }
-                w.app.as_mut().expect("app").frame(ui);
+                // The harness frames its ui with a margin; the real window has none.
+                let rect = ui.ctx().content_rect();
+                let mut whole = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+                whole.set_clip_rect(rect);
+                w.app.as_mut().expect("app").frame(&mut whole);
             },
             world,
         )
@@ -106,7 +114,7 @@ fn renders_settings_and_log_in_light_and_dark() {
 #[test]
 fn settings_edits_reach_the_service() {
     let (f, rx) = fixture();
-    let mut h = harness(&f, rx, 1240.0);
+    let mut h = harness_sized(&f, rx, 1240.0, 1100.0);
     settle(&mut h);
     nav(&mut h, "Settings");
     h.get_by_role_and_label(Role::ComboBox, "Refresh interval").click();
@@ -143,7 +151,7 @@ fn settings_edits_reach_the_service() {
 #[test]
 fn updater_box_follows_the_state() {
     let (f, rx) = fixture();
-    let mut h = harness(&f, rx, 1240.0);
+    let mut h = harness_sized(&f, rx, 1240.0, 1100.0);
     settle(&mut h);
     nav(&mut h, "Settings");
     h.get_by_label("Automatic updates are off");
@@ -270,12 +278,14 @@ fn palette_switches_through_the_cli_and_closes_on_escape() {
     settle(&mut h);
     assert!(!app(&h).palette.open);
 
-    // Ctrl+, opens Settings; Ctrl+R refreshes
+    // Ctrl+, opens Settings; Ctrl+R refreshes (the count is relative: the focus refresh is
+    // throttled process-wide, so another test may already have spent it)
+    let before = f.cswap.calls().iter().filter(|c| *c == "refresh").count();
     h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
     h.key_press_modifiers(Modifiers::COMMAND, Key::R);
     settle(&mut h);
     assert_eq!(app(&h).page, Page::Settings);
-    assert!(f.cswap.calls().iter().filter(|c| *c == "refresh").count() >= 2, "{:?}", f.cswap.calls());
+    assert_eq!(f.cswap.calls().iter().filter(|c| *c == "refresh").count(), before + 1, "{:?}", f.cswap.calls());
 }
 
 #[test]
@@ -301,16 +311,3 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
     h.get_by_role_and_label(Role::Button, "Expand the sidebar");
 }
 
-#[test]
-#[ignore]
-fn debug_settings_layout() {
-    let (f, rx) = fixture();
-    let mut h = harness(&f, rx, 1240.0);
-    settle(&mut h);
-    nav(&mut h, "Settings");
-    for l in ["cswap binary", "Appearance & behaviour", "Data", "About", "Start auto-switch with the app", "Locations checked"] {
-        for n in h.query_all_by_label(l) {
-            eprintln!("{l}: {:?} {:?}", n.accesskit_node().role(), n.rect());
-        }
-    }
-}
