@@ -26,6 +26,13 @@ $instKey = "HKCU:\Software\$guid"
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "$shortcut.lnk"
 $failures = @()
+# Waits for the installer itself only: Start-Process -Wait also waits for every process it
+# started, and --force-run starts the app, which keeps running.
+function RunWait($file, [string[]]$argv) {
+    $p = Start-Process $file -ArgumentList $argv -PassThru
+    if (-not $p.WaitForExit(120000)) { throw "$file $argv did not finish in 120 s" }
+    $p
+}
 function Check($ok, $what) { if ($ok) { "  ok   $what" } else { "  FAIL $what"; $script:failures += $what } }
 
 # The real install, to prove it is left alone.
@@ -61,7 +68,7 @@ try {
 
     # ---- build the test installer
     $defines = @("/DAPP_GUID=$guid", "/DSHORTCUT=$shortcut", "/DRUN_VALUE=$runValue", "/DUPDATER_CACHE=$cache", "/DDEFAULT_DIR=$root\default-not-used")
-    $out = Join-Path $root 'setup.exe'
+    $out = Join-Path $root 'claude-swap-desktop-win-x64-setup.exe'
     $makensis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
     if (-not $makensis) { $makensis = @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "$env:ProgramFiles\NSIS\makensis.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1 }
     & $makensis /V2 /DVERSION=1.0.0 "/DEXE=$Exe" "/DOUTFILE=$out" @defines (Join-Path $here 'installer.nsi')
@@ -69,7 +76,7 @@ try {
 
     # ---- 1. takeover, exactly as 0.1.x's electron-updater starts it (install on quit)
     "takeover (/S --updated):"
-    $p = Start-Process $out -ArgumentList '/S', '--updated' -Wait -PassThru
+    $p = RunWait $out @('/S', '--updated')
     Check ($p.ExitCode -eq 0) "installer exit code 0 (got $($p.ExitCode))"
     Check (-not (Test-Path "$dir\LICENSE.electron.txt") -and -not (Test-Path "$dir\resources") -and -not (Test-Path "$dir\locales") -and -not (Test-Path "$dir\ffmpeg.dll")) 'Electron files removed'
     Check ((Get-FileHash "$dir\Claude Swap.exe").Hash -eq (Get-FileHash $Exe).Hash) 'Claude Swap.exe is the v1 exe'
@@ -90,7 +97,7 @@ try {
     $env:CSWAP_DESKTOP_USERDATA = $data
     $running = Start-Process "$dir\Claude Swap.exe" -PassThru
     Start-Sleep 3
-    $p = Start-Process $out -ArgumentList '/S', '--updated', '--force-run' -Wait -PassThru
+    $p = RunWait $out @('/S', '--updated', '--force-run')
     Check ($p.ExitCode -eq 0) "installer exit code 0 (got $($p.ExitCode))"
     Check ($running.HasExited) 'the running copy was stopped'
     Start-Sleep 3
@@ -101,7 +108,7 @@ try {
 
     # ---- 3. uninstall
     "uninstall (/S):"
-    $p = Start-Process "$dir\Uninstall Claude Swap.exe" -ArgumentList '/S' -Wait -PassThru
+    $p = RunWait "$dir\Uninstall Claude Swap.exe" @('/S')
     # The NSIS uninstaller copies itself to %TEMP% and returns at once; wait for the copy.
     for ($i = 0; $i -lt 40 -and (Test-Path "$dir\Claude Swap.exe"); $i++) { Start-Sleep -Milliseconds 250 }
     Start-Sleep 1
