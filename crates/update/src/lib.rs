@@ -241,7 +241,9 @@ impl Inner {
             self.fail(e);
         }
         self.busy.store(false, Ordering::SeqCst);
-        if self.install_when_ready.swap(false, Ordering::SeqCst) && lock(&self.state).status == UpdaterStatus::Downloaded {
+        if self.install_when_ready.swap(false, Ordering::SeqCst)
+            && lock(&self.state).status == UpdaterStatus::Downloaded
+        {
             self.install_now();
         }
     }
@@ -266,7 +268,8 @@ impl Inner {
             code => return Err(format!("GitHub answered HTTP {code}")),
         }
         let rel: release::Release = resp.json().await.map_err(|e| format!("unreadable release: {e}"))?;
-        let latest = release::parse_version(&rel.tag_name).ok_or_else(|| format!("latest release tag {:?} is not a version", rel.tag_name))?;
+        let latest = release::parse_version(&rel.tag_name)
+            .ok_or_else(|| format!("latest release tag {:?} is not a version", rel.tag_name))?;
         let current = release::parse_version(&self.cfg.current).ok_or("this build's version is not semver")?;
         let now = time::iso_now();
         let page = if rel.html_url.is_empty() { release::RELEASES_PAGE.to_string() } else { rel.html_url.clone() };
@@ -326,7 +329,11 @@ impl Inner {
         let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_file(&sig_file);
 
-        let sig_text = get_ok(client, &sig.browser_download_url).await?.text().await.map_err(|e| format!("signature download failed: {e}"))?;
+        let sig_text = get_ok(client, &sig.browser_download_url)
+            .await?
+            .text()
+            .await
+            .map_err(|e| format!("signature download failed: {e}"))?;
         let resp = get_ok(client, &asset.browser_download_url).await?;
         let total = resp.content_length().unwrap_or(asset.size);
         let digest = match self.stream_to(resp, &part, total).await {

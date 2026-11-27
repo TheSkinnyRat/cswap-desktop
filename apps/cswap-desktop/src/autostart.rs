@@ -89,7 +89,10 @@ fn mac_plist_path() -> Option<PathBuf> {
 
 #[allow(dead_code)] // per platform
 fn linux_entry_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).or_else(|| Some(home()?.join(".config")))?;
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| Some(home()?.join(".config")))?;
     Some(base.join("autostart").join("claude-swap.desktop"))
 }
 
@@ -125,7 +128,11 @@ pub fn set_enabled(on: bool) -> Result<(), String> {
 #[cfg(not(windows))]
 fn entry_file() -> Option<(PathBuf, String)> {
     let exe = launch_target();
-    if cfg!(target_os = "macos") { Some((mac_plist_path()?, mac_plist(&exe))) } else { Some((linux_entry_path()?, desktop_entry(&exe))) }
+    if cfg!(target_os = "macos") {
+        Some((mac_plist_path()?, mac_plist(&exe)))
+    } else {
+        Some((linux_entry_path()?, desktop_entry(&exe)))
+    }
 }
 
 #[cfg(not(windows))]
@@ -168,6 +175,8 @@ mod tests {
         let d = desktop_entry(Path::new("/home/u/Apps/a $b.AppImage"));
         assert!(d.contains("Exec=\"/home/u/Apps/a \\$b.AppImage\" --hidden\n"), "{d}");
         let p = mac_plist(Path::new("/Applications/Claude Swap.app/Contents/MacOS/claude-swap"));
-        assert!(p.contains("<string>/Applications/Claude Swap.app/Contents/MacOS/claude-swap</string><string>--hidden</string>"));
+        assert!(p.contains(
+            "<string>/Applications/Claude Swap.app/Contents/MacOS/claude-swap</string><string>--hidden</string>"
+        ));
     }
 }

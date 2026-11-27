@@ -241,14 +241,21 @@ impl Core {
     #[allow(dead_code)]
     fn wait(&self, timeout: Duration) {
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            DispatchMessageW, MSG, MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx, PM_REMOVE, PeekMessageW, QS_ALLINPUT, TranslateMessage,
+            DispatchMessageW, MSG, MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx, PM_REMOVE, PeekMessageW,
+            QS_ALLINPUT, TranslateMessage,
         };
         // A channel cannot be waited on together with messages; the tray's clicks arrive as
         // messages anyway, and other wakes are picked up within 100 ms.
         let timeout = timeout.min(Duration::from_millis(100));
         // SAFETY: standard message pumping on this thread with a live MSG.
         unsafe {
-            MsgWaitForMultipleObjectsEx(0, std::ptr::null(), timeout.as_millis() as u32, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            MsgWaitForMultipleObjectsEx(
+                0,
+                std::ptr::null(),
+                timeout.as_millis() as u32,
+                QS_ALLINPUT,
+                MWMO_INPUTAVAILABLE,
+            );
             let mut msg: MSG = std::mem::zeroed();
             while PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
                 TranslateMessage(&msg);
@@ -332,7 +339,11 @@ fn native_options(visible: bool) -> eframe::NativeOptions {
 /// One eframe pass: from opening the window until it closes to the tray or the app exits.
 fn open_window(core: &mut Core, visible: bool) -> Result<(), String> {
     let c = &mut *core;
-    let r = eframe::run_native("Claude Swap", native_options(visible), Box::new(move |cc| Ok(Box::new(Window::new(cc, c, visible)))));
+    let r = eframe::run_native(
+        "Claude Swap",
+        native_options(visible),
+        Box::new(move |cc| Ok(Box::new(Window::new(cc, c, visible)))),
+    );
     // Whether or not eframe called `on_exit`: nothing may reach a window that is gone.
     core.control.set_window(None);
     core.sink.set_waker(None);

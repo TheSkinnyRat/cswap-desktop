@@ -42,10 +42,13 @@ pub struct Probe<'a> {
 /// A cargo build runs from `target/<profile>/`; it must never replace itself with a
 /// release download (and its "install folder" is the build tree).
 fn is_dev_build(exe: &Path) -> bool {
-    let parts: Vec<String> = exe.components().filter_map(|c| match c {
-        Component::Normal(s) => Some(s.to_string_lossy().to_ascii_lowercase()),
-        _ => None,
-    }).collect();
+    let parts: Vec<String> = exe
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s.to_string_lossy().to_ascii_lowercase()),
+            _ => None,
+        })
+        .collect();
     parts.windows(2).any(|w| w[0] == "target" && (w[1] == "debug" || w[1] == "release" || w[1].contains('-')))
 }
 
@@ -54,17 +57,18 @@ fn mac_bundle(exe: &Path) -> Option<PathBuf> {
     let macos = exe.parent()?;
     let contents = macos.parent()?;
     let bundle = contents.parent()?;
-    (macos.file_name()? == "MacOS" && contents.file_name()? == "Contents" && bundle.extension()? == "app").then(|| bundle.to_path_buf())
+    (macos.file_name()? == "MacOS" && contents.file_name()? == "Contents" && bundle.extension()? == "app")
+        .then(|| bundle.to_path_buf())
 }
 
 pub fn detect(p: &Probe<'_>) -> InstallKind {
-    if p.os == "linux" {
-        if let Some(file) = p.appimage.as_ref().filter(|f| f.has_root()) {
-            return match file.parent() {
-                Some(dir) if (p.writable)(dir) => InstallKind::AppImage { file: file.clone() },
-                _ => InstallKind::Link { reason: format!("{} is in a folder this user cannot write to", file.display()) },
-            };
-        }
+    if p.os == "linux"
+        && let Some(file) = p.appimage.as_ref().filter(|f| f.has_root())
+    {
+        return match file.parent() {
+            Some(dir) if (p.writable)(dir) => InstallKind::AppImage { file: file.clone() },
+            _ => InstallKind::Link { reason: format!("{} is in a folder this user cannot write to", file.display()) },
+        };
     }
     if is_dev_build(&p.exe) {
         return InstallKind::Dev;
@@ -135,7 +139,12 @@ impl Probe<'static> {
 mod tests {
     use super::*;
 
-    fn probe<'a>(os: &'a str, exe: &str, exists: &'a dyn Fn(&Path) -> bool, writable: &'a dyn Fn(&Path) -> bool) -> Probe<'a> {
+    fn probe<'a>(
+        os: &'a str,
+        exe: &str,
+        exists: &'a dyn Fn(&Path) -> bool,
+        writable: &'a dyn Fn(&Path) -> bool,
+    ) -> Probe<'a> {
         Probe { os, exe: PathBuf::from(exe), appimage: None, exists, writable }
     }
 
@@ -144,11 +153,23 @@ mod tests {
         let yes = |_: &Path| true;
         let no = |_: &Path| false;
         let uninst = |p: &Path| p.ends_with(UNINSTALLER);
-        assert!(matches!(detect(&probe("windows", r"C:\U\AppData\Local\Programs\cswap\Claude Swap.exe", &uninst, &yes)), InstallKind::Nsis { .. }));
-        assert!(matches!(detect(&probe("windows", r"D:\tools\claude-swap-desktop-win-x64-portable.exe", &no, &yes)), InstallKind::Portable { .. }));
+        assert!(matches!(
+            detect(&probe("windows", r"C:\U\AppData\Local\Programs\cswap\Claude Swap.exe", &uninst, &yes)),
+            InstallKind::Nsis { .. }
+        ));
+        assert!(matches!(
+            detect(&probe("windows", r"D:\tools\claude-swap-desktop-win-x64-portable.exe", &no, &yes)),
+            InstallKind::Portable { .. }
+        ));
         assert!(matches!(detect(&probe("windows", r"D:\ro\x.exe", &no, &no)), InstallKind::Link { .. }));
-        assert_eq!(detect(&probe("windows", r"D:\src\cswap\target\release\claude-swap.exe", &uninst, &yes)), InstallKind::Dev);
-        assert_eq!(detect(&probe("linux", "/src/target/x86_64-unknown-linux-gnu/release/claude-swap", &no, &yes)), InstallKind::Dev);
+        assert_eq!(
+            detect(&probe("windows", r"D:\src\cswap\target\release\claude-swap.exe", &uninst, &yes)),
+            InstallKind::Dev
+        );
+        assert_eq!(
+            detect(&probe("linux", "/src/target/x86_64-unknown-linux-gnu/release/claude-swap", &no, &yes)),
+            InstallKind::Dev
+        );
     }
 
     #[test]
@@ -156,7 +177,10 @@ mod tests {
         let yes = |_: &Path| true;
         let no = |_: &Path| false;
         let exe = "/Applications/Claude Swap.app/Contents/MacOS/claude-swap";
-        assert_eq!(detect(&probe("macos", exe, &no, &yes)), InstallKind::MacApp { bundle: PathBuf::from("/Applications/Claude Swap.app") });
+        assert_eq!(
+            detect(&probe("macos", exe, &no, &yes)),
+            InstallKind::MacApp { bundle: PathBuf::from("/Applications/Claude Swap.app") }
+        );
         assert!(matches!(detect(&probe("macos", exe, &no, &no)), InstallKind::Link { .. }));
         let tl = "/private/var/folders/x/T/AppTranslocation/ABC/d/Claude Swap.app/Contents/MacOS/claude-swap";
         match detect(&probe("macos", tl, &no, &yes)) {

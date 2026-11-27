@@ -90,11 +90,26 @@ mod tests {
     #[test]
     fn each_kind_wants_its_own_asset_and_its_signature() {
         let p = PathBuf::from("x");
-        assert_eq!(asset_name(&InstallKind::Nsis { exe: p.clone() }, "x86_64").unwrap(), "claude-swap-desktop-win-x64-setup.exe");
-        assert_eq!(asset_name(&InstallKind::Portable { exe: p.clone() }, "x86_64").unwrap(), "claude-swap-desktop-win-x64-portable.exe");
-        assert_eq!(asset_name(&InstallKind::MacApp { bundle: p.clone() }, "aarch64").unwrap(), "claude-swap-desktop-mac-arm64.dmg");
-        assert_eq!(asset_name(&InstallKind::MacApp { bundle: p.clone() }, "x86_64").unwrap(), "claude-swap-desktop-mac-x64.dmg");
-        assert_eq!(asset_name(&InstallKind::AppImage { file: p }, "x86_64").unwrap(), "claude-swap-desktop-linux-x86_64.AppImage");
+        assert_eq!(
+            asset_name(&InstallKind::Nsis { exe: p.clone() }, "x86_64").unwrap(),
+            "claude-swap-desktop-win-x64-setup.exe"
+        );
+        assert_eq!(
+            asset_name(&InstallKind::Portable { exe: p.clone() }, "x86_64").unwrap(),
+            "claude-swap-desktop-win-x64-portable.exe"
+        );
+        assert_eq!(
+            asset_name(&InstallKind::MacApp { bundle: p.clone() }, "aarch64").unwrap(),
+            "claude-swap-desktop-mac-arm64.dmg"
+        );
+        assert_eq!(
+            asset_name(&InstallKind::MacApp { bundle: p.clone() }, "x86_64").unwrap(),
+            "claude-swap-desktop-mac-x64.dmg"
+        );
+        assert_eq!(
+            asset_name(&InstallKind::AppImage { file: p }, "x86_64").unwrap(),
+            "claude-swap-desktop-linux-x86_64.AppImage"
+        );
         assert!(asset_name(&InstallKind::Link { reason: String::new() }, "x86_64").is_none());
         for kind_asset in ALL_ASSETS {
             assert!(!kind_asset.contains("1.0"), "asset names stay version-free: {kind_asset}");
@@ -111,7 +126,10 @@ mod tests {
         assert!(pick(&r, "claude-swap-desktop-win-x64-setup.exe").unwrap_err().contains("unsigned"));
         r.assets.push(asset("claude-swap-desktop-win-x64-setup.exe.sig"));
         let (a, s) = pick(&r, "claude-swap-desktop-win-x64-setup.exe").unwrap();
-        assert_eq!((a.name.as_str(), s.name.as_str()), ("claude-swap-desktop-win-x64-setup.exe", "claude-swap-desktop-win-x64-setup.exe.sig"));
+        assert_eq!(
+            (a.name.as_str(), s.name.as_str()),
+            ("claude-swap-desktop-win-x64-setup.exe", "claude-swap-desktop-win-x64-setup.exe.sig")
+        );
         assert!(pick(&r, "claude-swap-desktop-mac-x64.dmg").is_err());
     }
 }

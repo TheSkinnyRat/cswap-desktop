@@ -44,7 +44,11 @@ const ASSET: &str = "claude-swap-desktop-win-x64-portable.exe";
 
 fn temp_dir(tag: &str) -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
-    let d = std::env::temp_dir().join(format!("cswap-upd-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
+    let d = std::env::temp_dir().join(format!(
+        "cswap-upd-{tag}-{}-{}",
+        std::process::id(),
+        N.fetch_add(1, Ordering::SeqCst)
+    ));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
@@ -56,7 +60,9 @@ fn github(tag: &str, served: &[u8], signed: &[u8], with_sig: bool) -> FakeGithub
     let sig = sign::sign(&sign::tests::test_key(), ASSET, &version, &Sha512::digest(signed).into());
     let (tag, served) = (tag.to_string(), served.to_vec());
     serve(move |base| {
-        let mut assets = vec![serde_json::json!({"name": ASSET, "browser_download_url": format!("{base}/dl/{ASSET}"), "size": served.len()})];
+        let mut assets = vec![
+            serde_json::json!({"name": ASSET, "browser_download_url": format!("{base}/dl/{ASSET}"), "size": served.len()}),
+        ];
         if with_sig {
             assets.push(serde_json::json!({"name": format!("{ASSET}.sig"), "browser_download_url": format!("{base}/dl/{ASSET}.sig"), "size": sig.len()}));
         }
@@ -187,9 +193,23 @@ fn no_key_or_dev_build_means_disabled_and_no_request() {
     let cfg = UpdateConfig { repo: "o/r".into(), current: "1.0.0".into(), data_dir: temp_dir("off"), auto: false };
     let quit: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
     // An address nothing listens on: a request would fail as Error, not stay Disabled.
-    let u = Updater::with(cfg.clone(), sink.clone(), quit.clone(), InstallKind::Portable { exe: "x".into() }, Err("no key".into()), "http://127.0.0.1:9".into());
+    let u = Updater::with(
+        cfg.clone(),
+        sink.clone(),
+        quit.clone(),
+        InstallKind::Portable { exe: "x".into() },
+        Err("no key".into()),
+        "http://127.0.0.1:9".into(),
+    );
     assert_eq!(check(&u).status, UpdaterStatus::Disabled);
-    let u = Updater::with(cfg, sink, quit, InstallKind::Dev, Ok(sign::tests::test_key().verifying_key()), "http://127.0.0.1:9".into());
+    let u = Updater::with(
+        cfg,
+        sink,
+        quit,
+        InstallKind::Dev,
+        Ok(sign::tests::test_key().verifying_key()),
+        "http://127.0.0.1:9".into(),
+    );
     let s = check(&u);
     assert_eq!(s.status, UpdaterStatus::Disabled);
     assert!(s.disabled_reason.unwrap().contains("development"));

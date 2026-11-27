@@ -60,7 +60,14 @@ pub fn hand_over(kind: &InstallKind, dl: &Download, data_dir: &Path, relaunch: b
 
 // ---- Windows ----------------------------------------------------------------------
 
-fn spawn_windows_helper(mode: &str, pid: u32, dl: &Download, target: &Path, data_dir: &Path, relaunch: bool) -> Result<(), String> {
+fn spawn_windows_helper(
+    mode: &str,
+    pid: u32,
+    dl: &Download,
+    target: &Path,
+    data_dir: &Path,
+    relaunch: bool,
+) -> Result<(), String> {
     let me = std::env::current_exe().map_err(|e| format!("cannot find this exe: {e}"))?;
     let dir = updates_dir(data_dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -84,7 +91,11 @@ pub fn run_helper(args: &[std::ffi::OsString]) -> Result<(), String> {
     let s = |i: usize| args.get(i).map(PathBuf::from).ok_or_else(|| "update helper: missing argument".to_string());
     let mode = s(0)?.to_string_lossy().into_owned();
     let pid: u32 = s(1)?.to_string_lossy().parse().map_err(|_| "update helper: bad pid")?;
-    let dl = Download { file: s(2)?, asset: s(4)?.to_string_lossy().into_owned(), version: s(5)?.to_string_lossy().into_owned() };
+    let dl = Download {
+        file: s(2)?,
+        asset: s(4)?.to_string_lossy().into_owned(),
+        version: s(5)?.to_string_lossy().into_owned(),
+    };
     let target = s(3)?;
     let relaunch = s(6)?.to_string_lossy() == "1";
     let data_dir = s(7)?;
@@ -99,7 +110,14 @@ pub fn run_helper(args: &[std::ffi::OsString]) -> Result<(), String> {
     r
 }
 
-fn helper_steps(mode: &str, pid: u32, dl: &Download, target: &Path, relaunch: bool, key: &ed25519_dalek::VerifyingKey) -> Result<(), String> {
+fn helper_steps(
+    mode: &str,
+    pid: u32,
+    dl: &Download,
+    target: &Path,
+    relaunch: bool,
+    key: &ed25519_dalek::VerifyingKey,
+) -> Result<(), String> {
     if !wait_for_exit(pid, WAIT_FOR_EXIT) {
         return Err(format!("Claude Swap (pid {pid}) did not exit within {}s", WAIT_FOR_EXIT.as_secs()));
     }
@@ -167,7 +185,12 @@ fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
 fn wait_for_exit(pid: u32, timeout: Duration) -> bool {
     let start = std::time::Instant::now();
     while start.elapsed() < timeout {
-        let alive = Command::new("/bin/kill").arg("-0").arg(pid.to_string()).stderr(std::process::Stdio::null()).status().is_ok_and(|s| s.success());
+        let alive = Command::new("/bin/kill")
+            .arg("-0")
+            .arg(pid.to_string())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
         if !alive {
             return true;
         }
@@ -215,7 +238,8 @@ fn after_exit(_pid: u32, _script: &str, _args: &[&std::ffi::OsStr]) -> Result<()
 }
 
 fn run(cmd: &str, args: &[&std::ffi::OsStr]) -> Result<String, String> {
-    let out = Command::new(cmd).args(args).stdin(std::process::Stdio::null()).output().map_err(|e| format!("{cmd}: {e}"))?;
+    let out =
+        Command::new(cmd).args(args).stdin(std::process::Stdio::null()).output().map_err(|e| format!("{cmd}: {e}"))?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
@@ -232,12 +256,28 @@ fn mac_hand_over(pid: u32, dl: &Download, bundle: &Path, relaunch: bool) -> Resu
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&mount).map_err(|e| format!("cannot create {}: {e}", mount.display()))?;
     // The DMG's own checksum pass is redundant after the signature check.
-    run("/usr/bin/hdiutil", &["attach".as_ref(), "-nobrowse".as_ref(), "-readonly".as_ref(), "-noautoopen".as_ref(), "-noverify".as_ref(), "-mountpoint".as_ref(), mount.as_os_str(), dl.file.as_os_str()])?;
+    run(
+        "/usr/bin/hdiutil",
+        &[
+            "attach".as_ref(),
+            "-nobrowse".as_ref(),
+            "-readonly".as_ref(),
+            "-noautoopen".as_ref(),
+            "-noverify".as_ref(),
+            "-mountpoint".as_ref(),
+            mount.as_os_str(),
+            dl.file.as_os_str(),
+        ],
+    )?;
     let src = mount.join("Claude Swap.app");
     // --noextattr: the volume's Finder metadata on the files makes `codesign --verify
     // --strict` reject the copy as carrying "detritus"; the signature lives in the files.
     let copied = if src.is_dir() {
-        run("/usr/bin/ditto", &["--norsrc".as_ref(), "--noextattr".as_ref(), "--noacl".as_ref(), src.as_os_str(), staging.as_os_str()]).map(|_| ())
+        run(
+            "/usr/bin/ditto",
+            &["--norsrc".as_ref(), "--noextattr".as_ref(), "--noacl".as_ref(), src.as_os_str(), staging.as_os_str()],
+        )
+        .map(|_| ())
     } else {
         Err("the disk image does not contain Claude Swap.app".into())
     };

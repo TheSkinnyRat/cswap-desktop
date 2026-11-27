@@ -53,7 +53,8 @@ fn start_driver(data_dir: PathBuf, sink: EventSink) -> (Arc<dyn Cswap>, Box<dyn 
 /// A copy the app may let rewire the user's login items: not a cargo build, not a test run
 /// with its own data dir (0.1.23 checked `app.isPackaged`).
 fn packaged() -> bool {
-    std::env::var_os("CSWAP_DESKTOP_USERDATA").is_none() && cswap_update::kind::Probe::current() != cswap_update::kind::InstallKind::Dev
+    std::env::var_os("CSWAP_DESKTOP_USERDATA").is_none()
+        && cswap_update::kind::Probe::current() != cswap_update::kind::InstallKind::Dev
 }
 
 fn main() -> ExitCode {
@@ -103,7 +104,12 @@ fn main() -> ExitCode {
         Arc::new(move || c.request_quit()) as Arc<dyn Fn() + Send + Sync>
     };
     let updater = Updater::start(
-        UpdateConfig { repo: REPO.into(), current: env!("CARGO_PKG_VERSION").into(), data_dir: data.clone(), auto: settings.auto_update },
+        UpdateConfig {
+            repo: REPO.into(),
+            current: env!("CARGO_PKG_VERSION").into(),
+            data_dir: data.clone(),
+            auto: settings.auto_update,
+        },
         sink.clone(),
         quit,
     );
@@ -111,10 +117,12 @@ fn main() -> ExitCode {
         let c = control.clone();
         p.on_show(move || c.request_show());
     }
-    *control.model.lock().unwrap_or_else(|p| p.into_inner()) = tray::Model::from_state(&cswap.accounts(), &cswap.auto_status());
+    *control.model.lock().unwrap_or_else(|p| p.into_inner()) =
+        tray::Model::from_state(&cswap.accounts(), &cswap.auto_status());
     spawn_router(events, control.clone(), cswap.clone(), updater.clone(), settings.clone());
 
-    let services = Services { cswap, updates: updater.clone(), host: Arc::new(host::DesktopHost { control: control.clone() }) };
+    let services =
+        Services { cswap, updates: updater.clone(), host: Arc::new(host::DesktopHost { control: control.clone() }) };
     let core = shell::Core::new(services, sink, control, woken);
     let show = !(hidden || settings.start_minimized);
     let result = shell::run(core, show);
@@ -134,7 +142,13 @@ fn main() -> ExitCode {
 
 /// Every pushed event passes here: the tray's model, auto-switch notifications, settings
 /// that the app itself acts on, then on to the window if one is open.
-fn spawn_router(events: Receiver<Event>, control: Arc<Control>, cswap: Arc<dyn Cswap>, updater: Arc<Updater>, mut last: AppSettings) {
+fn spawn_router(
+    events: Receiver<Event>,
+    control: Arc<Control>,
+    cswap: Arc<dyn Cswap>,
+    updater: Arc<Updater>,
+    mut last: AppSettings,
+) {
     let packaged = packaged();
     std::thread::Builder::new()
         .name("event-router".into())
@@ -160,7 +174,10 @@ fn spawn_router(events: Receiver<Event>, control: Arc<Control>, cswap: Arc<dyn C
                     Event::Settings(s) => {
                         // As 0.1.23's setSettings: the login item follows a CHANGE of the
                         // setting, in a packaged copy only.
-                        if s.launch_at_login != last.launch_at_login && packaged && autostart::is_enabled() != s.launch_at_login {
+                        if s.launch_at_login != last.launch_at_login
+                            && packaged
+                            && autostart::is_enabled() != s.launch_at_login
+                        {
                             if let Err(e) = autostart::set_enabled(s.launch_at_login) {
                                 tracing::warn!("launch at login: {e}");
                             }

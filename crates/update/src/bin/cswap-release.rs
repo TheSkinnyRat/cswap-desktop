@@ -72,7 +72,8 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         "sign" => {
             let v = version()?;
-            let raw = std::env::var(sign::SIGNING_KEY_ENV).map_err(|_| format!("${} is not set", sign::SIGNING_KEY_ENV))?;
+            let raw =
+                std::env::var(sign::SIGNING_KEY_ENV).map_err(|_| format!("${} is not set", sign::SIGNING_KEY_ENV))?;
             let key = sign::signing_key(&raw)?;
             if o.files.is_empty() {
                 return Err("no files to sign".into());

@@ -31,8 +31,12 @@ mod imp {
     use std::path::Path;
     use std::sync::Arc;
 
-    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, WAIT_OBJECT_0};
-    use windows_sys::Win32::System::Threading::{CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, INFINITE, OpenEventW, SetEvent, WaitForSingleObject};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, WAIT_OBJECT_0,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, INFINITE, OpenEventW, SetEvent, WaitForSingleObject,
+    };
 
     use super::{Claim, key_for};
 
@@ -169,7 +173,10 @@ mod tests {
 
     #[test]
     fn key_ignores_case_and_trailing_separator() {
-        assert_eq!(key_for(Path::new(r"C:\Users\P\AppData\Roaming\cswap-desktop")), key_for(Path::new(r"c:\users\p\appdata\roaming\CSWAP-DESKTOP\")));
+        assert_eq!(
+            key_for(Path::new(r"C:\Users\P\AppData\Roaming\cswap-desktop")),
+            key_for(Path::new(r"c:\users\p\appdata\roaming\CSWAP-DESKTOP\"))
+        );
         assert_ne!(key_for(Path::new("/a")), key_for(Path::new("/b")));
     }
 

@@ -48,10 +48,18 @@ mod tests {
 
     #[test]
     fn switch_events_read_as_0_1_23() {
-        let e = ev(r#"{"schemaVersion":1,"event":"switch","ts":"t","to":{"number":3,"email":"c@example.com"},"trigger":"five_hour>=90"}"#);
-        assert_eq!(text(&e).unwrap(), ("cswap switched account".into(), "Now on Account-3 (c@example.com) · five_hour>=90".into()));
+        let e = ev(
+            r#"{"schemaVersion":1,"event":"switch","ts":"t","to":{"number":3,"email":"c@example.com"},"trigger":"five_hour>=90"}"#,
+        );
+        assert_eq!(
+            text(&e).unwrap(),
+            ("cswap switched account".into(), "Now on Account-3 (c@example.com) · five_hour>=90".into())
+        );
         let e = ev(r#"{"event":"switch","dryRun":true,"to":{"email":"c@example.com"}}"#);
-        assert_eq!(text(&e).unwrap(), ("cswap would switch (dry run)".into(), "Now on Account-? (c@example.com) · ".into()));
+        assert_eq!(
+            text(&e).unwrap(),
+            ("cswap would switch (dry run)".into(), "Now on Account-? (c@example.com) · ".into())
+        );
         let e = ev(r#"{"event":"switch","to":null,"trigger":"manual"}"#);
         assert_eq!(text(&e).unwrap().1, "manual");
         assert!(text(&ev(r#"{"event":"poll"}"#)).is_none());

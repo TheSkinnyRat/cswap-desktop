@@ -184,7 +184,9 @@ mod native {
             })));
             TrayIconEvent::set_event_handler(Some(move |e: TrayIconEvent| {
                 let a = match e {
-                    TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => Action::Toggle,
+                    TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => {
+                        Action::Toggle
+                    }
                     TrayIconEvent::DoubleClick { button: MouseButton::Left, .. } => Action::Open,
                     _ => return,
                 };
@@ -220,7 +222,9 @@ mod native {
             for entry in menu(m) {
                 let _ = match entry {
                     Entry::Separator => built.append(&PredefinedMenuItem::separator()),
-                    Entry::Item { text, enabled, action } => built.append(&MenuItem::with_id(action_id(&action), text, enabled, None)),
+                    Entry::Item { text, enabled, action } => {
+                        built.append(&MenuItem::with_id(action_id(&action), text, enabled, None))
+                    }
                 };
             }
             self.icon.set_menu(Some(Box::new(built)));
@@ -272,7 +276,10 @@ mod tests {
 
     #[test]
     fn menu_switches_to_inactive_accounts_only_and_follows_auto() {
-        let m = Model { accounts: vec![acct(1, "a@example.com", true), acct(2, "b@example.com", false)], auto: AutoStatus::default() };
+        let m = Model {
+            accounts: vec![acct(1, "a@example.com", true), acct(2, "b@example.com", false)],
+            auto: AutoStatus::default(),
+        };
         let items: Vec<(String, bool, Action)> = menu(&m)
             .into_iter()
             .filter_map(|e| match e {
@@ -283,13 +290,25 @@ mod tests {
         let texts: Vec<&str> = items.iter().map(|i| i.0.as_str()).collect();
         assert_eq!(
             texts,
-            ["Open Claude Swap", "● 1. a@example.com", "   2. b@example.com", "Rotate to next", "Switch to best", "Refresh usage", "Start auto-switch", "Quit"]
+            [
+                "Open Claude Swap",
+                "● 1. a@example.com",
+                "   2. b@example.com",
+                "Rotate to next",
+                "Switch to best",
+                "Refresh usage",
+                "Start auto-switch",
+                "Quit"
+            ]
         );
         assert!(!items[1].1, "the active account is not offered");
         assert_eq!((items[2].1, &items[2].2), (true, &Action::Switch(2)));
         assert!(items[3].1 && items[4].1);
 
-        let one = Model { accounts: vec![acct(1, "a@example.com", true)], auto: AutoStatus { running: true, dry_run: Some(true), ..Default::default() } };
+        let one = Model {
+            accounts: vec![acct(1, "a@example.com", true)],
+            auto: AutoStatus { running: true, dry_run: Some(true), ..Default::default() },
+        };
         let m1 = menu(&one);
         assert!(m1.contains(&item("Rotate to next", false, Action::RotateNext)));
         assert!(m1.contains(&item("Stop auto-switch (dry run)", true, Action::ToggleAuto)));
@@ -300,7 +319,15 @@ mod tests {
 
     #[test]
     fn menu_ids_round_trip() {
-        for a in [Action::Open, Action::Switch(12), Action::RotateNext, Action::SwitchBest, Action::Refresh, Action::ToggleAuto, Action::Quit] {
+        for a in [
+            Action::Open,
+            Action::Switch(12),
+            Action::RotateNext,
+            Action::SwitchBest,
+            Action::Refresh,
+            Action::ToggleAuto,
+            Action::Quit,
+        ] {
             assert_eq!(native::action_of(&native::action_id(&a)), Some(a));
         }
         assert_eq!(native::action_of("switch:x"), None);

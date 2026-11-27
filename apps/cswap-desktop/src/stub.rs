@@ -43,11 +43,15 @@ impl StubCswap {
         let payload = ListPayload {
             schema_version: 1,
             active_account_number: Some(1),
-            accounts: vec![account(1, "alice@example.com", true, 12.0, 40.0), account(2, "bob@example.com", false, 80.0, 55.0)],
+            accounts: vec![
+                account(1, "alice@example.com", true, 12.0, 40.0),
+                account(2, "bob@example.com", false, 80.0, 55.0),
+            ],
             ..Default::default()
         };
         let accounts = AccountsState { payload: Some(payload), fetched_at: Some("now".into()), ..Default::default() };
-        let s = Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), AppSettings::default())) });
+        let s =
+            Arc::new(StubCswap { sink, state: Mutex::new((accounts, AutoStatus::default(), AppSettings::default())) });
         let st = s.state.lock().unwrap().0.clone();
         s.sink.send(Event::Accounts(st));
         s
@@ -60,7 +64,8 @@ impl StubCswap {
     }
 
     fn set_auto(&self, running: bool, dry: bool) -> AutoStatus {
-        let st = AutoStatus { running, dry_run: running.then_some(dry), pid: running.then_some(1), ..Default::default() };
+        let st =
+            AutoStatus { running, dry_run: running.then_some(dry), pid: running.then_some(1), ..Default::default() };
         self.state.lock().unwrap().1 = st.clone();
         self.sink.send(Event::AutoStatus(st.clone()));
         st
@@ -185,7 +190,12 @@ impl Cswap for StubCswap {
         s
     }
     fn binary(&self) -> Option<CswapBinaryInfo> {
-        Some(CswapBinaryInfo { path: Some("stub".into()), source: BinarySource::Env, version: Some("stub".into()), ..Default::default() })
+        Some(CswapBinaryInfo {
+            path: Some("stub".into()),
+            source: BinarySource::Env,
+            version: Some("stub".into()),
+            ..Default::default()
+        })
     }
     fn detect_binary(&self) -> Pending<CswapBinaryInfo> {
         Pending::ready(self.binary().unwrap_or_default())
