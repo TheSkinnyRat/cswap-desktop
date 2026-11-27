@@ -19,8 +19,9 @@
 ;   --force-run   start the app when done; the finish page is skipped then
 ;   --updated     passed by electron-updater and by v1's helper; ignored
 ;
-; Test seam: /DAPP_GUID=<x> /DSHORTCUT=<name> /DRUN_VALUE=<name> /DDEFAULT_DIR=<dir> make a
-; build that cannot touch a real install's entry, shortcut or login item.
+; Test seam: /DAPP_GUID=<x> /DSHORTCUT=<name> /DRUN_VALUE=<name> /DDEFAULT_DIR=<dir>
+; /DUPDATER_CACHE=<name> make a build that cannot touch a real install's entry, shortcut,
+; login item or download cache.
 
 Unicode true
 ManifestDPIAware true
@@ -51,6 +52,10 @@ SetCompressor /SOLID lzma
 ; Electron's login item for 0.1.x (apps/cswap-desktop/src/autostart.rs).
 !ifndef RUN_VALUE
   !define RUN_VALUE "electron.app.Claude Swap"
+!endif
+; electron-updater's download cache for 0.1.x (`updaterCacheDirName` in app-update.yml).
+!ifndef UPDATER_CACHE
+  !define UPDATER_CACHE "cswap-desktop-updater"
 !endif
 !ifndef DEFAULT_DIR
   !define DEFAULT_DIR "$LOCALAPPDATA\Programs\cswap"
@@ -213,7 +218,7 @@ Section "Install"
   CreateShortCut "$SMPROGRAMS\${SHORTCUT}.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0
 
   ; electron-updater's download cache: ~230 MB of old installers nobody will run again.
-  RMDir /r "$LOCALAPPDATA\cswap-desktop-updater"
+  RMDir /r "$LOCALAPPDATA\${UPDATER_CACHE}"
 
   ${If} $ForceRun == "1"
     Call LaunchApp
