@@ -94,11 +94,18 @@ pub fn window_cells(a: &Account, models: &[String], cards: bool) -> Vec<WindowCe
         },
     ];
     for m in models {
-        let w = u.and_then(|u| u.scoped.as_ref()).and_then(|s| s.iter().find(|s| &s.name == m)).map(|s| s.window.clone());
+        let w =
+            u.and_then(|u| u.scoped.as_ref()).and_then(|s| s.iter().find(|s| &s.name == m)).map(|s| s.window.clone());
         if cards && w.is_none() {
             continue;
         }
-        cells.push(WindowCell { key: format!("model-{m}"), tooltip_name: m.clone(), card_name: m.clone(), window: w, is_model: true });
+        cells.push(WindowCell {
+            key: format!("model-{m}"),
+            tooltip_name: m.clone(),
+            card_name: m.clone(),
+            window: w,
+            is_model: true,
+        });
     }
     cells
 }
@@ -179,7 +186,10 @@ pub fn plan_tooltip(plan: &PlanInfo, active: bool, now_ms: i64, offset_secs: i64
             None => format!("Subscription: {}", plan.label),
         }
     } else {
-        format!("Subscription when this account was last active, {}", clock_of(Some(&plan.seen_at), now_ms, offset_secs))
+        format!(
+            "Subscription when this account was last active, {}",
+            clock_of(Some(&plan.seen_at), now_ms, offset_secs)
+        )
     }
 }
 
@@ -339,7 +349,11 @@ pub fn describe_event(ev: &AutoEvent, now_ms: i64, offset_secs: i64) -> String {
             if let Some(Value::Object(w)) = field(ev, "windowsPct") {
                 for (n, wins) in sorted_entries(w) {
                     let inner = match wins {
-                        Value::Object(m) => sorted_entries(m).iter().map(|(k, v)| format!("{k} {}%", round(v))).collect::<Vec<_>>().join(" · "),
+                        Value::Object(m) => sorted_entries(m)
+                            .iter()
+                            .map(|(k, v)| format!("{k} {}%", round(v)))
+                            .collect::<Vec<_>>()
+                            .join(" · "),
                         _ => String::new(),
                     };
                     parts.push(format!("#{n} {inner}"));
@@ -349,7 +363,10 @@ pub fn describe_event(ev: &AutoEvent, now_ms: i64, offset_secs: i64) -> String {
                 && let Some(Value::Object(h)) = field(ev, "headroomPct")
             {
                 for (n, v) in sorted_entries(h) {
-                    let used = v.as_f64().map(|f| format!("{}%", (100.0 - f + 0.5).floor() as i64)).unwrap_or_else(|| "?".into());
+                    let used = v
+                        .as_f64()
+                        .map(|f| format!("{}%", (100.0 - f + 0.5).floor() as i64))
+                        .unwrap_or_else(|| "?".into());
                     parts.push(format!("#{n} {used}"));
                 }
             }
@@ -382,7 +399,11 @@ pub fn describe_event(ev: &AutoEvent, now_ms: i64, offset_secs: i64) -> String {
         }
         "sleep" => {
             let until = js_string(field(ev, "until"));
-            format!("next check in {}s ({})", js_string(field(ev, "seconds")), clock_of(Some(&until), now_ms, offset_secs))
+            format!(
+                "next check in {}s ({})",
+                js_string(field(ev, "seconds")),
+                clock_of(Some(&until), now_ms, offset_secs)
+            )
         }
         "account-quarantined" | "account-unquarantined" => format!(
             "Account-{} ({}) · {}",

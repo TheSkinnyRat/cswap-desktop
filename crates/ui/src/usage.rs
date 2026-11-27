@@ -75,7 +75,8 @@ pub fn bar(ui: &mut Ui, t: &Tokens, id: Id, pct: Option<f64>, tone: Tone, pace: 
     }
     if let Some(m) = pace {
         let x = pace_x(track, m);
-        let r = Rect::from_min_max(pos2(x - 1.0, track.min.y - MARK_OVERHANG), pos2(x + 1.0, track.max.y + MARK_OVERHANG));
+        let r =
+            Rect::from_min_max(pos2(x - 1.0, track.min.y - MARK_OVERHANG), pos2(x + 1.0, track.max.y + MARK_OVERHANG));
         p.rect_filled(r, CornerRadius::same(1), t.text_2);
     }
     resp
@@ -108,7 +109,11 @@ pub fn ring(
     let hover = ui.ctx().animate_bool_with_time(id.with("hover"), resp.hovered(), crate::theme::TRANSITION_SECS);
     let p = ui.painter();
     if hover > 0.0 {
-        p.rect_filled(rect, CornerRadius::same(crate::theme::RADIUS_MD - 1), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, hover));
+        p.rect_filled(
+            rect,
+            CornerRadius::same(crate::theme::RADIUS_MD - 1),
+            Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, hover),
+        );
     }
     let c = pos2(rect.min.x + 4.0 + RING / 2.0, rect.center().y);
     p.circle_stroke(c, RING_R, Stroke::new(RING_STROKE, t.border_strong.gamma_multiply(0.4)));

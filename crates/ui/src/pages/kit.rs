@@ -20,14 +20,26 @@ pub fn mono(size: f32) -> FontId {
 }
 
 /// Text cut to `width` with an ellipsis, one line.
-pub fn galley(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+pub fn galley(
+    ui: &Ui,
+    text: impl Into<String>,
+    font: FontId,
+    color: Color32,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::simple_singleline(text.into(), font, color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(1.0));
     ui.painter().layout_job(job)
 }
 
 /// Wrapped text, `width` wide.
-pub fn wrapped(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+pub fn wrapped(
+    ui: &Ui,
+    text: impl Into<String>,
+    font: FontId,
+    color: Color32,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
     ui.painter().layout(text.into(), font, color, width.max(1.0))
 }
 
@@ -123,13 +135,16 @@ pub fn paint_icon(p: &egui::Painter, c: Pos2, icon: Icon, color: Color32) {
             // Dashed circle: eight short arcs.
             for i in 0..8 {
                 let a0 = i as f32 * std::f32::consts::TAU / 8.0;
-                let pts: Vec<Pos2> = (0..=3).map(|k| a0 + k as f32 * 0.16).map(|a| c + vec2(a.cos(), a.sin()) * 5.5).collect();
+                let pts: Vec<Pos2> =
+                    (0..=3).map(|k| a0 + k as f32 * 0.16).map(|a| c + vec2(a.cos(), a.sin()) * 5.5).collect();
                 p.add(egui::Shape::line(pts, s));
             }
         }
         Icon::Gauge | Icon::GaugeOff => {
-            let pts: Vec<Pos2> =
-                (0..=16).map(|k| std::f32::consts::PI * (1.0 + k as f32 / 16.0)).map(|a| c + vec2(a.cos(), a.sin()) * 6.0 + vec2(0.0, 2.0)).collect();
+            let pts: Vec<Pos2> = (0..=16)
+                .map(|k| std::f32::consts::PI * (1.0 + k as f32 / 16.0))
+                .map(|a| c + vec2(a.cos(), a.sin()) * 6.0 + vec2(0.0, 2.0))
+                .collect();
             p.add(egui::Shape::line(pts, s));
             l((0.0, 2.0), (3.0, -2.5));
             if icon == Icon::GaugeOff {
@@ -137,8 +152,14 @@ pub fn paint_icon(p: &egui::Painter, c: Pos2, icon: Icon, color: Color32) {
             }
         }
         Icon::Eye | Icon::EyeOff => {
-            let top: Vec<Pos2> = (0..=12).map(|k| -6.5 + k as f32 * 13.0 / 12.0).map(|x| pos2(c.x + x, c.y - 4.0 * (1.0 - (x / 6.5).powi(2)))).collect();
-            let bot: Vec<Pos2> = (0..=12).map(|k| -6.5 + k as f32 * 13.0 / 12.0).map(|x| pos2(c.x + x, c.y + 4.0 * (1.0 - (x / 6.5).powi(2)))).collect();
+            let top: Vec<Pos2> = (0..=12)
+                .map(|k| -6.5 + k as f32 * 13.0 / 12.0)
+                .map(|x| pos2(c.x + x, c.y - 4.0 * (1.0 - (x / 6.5).powi(2))))
+                .collect();
+            let bot: Vec<Pos2> = (0..=12)
+                .map(|k| -6.5 + k as f32 * 13.0 / 12.0)
+                .map(|x| pos2(c.x + x, c.y + 4.0 * (1.0 - (x / 6.5).powi(2))))
+                .collect();
             p.add(egui::Shape::line(top, s));
             p.add(egui::Shape::line(bot, s));
             p.circle_stroke(c, 1.8, s);
@@ -190,8 +211,18 @@ pub fn paint_icon(p: &egui::Painter, c: Pos2, icon: Icon, color: Color32) {
             p.add(egui::Shape::convex_polygon(pts, Color32::TRANSPARENT, s));
         }
         Icon::Pause => {
-            p.rect_stroke(Rect::from_center_size(pos2(c.x - 2.5, c.y), vec2(2.5, 10.0)), CornerRadius::same(1), s, StrokeKind::Middle);
-            p.rect_stroke(Rect::from_center_size(pos2(c.x + 2.5, c.y), vec2(2.5, 10.0)), CornerRadius::same(1), s, StrokeKind::Middle);
+            p.rect_stroke(
+                Rect::from_center_size(pos2(c.x - 2.5, c.y), vec2(2.5, 10.0)),
+                CornerRadius::same(1),
+                s,
+                StrokeKind::Middle,
+            );
+            p.rect_stroke(
+                Rect::from_center_size(pos2(c.x + 2.5, c.y), vec2(2.5, 10.0)),
+                CornerRadius::same(1),
+                s,
+                StrokeKind::Middle,
+            );
         }
         Icon::Zap => {
             let pts = [(1.0, -6.0), (-4.5, 1.0), (0.0, 1.0), (-1.0, 6.0), (4.5, -1.0), (0.0, -1.0), (1.0, -6.0)];
@@ -284,7 +315,8 @@ impl<'a> Btn<'a> {
         }
         let tw = ui.painter().layout_no_wrap(self.label.to_owned(), font(size), Color32::WHITE).size().x;
         let gap = if self.small { 6.0 } else { 8.0 };
-        let icons = (self.icon.is_some() || self.loading) as u8 as f32 * (14.0 + gap) + self.trailing.is_some() as u8 as f32 * (12.0 + gap);
+        let icons = (self.icon.is_some() || self.loading) as u8 as f32 * (14.0 + gap)
+            + self.trailing.is_some() as u8 as f32 * (12.0 + gap);
         (pad * 2.0 + tw + icons).max(self.min_width)
     }
 
@@ -297,10 +329,21 @@ impl<'a> Btn<'a> {
         resp.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &name));
         let k = hover_t(ui, &resp);
         let (fill, fill_h, stroke, stroke_h, fg, fg_h) = match self.variant {
-            Variant::Primary => (t.accent, t.accent_hover, Color32::TRANSPARENT, Color32::TRANSPARENT, t.accent_fg, t.accent_fg),
+            Variant::Primary => {
+                (t.accent, t.accent_hover, Color32::TRANSPARENT, Color32::TRANSPARENT, t.accent_fg, t.accent_fg)
+            }
             Variant::Default => (t.surface, t.surface_2, t.border, t.border_strong, t.text, t.text),
-            Variant::Ghost => (Color32::TRANSPARENT, t.surface_2, Color32::TRANSPARENT, Color32::TRANSPARENT, t.text_2, t.text),
-            Variant::Danger => (t.danger, t.danger.gamma_multiply(1.1), Color32::TRANSPARENT, Color32::TRANSPARENT, Color32::WHITE, Color32::WHITE),
+            Variant::Ghost => {
+                (Color32::TRANSPARENT, t.surface_2, Color32::TRANSPARENT, Color32::TRANSPARENT, t.text_2, t.text)
+            }
+            Variant::Danger => (
+                t.danger,
+                t.danger.gamma_multiply(1.1),
+                Color32::TRANSPARENT,
+                Color32::TRANSPARENT,
+                Color32::WHITE,
+                Color32::WHITE,
+            ),
         };
         let mix = |a: Color32, b: Color32| a.lerp_to_gamma(b, k);
         let (mut fill, mut stroke, mut fg) = (mix(fill, fill_h), mix(stroke, stroke_h), mix(fg, fg_h));
@@ -323,7 +366,8 @@ impl<'a> Btn<'a> {
         if self.loading {
             let a = ui.input(|i| i.time) as f32 * 6.0;
             let c = pos2(x + 7.0, rect.center().y);
-            let pts: Vec<Pos2> = (0..=12).map(|k| a + k as f32 * 0.4).map(|a| c + vec2(a.cos(), a.sin()) * 5.0).collect();
+            let pts: Vec<Pos2> =
+                (0..=12).map(|k| a + k as f32 * 0.4).map(|a| c + vec2(a.cos(), a.sin()) * 5.0).collect();
             p.add(egui::Shape::line(pts, Stroke::new(1.5, fg)));
             ui.ctx().request_repaint();
             x += 14.0 + gap;
@@ -343,7 +387,8 @@ impl<'a> Btn<'a> {
 
 /// `Switch`: 30×18 toggle.
 pub fn switch(ui: &mut Ui, t: &Tokens, on: &mut bool, label: &str, enabled: bool) -> Response {
-    let (rect, mut resp) = ui.allocate_exact_size(vec2(30.0, 18.0), if enabled { Sense::click() } else { Sense::hover() });
+    let (rect, mut resp) =
+        ui.allocate_exact_size(vec2(30.0, 18.0), if enabled { Sense::click() } else { Sense::hover() });
     if resp.clicked() {
         *on = !*on;
         resp.mark_changed();
@@ -354,7 +399,13 @@ pub fn switch(ui: &mut Ui, t: &Tokens, on: &mut bool, label: &str, enabled: bool
     let (bg, border) = if *on { (t.accent, t.accent) } else { (t.surface_3, t.border_strong) };
     let a = if enabled { 1.0 } else { 0.5 };
     let p = ui.painter();
-    p.rect(rect, CornerRadius::same(9), bg.gamma_multiply(a), Stroke::new(1.0, border.gamma_multiply(a)), StrokeKind::Inside);
+    p.rect(
+        rect,
+        CornerRadius::same(9),
+        bg.gamma_multiply(a),
+        Stroke::new(1.0, border.gamma_multiply(a)),
+        StrokeKind::Inside,
+    );
     let x = egui::lerp(rect.min.x + 9.0..=rect.max.x - 9.0, k);
     p.circle_filled(pos2(x, rect.center().y), 6.0, Color32::WHITE.gamma_multiply(a));
     resp
@@ -362,7 +413,16 @@ pub fn switch(ui: &mut Ui, t: &Tokens, on: &mut bool, label: &str, enabled: bool
 
 #[allow(clippy::too_many_arguments)]
 /// A single-line input in the 0.1.23 frame (32 px, 7 px radius, accent on focus).
-pub fn input(ui: &mut Ui, t: &Tokens, value: &mut String, id: &str, hint: &str, width: f32, mono_font: bool, password: bool) -> Response {
+pub fn input(
+    ui: &mut Ui,
+    t: &Tokens,
+    value: &mut String,
+    id: &str,
+    hint: &str,
+    width: f32,
+    mono_font: bool,
+    password: bool,
+) -> Response {
     let f = if mono_font { mono(12.0) } else { font(13.0) };
     let frame = egui::Frame::new()
         .fill(t.surface)
@@ -379,7 +439,12 @@ pub fn input(ui: &mut Ui, t: &Tokens, value: &mut String, id: &str, hint: &str, 
         .desired_width(width - 18.0);
     let resp = edit.show(ui).response.response;
     if resp.has_focus() {
-        ui.painter().rect_stroke(resp.rect, CornerRadius::same(RADIUS_MD), Stroke::new(1.0, t.accent), StrokeKind::Inside);
+        ui.painter().rect_stroke(
+            resp.rect,
+            CornerRadius::same(RADIUS_MD),
+            Stroke::new(1.0, t.accent),
+            StrokeKind::Inside,
+        );
     }
     resp
 }
@@ -421,7 +486,12 @@ pub fn menu(ui: &Ui, t: &Tokens, anchor: &Response, width: f32, items: &[Option<
         .stroke(Stroke::new(1.0, t.border))
         .corner_radius(CornerRadius::same(RADIUS_LG - 2))
         .inner_margin(egui::Margin::same(4))
-        .shadow(egui::Shadow { offset: [0, 8], blur: 24, spread: 0, color: Color32::from_black_alpha(if t.dark { 90 } else { 30 }) });
+        .shadow(egui::Shadow {
+            offset: [0, 8],
+            blur: 24,
+            spread: 0,
+            color: Color32::from_black_alpha(if t.dark { 90 } else { 30 }),
+        });
     let _ = ui;
     egui::Popup::menu(anchor).width(width).frame(frame).gap(4.0).show(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -435,7 +505,11 @@ pub fn menu(ui: &Ui, t: &Tokens, anchor: &Response, width: f32, items: &[Option<
             resp.widget_info(|| WidgetInfo::labeled(Role::MenuItem, true, it.label));
             let k = hover_t(ui, &resp);
             let (fg, hover_bg) = if it.danger { (t.danger, t.danger_soft) } else { (t.text, t.surface_2) };
-            ui.painter().rect_filled(r, CornerRadius::same(RADIUS_MD - 1), Color32::TRANSPARENT.lerp_to_gamma(hover_bg, k));
+            ui.painter().rect_filled(
+                r,
+                CornerRadius::same(RADIUS_MD - 1),
+                Color32::TRANSPARENT.lerp_to_gamma(hover_bg, k),
+            );
             let mut right = r.max.x - 8.0;
             if let Some(h) = it.hint {
                 let g = ui.painter().layout_no_wrap(h.to_owned(), font(11.0), t.text_3);
@@ -475,7 +549,12 @@ pub fn dialog(
         .fill(t.surface)
         .stroke(Stroke::new(1.0, t.border))
         .corner_radius(CornerRadius::same(12))
-        .shadow(egui::Shadow { offset: [0, 16], blur: 40, spread: 0, color: Color32::from_black_alpha(if t.dark { 120 } else { 45 }) });
+        .shadow(egui::Shadow {
+            offset: [0, 16],
+            blur: 40,
+            spread: 0,
+            color: Color32::from_black_alpha(if t.dark { 120 } else { 45 }),
+        });
     let width = width.min(ctx.content_rect().width() - 32.0);
     let mut close = false;
     let area = egui::Modal::default_area(Id::unique(("kit-dialog", id)))
@@ -496,7 +575,11 @@ pub fn dialog(
             let cr = ui.interact(close_rect, Id::unique(("kit-dialog-close", id)), Sense::click());
             cr.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Close"));
             let k = hover_t(ui, &cr);
-            ui.painter().rect_filled(close_rect, CornerRadius::same(RADIUS_MD), Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, k));
+            ui.painter().rect_filled(
+                close_rect,
+                CornerRadius::same(RADIUS_MD),
+                Color32::TRANSPARENT.lerp_to_gamma(t.surface_2, k),
+            );
             paint_icon(ui.painter(), close_rect.center(), Icon::Close, t.text_2);
             if cr.clicked() {
                 close = true;
@@ -510,11 +593,7 @@ pub fn dialog(
             // footer
             let top = ui.cursor().min.y - 8.0;
             let fr = Rect::from_min_size(pos2(hr.min.x, top), vec2(width, 56.0));
-            ui.painter().rect_filled(
-                fr,
-                CornerRadius { nw: 0, ne: 0, sw: 12, se: 12 },
-                t.bg.gamma_multiply(0.6),
-            );
+            ui.painter().rect_filled(fr, CornerRadius { nw: 0, ne: 0, sw: 12, se: 12 }, t.bg.gamma_multiply(0.6));
             ui.painter().hline(fr.x_range(), fr.min.y, Stroke::new(1.0, t.border));
             let mut fu = ui.new_child(
                 egui::UiBuilder::new()
@@ -536,12 +615,24 @@ pub fn card_frame(t: &Tokens) -> egui::Frame {
         .fill(t.surface)
         .stroke(Stroke::new(1.0, t.border))
         .corner_radius(CornerRadius::same(RADIUS_LG - 2))
-        .shadow(egui::Shadow { offset: [0, 1], blur: 2, spread: 0, color: Color32::from_black_alpha(if t.dark { 40 } else { 10 }) })
+        .shadow(egui::Shadow {
+            offset: [0, 1],
+            blur: 2,
+            spread: 0,
+            color: Color32::from_black_alpha(if t.dark { 40 } else { 10 }),
+        })
 }
 
 /// Page header: title + subtitle on the left, actions on the right (wrapping below when
 /// there is no room, like `flex-wrap`). `actions` lays out right-to-left.
-pub fn page_header(ui: &mut Ui, t: &Tokens, title: &str, subtitle: impl FnOnce(&mut Ui), actions_width: f32, actions: impl FnOnce(&mut Ui)) {
+pub fn page_header(
+    ui: &mut Ui,
+    t: &Tokens,
+    title: &str,
+    subtitle: impl FnOnce(&mut Ui),
+    actions_width: f32,
+    actions: impl FnOnce(&mut Ui),
+) {
     let full = ui.available_width();
     let side_by_side = full - 48.0 - actions_width >= 220.0;
     egui::Frame::new().inner_margin(egui::Margin { left: 24, right: 24, top: 20, bottom: 12 }).show(ui, |ui| {
@@ -549,19 +640,21 @@ pub fn page_header(ui: &mut Ui, t: &Tokens, title: &str, subtitle: impl FnOnce(&
         let left_w = if side_by_side { w - actions_width - 12.0 } else { w };
         let top = ui.cursor().min;
         let left = place(ui, egui::UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 400.0))), |ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.set_width(left_w);
-                text(ui, title, 16.0, t.text);
-                subtitle(ui);
-            })
-            .response
-            .rect;
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.set_width(left_w);
+            text(ui, title, 16.0, t.text);
+            subtitle(ui);
+        })
+        .response
+        .rect;
         let act_rect = if side_by_side {
             Rect::from_min_size(pos2(top.x + w - actions_width, top.y), vec2(actions_width, 32.0))
         } else {
             Rect::from_min_size(pos2(top.x, left.max.y + 12.0), vec2(actions_width.min(w), 32.0))
         };
-        let mut a = ui.new_child(egui::UiBuilder::new().max_rect(act_rect).layout(egui::Layout::right_to_left(egui::Align::Center)));
+        let mut a = ui.new_child(
+            egui::UiBuilder::new().max_rect(act_rect).layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
         a.spacing_mut().item_spacing.x = 8.0;
         actions(&mut a);
         let bottom = left.max.y.max(act_rect.max.y);
@@ -590,7 +683,12 @@ pub fn empty(ui: &mut Ui, t: &Tokens, title: &str, body: &str, action: impl FnOn
 fn dashed_rect(p: &egui::Painter, r: Rect, color: Color32) {
     let s = Stroke::new(1.0, color);
     let r = r.shrink(0.5);
-    for (a, b) in [(r.left_top(), r.right_top()), (r.right_top(), r.right_bottom()), (r.right_bottom(), r.left_bottom()), (r.left_bottom(), r.left_top())] {
+    for (a, b) in [
+        (r.left_top(), r.right_top()),
+        (r.right_top(), r.right_bottom()),
+        (r.right_bottom(), r.left_bottom()),
+        (r.left_bottom(), r.left_top()),
+    ] {
         p.extend(egui::Shape::dashed_line(&[a, b], s, 4.0, 3.0));
     }
 }

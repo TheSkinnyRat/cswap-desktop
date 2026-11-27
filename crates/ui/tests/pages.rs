@@ -256,7 +256,9 @@ fn remove_needs_the_slot_or_email_typed() {
     h.run();
     h.get_by_label("Remove account").click();
     h.run();
-    let submit = |h: &Harness<'_, World>| h.get_by_role_and_label(Role::Button, "Remove permanently").accesskit_node().is_disabled();
+    let submit = |h: &Harness<'_, World>| {
+        h.get_by_role_and_label(Role::Button, "Remove permanently").accesskit_node().is_disabled()
+    };
     assert!(submit(&h), "nothing typed");
     h.get_by_role(Role::TextInput).set_text_value_accesskit("nope");
     h.run();
@@ -317,7 +319,10 @@ fn mappings_add_with_the_picker_and_unmap() {
     h.run();
     h.run();
     let rows = h.state().mock.list_mappings().take().unwrap().unwrap();
-    assert!(rows.iter().any(|m| m.path == "/tmp/picked-project" && m.email == "you@example.com"), "mapped to the active account");
+    assert!(
+        rows.iter().any(|m| m.path == "/tmp/picked-project" && m.email == "you@example.com"),
+        "mapped to the active account"
+    );
     assert!(has_label(&h, "Unmap /tmp/picked-project"), "the list reloaded");
     h.get_by_role_and_label(Role::Button, "Unmap /tmp/picked-project").click();
     h.run();
@@ -399,7 +404,9 @@ fn renders() {
     shot(&mut h, "accounts-empty-light");
     let world = World::new(Which::Accounts, false);
     let payload = world.mock.accounts().payload;
-    world.mock.set_list(payload, Some(cswap_core::CswapError::new("Timeout", "cswap list --json took longer than 30 s")));
+    world
+        .mock
+        .set_list(payload, Some(cswap_core::CswapError::new("Timeout", "cswap list --json took longer than 30 s")));
     let mut h = harness_with(world, 1240.0);
     shot(&mut h, "accounts-stale-light");
 }

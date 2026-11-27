@@ -10,7 +10,9 @@ use egui::{Align, CornerRadius, Layout, Margin, Rect, Sense, Stroke, Ui, UiBuild
 
 use cswap_core::format::{now_ms, rel_time, time_of};
 use cswap_core::view::{self, ChipTone, SpecKind};
-use cswap_core::{AutoEvent, AutoOnceResult, AutoStatus, ConfigPayload, ConfigSetting, CsResult, Event, Pending, PlainOutput};
+use cswap_core::{
+    AutoEvent, AutoOnceResult, AutoStatus, ConfigPayload, ConfigSetting, CsResult, Event, Pending, PlainOutput,
+};
 
 use super::accounts::{local_offset, notify};
 use super::kit::{self, Btn, Icon, Variant};
@@ -196,7 +198,10 @@ impl AutoPage {
                 actions_w,
                 |ui| {
                     toggle = start.show(ui, &t).clicked();
-                    check = once.show(ui, &t).on_hover_text("cswap auto --once: evaluate once and switch if needed").clicked();
+                    check = once
+                        .show(ui, &t)
+                        .on_hover_text("cswap auto --once: evaluate once and switch if needed")
+                        .clicked();
                     kit::text(ui, "Dry run", 12.5, t.text_2);
                     ui.add_space(-4.0);
                     kit::switch(ui, &t, &mut dry, "Dry run", !auto.running);
@@ -209,22 +214,30 @@ impl AutoPage {
                 let wide = w >= 760.0;
                 let left_w = if wide { w - 340.0 - 16.0 } else { w };
                 let top = ui.cursor().min;
-                let left = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))), |ui| {
+                let left = kit::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))),
+                    |ui| {
                         ui.set_width(left_w);
                         ui.spacing_mut().item_spacing = vec2(12.0, 16.0);
                         self.stats(ui, &t, &auto, &all, now);
                         self.feed(ui, &t, &auto, &all, off, now);
-                    })
-                    .response
-                    .rect;
+                    },
+                )
+                .response
+                .rect;
                 let right_top = if wide { pos2(top.x + left_w + 16.0, top.y) } else { pos2(top.x, left.max.y + 16.0) };
                 let right_w = if wide { 340.0 } else { w };
-                let right = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))), |ui| {
+                let right = kit::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))),
+                    |ui| {
                         ui.set_width(right_w);
                         self.settings_card(ui, &t, &mut saves);
-                    })
-                    .response
-                    .rect;
+                    },
+                )
+                .response
+                .rect;
                 ui.allocate_space(vec2(w, left.max.y.max(right.max.y) - top.y));
             });
         });
@@ -232,7 +245,8 @@ impl AutoPage {
             cx.services.cswap.edit_settings(Box::new(move |s| s.auto_dry_run = dry));
         }
         if toggle && self.toggling.is_none() {
-            let p = if auto.running { cx.services.cswap.auto_stop() } else { cx.services.cswap.auto_start(dry_setting) };
+            let p =
+                if auto.running { cx.services.cswap.auto_stop() } else { cx.services.cswap.auto_start(dry_setting) };
             self.toggling = Some((auto.running, p));
         }
         if check && self.checking.is_none() {
@@ -246,9 +260,13 @@ impl AutoPage {
     fn stats(&self, ui: &mut Ui, t: &Tokens, auto: &AutoStatus, all: &[AutoEvent], now: i64) {
         let (state, tone) = view::auto_state(auto);
         let state_sub = if auto.running {
-            auto.started_at
-                .as_deref()
-                .map(|s| format!("since {} · pid {}", cswap_core::format::clock_of(Some(s), now, self.offset()), auto.pid.map(|p| p.to_string()).unwrap_or_default()))
+            auto.started_at.as_deref().map(|s| {
+                format!(
+                    "since {} · pid {}",
+                    cswap_core::format::clock_of(Some(s), now, self.offset()),
+                    auto.pid.map(|p| p.to_string()).unwrap_or_default()
+                )
+            })
         } else {
             auto.last_error.clone()
         };
@@ -256,7 +274,10 @@ impl AutoPage {
         let (poll_v, poll_sub) = match last_poll {
             Some(p) => (
                 rel_time(Some(&p.ts), now).replace("in ", ""),
-                format!("threshold {}%", view::config_text(p.extra.get("threshold").unwrap_or(&serde_json::Value::Null))),
+                format!(
+                    "threshold {}%",
+                    view::config_text(p.extra.get("threshold").unwrap_or(&serde_json::Value::Null))
+                ),
             ),
             None => ("—".into(), "no polls yet".into()),
         };
@@ -267,7 +288,15 @@ impl AutoPage {
             ui.spacing_mut().item_spacing.x = 12.0;
             stat(ui, t, cw, "STATE", &state, state_sub.as_deref(), tone);
             stat(ui, t, cw, "LAST POLL", &poll_v, Some(&poll_sub), ChipTone::Muted);
-            stat(ui, t, cw, "SWITCHES THIS SESSION", &switches.to_string(), Some(&format!("{} events", all.len())), ChipTone::Muted);
+            stat(
+                ui,
+                t,
+                cw,
+                "SWITCHES THIS SESSION",
+                &switches.to_string(),
+                Some(&format!("{} events", all.len())),
+                ChipTone::Muted,
+            );
         });
     }
 
@@ -280,39 +309,72 @@ impl AutoPage {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             // header with the Important / All segmented control
             let (hr, _) = ui.allocate_exact_size(vec2(w - 2.0, 44.0), Sense::hover());
-            ui.painter().text(pos2(hr.min.x + 16.0, hr.center().y), egui::Align2::LEFT_CENTER, "Event feed", kit::font(13.0), t.text);
+            ui.painter().text(
+                pos2(hr.min.x + 16.0, hr.center().y),
+                egui::Align2::LEFT_CENTER,
+                "Event feed",
+                kit::font(13.0),
+                t.text,
+            );
             ui.painter().hline(hr.x_range(), hr.max.y - 0.5, Stroke::new(1.0, t.border));
-            let seg_w = kit::measure(ui, "Important", kit::font(11.5)).x + kit::measure(ui, "All", kit::font(11.5)).x + 16.0 * 2.0 + 6.0;
+            let seg_w = kit::measure(ui, "Important", kit::font(11.5)).x
+                + kit::measure(ui, "All", kit::font(11.5)).x
+                + 16.0 * 2.0
+                + 6.0;
             let seg = egui::Rect::from_min_size(pos2(hr.max.x - 16.0 - seg_w, hr.center().y - 12.0), vec2(seg_w, 24.0));
-            ui.painter().rect(seg, CornerRadius::same(crate::theme::RADIUS_MD), t.surface_2, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+            ui.painter().rect(
+                seg,
+                CornerRadius::same(crate::theme::RADIUS_MD),
+                t.surface_2,
+                Stroke::new(1.0, t.border),
+                egui::StrokeKind::Inside,
+            );
             let mut x = seg.min.x + 3.0;
             for (label, all_v) in [("Important", false), ("All", true)] {
                 let bw = kit::measure(ui, label, kit::font(11.5)).x + 16.0;
                 let r = egui::Rect::from_min_size(pos2(x, seg.min.y + 3.0), vec2(bw, 18.0));
                 let resp = ui.interact(r, ui.scope_id().with(("feed-filter", label)), Sense::click());
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::accesskit::Role::Button, true, self.show_all == all_v, label));
+                resp.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::accesskit::Role::Button, true, self.show_all == all_v, label)
+                });
                 let on = self.show_all == all_v;
                 if on {
                     ui.painter().rect_filled(r, CornerRadius::same(4), t.surface);
                 }
-                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, kit::font(11.5), if on { t.text } else { t.text_2 });
+                ui.painter().text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    label,
+                    kit::font(11.5),
+                    if on { t.text } else { t.text_2 },
+                );
                 if resp.clicked() {
                     self.show_all = all_v;
                 }
                 x += bw;
             }
-            egui::ScrollArea::vertical().id_salt("auto-feed").max_height(max_h).min_scrolled_height(260.0).stick_to_bottom(true).auto_shrink([false, false]).show(ui, |ui| {
-                ui.set_width(w - 2.0);
-                if shown.is_empty() {
-                    let (r, _) = ui.allocate_exact_size(vec2(w - 2.0, 260.0), Sense::hover());
-                    let msg = if auto.running { "Waiting for the first event…" } else { "Start auto-switch to see polls, decisions and switches here." };
-                    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, msg, kit::font(12.5), t.text_3);
-                    return;
-                }
-                for (i, ev) in shown.iter().enumerate() {
-                    feed_line(ui, t, ev, i + 1 == shown.len(), off, now);
-                }
-            });
+            egui::ScrollArea::vertical()
+                .id_salt("auto-feed")
+                .max_height(max_h)
+                .min_scrolled_height(260.0)
+                .stick_to_bottom(true)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.set_width(w - 2.0);
+                    if shown.is_empty() {
+                        let (r, _) = ui.allocate_exact_size(vec2(w - 2.0, 260.0), Sense::hover());
+                        let msg = if auto.running {
+                            "Waiting for the first event…"
+                        } else {
+                            "Start auto-switch to see polls, decisions and switches here."
+                        };
+                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, msg, kit::font(12.5), t.text_3);
+                        return;
+                    }
+                    for (i, ev) in shown.iter().enumerate() {
+                        feed_line(ui, t, ev, i + 1 == shown.len(), off, now);
+                    }
+                });
         });
     }
 
@@ -394,10 +456,19 @@ fn feed_line(ui: &mut Ui, t: &Tokens, ev: &AutoEvent, last: bool, off: i64, now:
     if ui.rect_contains_pointer(rect) {
         ui.painter().rect_filled(rect, CornerRadius::ZERO, t.surface_2.gamma_multiply(0.4));
     }
-    ui.painter().text(pos2(top.x + 12.0, top.y + 6.0 + 9.0), egui::Align2::LEFT_CENTER, time, kit::mono(11.5), t.text_3);
-    kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))), |ui| {
-        kit::chip(ui, t, &ev.event, view::event_tone(&ev.event))
-    });
+    ui.painter().text(
+        pos2(top.x + 12.0, top.y + 6.0 + 9.0),
+        egui::Align2::LEFT_CENTER,
+        time,
+        kit::mono(11.5),
+        t.text_3,
+    );
+    kit::place(
+        ui,
+        UiBuilder::new()
+            .max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))),
+        |ui| kit::chip(ui, t, &ev.event, view::event_tone(&ev.event)),
+    );
     ui.painter().galley(pos2(text_x, top.y + 6.0 + 1.0), g, t.text_2);
     if !last {
         ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border.gamma_multiply(0.6)));
@@ -418,56 +489,69 @@ fn setting_row(
     let text_w = w - control_w - 12.0;
     let top = ui.cursor().min;
     let label_rect = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(text_w, 200.0))), |ui| {
-            ui.set_width(text_w);
-            ui.spacing_mut().item_spacing.y = 2.0;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                kit::text(ui, spec.label, 12.5, t.text);
-                if row.is_set {
-                    let g = kit::galley(ui, "reset", kit::font(10.5), t.text_3, 60.0);
-                    let (r, resp) = ui.allocate_exact_size(g.size(), Sense::click());
-                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("Reset {}", spec.label)));
-                    ui.painter().galley(r.min, g, t.text_3);
-                    if resp.hovered() {
-                        ui.painter().hline(r.x_range(), r.max.y, Stroke::new(1.0, t.text_3));
-                    }
-                    if resp.on_hover_text("Back to the default").clicked() {
-                        saves.push((spec.key.to_string(), None));
-                    }
+        ui.set_width(text_w);
+        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            kit::text(ui, spec.label, 12.5, t.text);
+            if row.is_set {
+                let g = kit::galley(ui, "reset", kit::font(10.5), t.text_3, 60.0);
+                let (r, resp) = ui.allocate_exact_size(g.size(), Sense::click());
+                resp.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("Reset {}", spec.label))
+                });
+                ui.painter().galley(r.min, g, t.text_3);
+                if resp.hovered() {
+                    ui.painter().hline(r.x_range(), r.max.y, Stroke::new(1.0, t.text_3));
                 }
-            });
-            kit::para(ui, spec.hint, 11.5, t.text_3);
-        })
-        .response
-        .rect;
+                if resp.on_hover_text("Back to the default").clicked() {
+                    saves.push((spec.key.to_string(), None));
+                }
+            }
+        });
+        kit::para(ui, spec.hint, 11.5, t.text_3);
+    })
+    .response
+    .rect;
     let current = view::config_text(&row.value);
     let crect = Rect::from_min_size(pos2(top.x + w - control_w, top.y), vec2(control_w, 32.0));
-    kit::place(ui, UiBuilder::new().max_rect(crect).layout(Layout::right_to_left(Align::Center)), |ui| match spec.kind {
-        SpecKind::Bool => {
-            let mut on = row.value == serde_json::Value::Bool(true) || row.value == serde_json::Value::String("true".into());
-            if kit::switch(ui, t, &mut on, spec.label, true).changed() {
-                saves.push((spec.key.to_string(), Some(if on { "true" } else { "false" }.to_string())));
-            }
-        }
-        SpecKind::Select(options) => {
-            egui::ComboBox::from_id_salt(("cfg", spec.key)).width(control_w - 8.0).selected_text(current.clone()).show_ui(ui, |ui| {
-                for o in options {
-                    if ui.selectable_label(current == *o, *o).clicked() && current != *o {
-                        saves.push((spec.key.to_string(), Some(o.to_string())));
-                    }
+    kit::place(ui, UiBuilder::new().max_rect(crect).layout(Layout::right_to_left(Align::Center)), |ui| {
+        match spec.kind {
+            SpecKind::Bool => {
+                let mut on =
+                    row.value == serde_json::Value::Bool(true) || row.value == serde_json::Value::String("true".into());
+                if kit::switch(ui, t, &mut on, spec.label, true).changed() {
+                    saves.push((spec.key.to_string(), Some(if on { "true" } else { "false" }.to_string())));
                 }
-            });
-        }
-        SpecKind::Number | SpecKind::Text => {
-            let buf = edits.entry(spec.key.to_string()).or_insert_with(|| current.clone());
-            let dirty = *buf != current;
-            let r = kit::input(ui, t, buf, spec.key, "", control_w, false, false);
-            if dirty {
-                ui.painter().rect_stroke(r.rect, CornerRadius::same(crate::theme::RADIUS_MD), Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
             }
-            // Committed on Enter or when the field loses focus, only if it changed.
-            if r.lost_focus() && *buf != current {
-                saves.push((spec.key.to_string(), Some(buf.clone())));
+            SpecKind::Select(options) => {
+                egui::ComboBox::from_id_salt(("cfg", spec.key))
+                    .width(control_w - 8.0)
+                    .selected_text(current.clone())
+                    .show_ui(ui, |ui| {
+                        for o in options {
+                            if ui.selectable_label(current == *o, *o).clicked() && current != *o {
+                                saves.push((spec.key.to_string(), Some(o.to_string())));
+                            }
+                        }
+                    });
+            }
+            SpecKind::Number | SpecKind::Text => {
+                let buf = edits.entry(spec.key.to_string()).or_insert_with(|| current.clone());
+                let dirty = *buf != current;
+                let r = kit::input(ui, t, buf, spec.key, "", control_w, false, false);
+                if dirty {
+                    ui.painter().rect_stroke(
+                        r.rect,
+                        CornerRadius::same(crate::theme::RADIUS_MD),
+                        Stroke::new(1.0, t.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                // Committed on Enter or when the field loses focus, only if it changed.
+                if r.lost_focus() && *buf != current {
+                    saves.push((spec.key.to_string(), Some(buf.clone())));
+                }
             }
         }
     });

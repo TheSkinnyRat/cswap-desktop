@@ -12,14 +12,14 @@
 use egui::{Align, Color32, CornerRadius, Id, Layout, Margin, Rect, Sense, Shape, Stroke, Ui, UiBuilder, pos2, vec2};
 
 use cswap_core::format::{
-    age_seconds, iso_from_ms, mask_email, now_ms, org_tag, parse_iso_ms, pct, reset_text,
-    status_label, status_tone, tone,
+    age_seconds, iso_from_ms, mask_email, now_ms, org_tag, parse_iso_ms, pct, reset_text, status_label, status_tone,
+    tone,
 };
 use cswap_core::view::{self, ChipTone, WindowCell};
 use cswap_core::{
     Account, AccountsState, AddAccountOptions, AddTokenOptions, AppSettings, CsResult, Event, ExportOptions,
-    ImportOptions, LaunchedSession, Mapping, Pending, PlainOutput, PlanInfo, RotateStrategy, SwitchPayload,
-    Transfer, UsageView,
+    ImportOptions, LaunchedSession, Mapping, Pending, PlainOutput, PlanInfo, RotateStrategy, SwitchPayload, Transfer,
+    UsageView,
 };
 
 use super::kit::{self, Btn, Icon, Variant, item, item_hint};
@@ -52,15 +52,55 @@ struct Op {
 }
 
 enum Dlg {
-    Add { slot: String, alias: String, overwrite: bool, run: Option<Pending<CsResult<PlainOutput>>> },
-    Token { token: String, email: String, slot: String, show: bool, overwrite: bool, run: Option<Pending<CsResult<PlainOutput>>> },
-    Alias { a: Account, alias: String, run: Option<(Pending<CsResult<PlainOutput>>, String)> },
-    Move { a: Account, slot: String, run: Option<(Pending<CsResult<PlainOutput>>, String)> },
-    Remove { a: Account, typed: String, run: Option<Pending<CsResult<PlainOutput>>> },
-    Export { a: Option<Account>, full: bool, run: Option<Pending<CsResult<Transfer>>> },
-    Import { force: bool, run: Option<Pending<CsResult<Transfer>>> },
-    Diag { run: Pending<CsResult<PlainOutput>>, out: Option<Result<String, String>> },
-    Run { a: Account, dir: String, mappings: Vec<Mapping>, load: Option<Pending<CsResult<Vec<Mapping>>>>, run: Option<Pending<CsResult<LaunchedSession>>> },
+    Add {
+        slot: String,
+        alias: String,
+        overwrite: bool,
+        run: Option<Pending<CsResult<PlainOutput>>>,
+    },
+    Token {
+        token: String,
+        email: String,
+        slot: String,
+        show: bool,
+        overwrite: bool,
+        run: Option<Pending<CsResult<PlainOutput>>>,
+    },
+    Alias {
+        a: Account,
+        alias: String,
+        run: Option<(Pending<CsResult<PlainOutput>>, String)>,
+    },
+    Move {
+        a: Account,
+        slot: String,
+        run: Option<(Pending<CsResult<PlainOutput>>, String)>,
+    },
+    Remove {
+        a: Account,
+        typed: String,
+        run: Option<Pending<CsResult<PlainOutput>>>,
+    },
+    Export {
+        a: Option<Account>,
+        full: bool,
+        run: Option<Pending<CsResult<Transfer>>>,
+    },
+    Import {
+        force: bool,
+        run: Option<Pending<CsResult<Transfer>>>,
+    },
+    Diag {
+        run: Pending<CsResult<PlainOutput>>,
+        out: Option<Result<String, String>>,
+    },
+    Run {
+        a: Account,
+        dir: String,
+        mappings: Vec<Mapping>,
+        load: Option<Pending<CsResult<Vec<Mapping>>>>,
+        run: Option<Pending<CsResult<LaunchedSession>>>,
+    },
 }
 
 enum RowAct {
@@ -212,32 +252,66 @@ impl AccountsPage {
                     t,
                     &more,
                     260.0,
-                    &[item("Export all accounts"), item("Import accounts"), None, item_hint("Token diagnostics", "--token-status")],
+                    &[
+                        item("Export all accounts"),
+                        item("Import accounts"),
+                        None,
+                        item_hint("Token diagnostics", "--token-status"),
+                    ],
                 );
                 let add_r = add.show(ui, t);
-                picked.1 = kit::menu(ui, t, &add_r, 240.0, &[item("From current Claude login"), item("From setup-token or API key")]);
+                picked.1 = kit::menu(
+                    ui,
+                    t,
+                    &add_r,
+                    240.0,
+                    &[item("From current Claude login"), item("From setup-token or API key")],
+                );
                 let rot = rotate.show(ui, t);
                 picked.0 = kit::menu(
                     ui,
                     t,
                     &rot,
                     260.0,
-                    &[item_hint("Next account", "rotation"), item_hint("Best (most quota left)", "best"), item("Next available (skip limited)")],
+                    &[
+                        item_hint("Next account", "rotation"),
+                        item_hint("Best (most quota left)", "best"),
+                        item("Next available (skip limited)"),
+                    ],
                 );
                 let (m_icon, m_tip) = if mask {
                     (Icon::EyeOff, "Show email addresses")
                 } else {
                     (Icon::Eye, "Hide email addresses (keeps the first three characters)")
                 };
-                toggles.2 = Btn::new("").variant(Variant::Ghost).icon(m_icon).a11y(m_tip).show(ui, t).on_hover_text(m_tip).clicked();
+                toggles.2 = Btn::new("")
+                    .variant(Variant::Ghost)
+                    .icon(m_icon)
+                    .a11y(m_tip)
+                    .show(ui, t)
+                    .on_hover_text(m_tip)
+                    .clicked();
                 let (p_icon, p_tip) = if s.show_pace {
                     (Icon::Gauge, "Hide the pace marker")
                 } else {
                     (Icon::GaugeOff, "Show where an evenly-spread week would be")
                 };
-                toggles.1 = Btn::new("").variant(Variant::Ghost).icon(p_icon).a11y(p_tip).show(ui, t).on_hover_text(p_tip).clicked();
-                let (v_icon, v_tip) = if rings { (Icon::Bars, "Show usage as bars") } else { (Icon::Ring, "Show usage as rings") };
-                toggles.0 = Btn::new("").variant(Variant::Ghost).icon(v_icon).a11y(v_tip).show(ui, t).on_hover_text(v_tip).clicked();
+                toggles.1 = Btn::new("")
+                    .variant(Variant::Ghost)
+                    .icon(p_icon)
+                    .a11y(p_tip)
+                    .show(ui, t)
+                    .on_hover_text(p_tip)
+                    .clicked();
+                let (v_icon, v_tip) =
+                    if rings { (Icon::Bars, "Show usage as bars") } else { (Icon::Ring, "Show usage as rings") };
+                toggles.0 = Btn::new("")
+                    .variant(Variant::Ghost)
+                    .icon(v_icon)
+                    .a11y(v_tip)
+                    .show(ui, t)
+                    .on_hover_text(v_tip)
+                    .clicked();
             },
         );
         if toggles.0 {
@@ -276,7 +350,14 @@ impl AccountsPage {
     }
 
     fn open_token(&mut self) {
-        self.dlg = Some(Dlg::Token { token: String::new(), email: String::new(), slot: String::new(), show: false, overwrite: false, run: None });
+        self.dlg = Some(Dlg::Token {
+            token: String::new(),
+            email: String::new(),
+            slot: String::new(),
+            show: false,
+            overwrite: false,
+            run: None,
+        });
     }
 
     fn body(&mut self, ui: &mut Ui, cx: &mut Cx, t: &Tokens, state: &AccountsState, list: &[Account], s: &AppSettings) {
@@ -285,14 +366,25 @@ impl AccountsPage {
             if state.payload.is_none() {
                 kit::notice(ui, t, &e.message, ChipTone::Danger);
             } else {
-                kit::notice(ui, t, &format!("Showing the last successful list — refresh failed: {}", e.message), ChipTone::Warn);
+                kit::notice(
+                    ui,
+                    t,
+                    &format!("Showing the last successful list — refresh failed: {}", e.message),
+                    ChipTone::Warn,
+                );
             }
         }
         if state.payload.is_none() && state.error.is_none() {
             // Loading: three placeholder rows.
             for _ in 0..3 {
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 62.0), Sense::hover());
-                ui.painter().rect(r, CornerRadius::same(8), t.surface, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                ui.painter().rect(
+                    r,
+                    CornerRadius::same(8),
+                    t.surface,
+                    Stroke::new(1.0, t.border),
+                    egui::StrokeKind::Inside,
+                );
             }
             return;
         }
@@ -303,7 +395,9 @@ impl AccountsPage {
                 t,
                 "No managed accounts yet",
                 "Log into Claude Code with the account you want to keep, then add it here. cswap backs up its login so you can switch back to it any time.",
-                |ui| add = Btn::new("Add current login").variant(Variant::Primary).icon(Icon::Plus).show(ui, t).clicked(),
+                |ui| {
+                    add = Btn::new("Add current login").variant(Variant::Primary).icon(Icon::Plus).show(ui, t).clicked()
+                },
             );
             if add {
                 self.open_add();
@@ -400,7 +494,11 @@ impl AccountsPage {
             RowAct::Menu(1) => self.dlg = Some(Dlg::Move { a, slot: String::new(), run: None }),
             RowAct::Menu(2) => {
                 let disabled = a.disabled == Some(true);
-                let ok = if disabled { format!("Account-{n} back in rotation") } else { format!("Account-{n} held out of rotation") };
+                let ok = if disabled {
+                    format!("Account-{n} back in rotation")
+                } else {
+                    format!("Account-{n} held out of rotation")
+                };
                 let p = cx.services.cswap.set_disabled(&n.to_string(), !disabled);
                 self.ops.push(Op { key: format!("dis-{n}"), kind: OpKind::Plain(p, ok) });
             }
@@ -440,7 +538,11 @@ impl AccountsPage {
         }
         // The active row keeps the button's space (columns must not move) but hides it.
         let label = format!("Switch to account {n}");
-        let b = Btn::new("Switch").small().variant(if a.active { Variant::Ghost } else { Variant::Default }).loading(self.busy(&format!("switch-{n}"))).a11y(&label);
+        let b = Btn::new("Switch")
+            .small()
+            .variant(if a.active { Variant::Ghost } else { Variant::Default })
+            .loading(self.busy(&format!("switch-{n}")))
+            .a11y(&label);
         if a.active {
             let w = b.width(ui);
             ui.add_space(w);
@@ -476,15 +578,23 @@ impl AccountsPage {
             x += w + view::COL_GAP;
         }
         let y0 = top_left.y + 10.0;
-        let mut row = ui.new_child(UiBuilder::new().max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0))).id_salt(("acct-row", a.number)));
+        let mut row = ui.new_child(
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0)))
+                .id_salt(("acct-row", a.number)),
+        );
         if a.disabled == Some(true) {
             row.multiply_opacity(0.7);
         }
         let cell = |row: &mut Ui, i: usize, f: &mut dyn FnMut(&mut Ui)| -> f32 {
-            kit::place(row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
-                ui.set_width(cols[i]);
-                f(ui)
-            })
+            kit::place(
+                row,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))),
+                |ui| {
+                    ui.set_width(cols[i]);
+                    f(ui)
+                },
+            )
             .response
             .rect
             .height()
@@ -500,7 +610,9 @@ impl AccountsPage {
             let col = 2 + k;
             match &c.window {
                 Some(_) => {
-                    let ch = cell(&mut row, col, &mut |ui| window_cell(ui, t, a.number, c, false, rings, s.show_pace, now, off));
+                    let ch = cell(&mut row, col, &mut |ui| {
+                        window_cell(ui, t, a.number, c, false, rings, s.show_pace, now, off)
+                    });
                     h = h.max(ch);
                 }
                 None => empty_cols.push(col),
@@ -518,26 +630,34 @@ impl AccountsPage {
             // The empty cell is a node of its own, named like a filled one, so a test can
             // point at the cell that holds the column.
             let key = &cells[col - 2].key;
-            let r = row.interact(Rect::from_min_size(pos2(xs[col], y0), vec2(cols[col], h)), Id::unique(("window", a.number, key)), Sense::hover());
+            let r = row.interact(
+                Rect::from_min_size(pos2(xs[col], y0), vec2(cols[col], h)),
+                Id::unique(("window", a.number, key)),
+                Sense::hover(),
+            );
             let name = format!("{} {key}: -", a.number);
             r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
         }
         let si = cols.len() - 2;
         let status_h = status_height(a);
-        kit::place(&mut row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))), |ui| {
-            status_block(ui, t, a)
-        });
+        kit::place(
+            &mut row,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))),
+            |ui| status_block(ui, t, a),
+        );
         let ai = cols.len() - 1;
-        let act = kit::place(&mut row, 
-                UiBuilder::new()
-                    .max_rect(Rect::from_min_size(pos2(xs[ai], mid - 14.0), vec2(cols[ai], 28.0)))
-                    .layout(Layout::right_to_left(Align::Center)),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    self.actions(ui, t, a)
-                },
-            )
-            .inner;
+        let act = kit::place(
+            &mut row,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(pos2(xs[ai], mid - 14.0), vec2(cols[ai], 28.0)))
+                .layout(Layout::right_to_left(Align::Center)),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                self.actions(ui, t, a)
+            },
+        )
+        .inner;
         let rect = Rect::from_min_size(top_left, vec2(width, h + 20.0));
         let hovered = ui.rect_contains_pointer(rect);
         let fill = match (a.active, hovered) {
@@ -573,7 +693,12 @@ impl AccountsPage {
         let width = ui.available_width();
         let bg = ui.painter().add(Shape::Noop);
         let mut act = None;
-        let inner = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0))).id_salt(("acct-card", a.number)), |ui| {
+        let inner = kit::place(
+            ui,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0)))
+                .id_salt(("acct-card", a.number)),
+            |ui| {
                 if a.disabled == Some(true) {
                     ui.multiply_opacity(0.7);
                 }
@@ -586,24 +711,39 @@ impl AccountsPage {
                     let num_w = 6.0 + 6.0 + kit::measure(ui, &a.number.to_string(), kit::mono(12.0)).x + 10.0;
                     let act_w = 104.0;
                     let p = ui.painter().clone();
-                    p.circle_filled(pos2(top.x + 3.0, top.y + 9.0), 3.0, if a.active { t.accent } else { Color32::TRANSPARENT });
-                    p.text(pos2(top.x + 12.0, top.y + 9.0), egui::Align2::LEFT_CENTER, a.number.to_string(), kit::mono(12.0), t.text_3);
+                    p.circle_filled(
+                        pos2(top.x + 3.0, top.y + 9.0),
+                        3.0,
+                        if a.active { t.accent } else { Color32::TRANSPARENT },
+                    );
+                    p.text(
+                        pos2(top.x + 12.0, top.y + 9.0),
+                        egui::Align2::LEFT_CENTER,
+                        a.number.to_string(),
+                        kit::mono(12.0),
+                        t.text_3,
+                    );
                     let name_w = (w - num_w - act_w).max(60.0);
-                    let nh = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))), |ui| {
+                    let nh = kit::place(
+                        ui,
+                        UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))),
+                        |ui| {
                             ui.set_width(name_w);
                             name_block(ui, t, a, plan, s.mask_emails, now, off)
-                        })
-                        .inner;
-                    act = kit::place(ui, 
-                            UiBuilder::new()
-                                .max_rect(Rect::from_min_size(pos2(top.x + w - act_w, top.y - 4.0), vec2(act_w, 28.0)))
-                                .layout(Layout::right_to_left(Align::Center)),
-                            |ui| {
-                                ui.spacing_mut().item_spacing.x = 4.0;
-                                self.actions(ui, t, a)
-                            },
-                        )
-                        .inner;
+                        },
+                    )
+                    .inner;
+                    act = kit::place(
+                        ui,
+                        UiBuilder::new()
+                            .max_rect(Rect::from_min_size(pos2(top.x + w - act_w, top.y - 4.0), vec2(act_w, 28.0)))
+                            .layout(Layout::right_to_left(Align::Center)),
+                        |ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            self.actions(ui, t, a)
+                        },
+                    )
+                    .inner;
                     ui.allocate_space(vec2(w, nh.max(20.0)));
                     // windows; models this account lacks are absent, not dashes
                     let cells = view::window_cells(a, models, true);
@@ -627,8 +767,9 @@ impl AccountsPage {
                         status_inline(ui, t, a);
                     });
                 });
-            })
-            .response;
+            },
+        )
+        .response;
         let rect = Rect::from_min_size(top_left, vec2(width, inner.rect.height()));
         let fill = if a.active { t.accent_soft.gamma_multiply(0.4) } else { Color32::TRANSPARENT };
         ui.painter().set(bg, egui::epaint::RectShape::filled(rect, CornerRadius::ZERO, fill));
@@ -646,7 +787,9 @@ impl AccountsPage {
         let taken: Vec<u32> = list.iter().map(|a| a.number).collect();
         let keep = match &mut d {
             Dlg::Add { slot, alias, overwrite, run } => add_dialog(ctx, cx, t, &taken, slot, alias, overwrite, run),
-            Dlg::Token { token, email, slot, show, overwrite, run } => token_dialog(ctx, cx, t, &taken, token, email, slot, show, overwrite, run),
+            Dlg::Token { token, email, slot, show, overwrite, run } => {
+                token_dialog(ctx, cx, t, &taken, token, email, slot, show, overwrite, run)
+            }
             Dlg::Alias { a, alias, run } => alias_dialog(ctx, cx, t, a, alias, run),
             Dlg::Move { a, slot, run } => move_dialog(ctx, cx, t, list, a, slot, run),
             Dlg::Remove { a, typed, run } => remove_dialog(ctx, cx, t, a, typed, run),
@@ -674,7 +817,11 @@ fn header_row(ui: &mut Ui, t: &Tokens, cols: &[f32], models: &[String]) {
     for (i, (l, cw)) in labels.iter().zip(cols).enumerate() {
         let lx = if i == 0 { x + 13.0 } else { x };
         let g = kit::galley(ui, l.clone(), kit::font(11.0), t.text_3, *cw);
-        let resp = ui.interact(Rect::from_min_size(pos2(lx, r.min.y), vec2(g.size().x, 30.0)), Id::unique(("col-head", i)), Sense::hover());
+        let resp = ui.interact(
+            Rect::from_min_size(pos2(lx, r.min.y), vec2(g.size().x, 30.0)),
+            Id::unique(("col-head", i)),
+            Sense::hover(),
+        );
         if i >= 4 && i < 4 + models.len() {
             let _ = resp.on_hover_text(format!("{} window", models[i - 4]));
         }
@@ -713,8 +860,10 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
             x = top.x;
             y += 24.0;
         }
-        let r = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| kit::chip(ui, t, label, *tone))
-            .inner;
+        let r = kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| {
+            kit::chip(ui, t, label, *tone)
+        })
+        .inner;
         if let Some(tip) = tip {
             let _ = ui.interact(r.rect, Id::unique(("acct-chip", a.number, i)), Sense::hover()).on_hover_text(tip);
         }
@@ -737,7 +886,17 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
 
 /// A filled window cell: bars (percentage, reset, track) or a ring.
 #[allow(clippy::too_many_arguments)]
-fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, rings: bool, pace: bool, now: i64, off: i64) {
+fn window_cell(
+    ui: &mut Ui,
+    t: &Tokens,
+    n: u32,
+    c: &WindowCell,
+    card: bool,
+    rings: bool,
+    pace: bool,
+    now: i64,
+    off: i64,
+) {
     let id = Id::unique(("window", n, &c.key));
     let Some(w) = &c.window else {
         let r = kit::text(ui, "-", 12.0, t.text_3);
@@ -877,7 +1036,9 @@ fn slot_warning(ui: &mut Ui, t: &Tokens, text: &str, overwrite: &mut bool) {
             ui.set_width(w - 26.0);
             ui.horizontal(|ui| {
                 kit::text(ui, text, 12.5, t.warn);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| kit::switch(ui, t, overwrite, "Overwrite slot", true));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    kit::switch(ui, t, overwrite, "Overwrite slot", true)
+                });
             });
         });
 }
@@ -939,9 +1100,19 @@ fn add_dialog(
                 );
             });
             steps(ui, t, 3, |ui| {
-                kit::para(ui, "Come back here and add it. cswap stores that login so you can switch back to it later.", 12.5, t.text_2);
+                kit::para(
+                    ui,
+                    "Come back here and add it. cswap stores that login so you can switch back to it later.",
+                    12.5,
+                    t.text_2,
+                );
             });
-            kit::para(ui, "Adding an account that is already managed refreshes its stored credentials instead of creating a duplicate.", 12.5, t.text_3);
+            kit::para(
+                ui,
+                "Adding an account that is already managed refreshes its stored credentials instead of creating a duplicate.",
+                12.5,
+                t.text_3,
+            );
             two_fields(
                 ui,
                 |ui| {
@@ -964,12 +1135,21 @@ fn add_dialog(
             }
         },
         |ui| {
-            submit = Btn::new("Add account").variant(Variant::Primary).loading(busy).enabled(can_submit).show(ui, t).clicked();
+            submit = Btn::new("Add account")
+                .variant(Variant::Primary)
+                .loading(busy)
+                .enabled(can_submit)
+                .show(ui, t)
+                .clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
     if submit {
-        let opts = AddAccountOptions { slot: slot_num, alias: Some(alias.clone()).filter(|s| !s.is_empty()), overwrite: *overwrite };
+        let opts = AddAccountOptions {
+            slot: slot_num,
+            alias: Some(alias.clone()).filter(|s| !s.is_empty()),
+            overwrite: *overwrite,
+        };
         *run = Some(cx.services.cswap.add_account(opts));
     }
     !(out.close || cancel)
@@ -1010,14 +1190,22 @@ fn token_dialog(
                 12.5,
                 t.text_2,
             );
-            let hint = view::token_kind(token).map(|k| format!("Detected: {k}")).unwrap_or_else(|| "sk-ant-oat01-… or sk-ant-api03-…".into());
+            let hint = view::token_kind(token)
+                .map(|k| format!("Detected: {k}"))
+                .unwrap_or_else(|| "sk-ant-oat01-… or sk-ant-api03-…".into());
             kit::field(ui, t, "Token", Some(&hint), |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     let w = ui.available_width() - 38.0;
                     kit::input(ui, t, token, "token-input", "", w, true, !*show);
                     let tip = if *show { "Hide token" } else { "Show token" };
-                    if Btn::new("").variant(Variant::Ghost).icon(if *show { Icon::EyeOff } else { Icon::Eye }).a11y(tip).show(ui, t).clicked() {
+                    if Btn::new("")
+                        .variant(Variant::Ghost)
+                        .icon(if *show { Icon::EyeOff } else { Icon::Eye })
+                        .a11y(tip)
+                        .show(ui, t)
+                        .clicked()
+                    {
                         *show = !*show;
                     }
                 });
@@ -1044,7 +1232,12 @@ fn token_dialog(
             }
         },
         |ui| {
-            submit = Btn::new("Register token").variant(Variant::Primary).loading(busy).enabled(can_submit).show(ui, t).clicked();
+            submit = Btn::new("Register token")
+                .variant(Variant::Primary)
+                .loading(busy)
+                .enabled(can_submit)
+                .show(ui, t)
+                .clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
@@ -1072,7 +1265,14 @@ fn settle_msg(cx: &mut Cx, run: &mut Option<(Pending<CsResult<PlainOutput>>, Str
     r
 }
 
-fn alias_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, alias: &mut String, run: &mut Option<(Pending<CsResult<PlainOutput>>, String)>) -> bool {
+fn alias_dialog(
+    ctx: &egui::Context,
+    cx: &mut Cx,
+    t: &Tokens,
+    a: &Account,
+    alias: &mut String,
+    run: &mut Option<(Pending<CsResult<PlainOutput>>, String)>,
+) -> bool {
     if settle_msg(cx, run) == Some(true) {
         return false;
     }
@@ -1090,7 +1290,12 @@ fn alias_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, alias
         440.0,
         |ui| {
             ui.horizontal_wrapped(|ui| {
-                kit::text(ui, format!("{}. An alias works anywhere a slot number or email does:", a.email), 12.5, t.text_2);
+                kit::text(
+                    ui,
+                    format!("{}. An alias works anywhere a slot number or email does:", a.email),
+                    12.5,
+                    t.text_2,
+                );
                 kit::code(ui, t, &preview);
             });
             kit::field(ui, t, "Alias", Some("Letters, digits, . - _ — not purely numeric."), |ui| {
@@ -1165,18 +1370,34 @@ fn move_dialog(
             }
         },
         |ui| {
-            go = Btn::new(if occupant.is_some() { "Swap" } else { "Move" }).variant(Variant::Primary).loading(busy).enabled(can_go).show(ui, t).clicked();
+            go = Btn::new(if occupant.is_some() { "Swap" } else { "Move" })
+                .variant(Variant::Primary)
+                .loading(busy)
+                .enabled(can_go)
+                .show(ui, t)
+                .clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
     if go {
-        let msg = if occupant.is_some() { format!("Swapped slots {} and {n}", a.number) } else { format!("Moved to slot {n}") };
+        let msg = if occupant.is_some() {
+            format!("Swapped slots {} and {n}", a.number)
+        } else {
+            format!("Moved to slot {n}")
+        };
         *run = Some((cx.services.cswap.move_account(&a.number.to_string(), n), msg));
     }
     !(out.close || cancel)
 }
 
-fn remove_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, typed: &mut String, run: &mut Option<Pending<CsResult<PlainOutput>>>) -> bool {
+fn remove_dialog(
+    ctx: &egui::Context,
+    cx: &mut Cx,
+    t: &Tokens,
+    a: &Account,
+    typed: &mut String,
+    run: &mut Option<Pending<CsResult<PlainOutput>>>,
+) -> bool {
     let n = a.number;
     if settle(cx, run, |_| format!("Removed Account-{n}")) == Some(true) {
         return false;
@@ -1191,7 +1412,11 @@ fn remove_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, type
         "Remove account",
         440.0,
         |ui| {
-            let live = if a.active { ", but this is the active account — the live login stays until you switch or /logout" } else { "" };
+            let live = if a.active {
+                ", but this is the active account — the live login stays until you switch or /logout"
+            } else {
+                ""
+            };
             kit::para(
                 ui,
                 format!(
@@ -1207,7 +1432,8 @@ fn remove_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: &Account, type
             });
         },
         |ui| {
-            go = Btn::new("Remove permanently").variant(Variant::Danger).loading(busy).enabled(ok).show(ui, t).clicked();
+            go =
+                Btn::new("Remove permanently").variant(Variant::Danger).loading(busy).enabled(ok).show(ui, t).clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );
@@ -1237,11 +1463,21 @@ fn switch_row(ui: &mut Ui, t: &Tokens, title: &str, sub: &str, on: &mut bool, la
         });
 }
 
-fn transfer_settle(cx: &mut Cx, run: &mut Option<Pending<CsResult<Transfer>>>, title: &str, fail: &str, import: bool) -> bool {
+fn transfer_settle(
+    cx: &mut Cx,
+    run: &mut Option<Pending<CsResult<Transfer>>>,
+    title: &str,
+    fail: &str,
+    import: bool,
+) -> bool {
     let Some(p) = run.as_mut() else { return false };
     match p.take() {
         Some(Ok(v)) => {
-            let body = if import && !v.output.stdout.trim().is_empty() { v.output.stdout.trim().to_string() } else { v.path.clone() };
+            let body = if import && !v.output.stdout.trim().is_empty() {
+                v.output.stdout.trim().to_string()
+            } else {
+                v.path.clone()
+            };
             notify(cx, ToastKind::Success, title, Some(&body));
             *run = None;
             true
@@ -1260,7 +1496,14 @@ fn transfer_settle(cx: &mut Cx, run: &mut Option<Pending<CsResult<Transfer>>>, t
     }
 }
 
-fn export_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: Option<&Account>, full: &mut bool, run: &mut Option<Pending<CsResult<Transfer>>>) -> bool {
+fn export_dialog(
+    ctx: &egui::Context,
+    cx: &mut Cx,
+    t: &Tokens,
+    a: Option<&Account>,
+    full: &mut bool,
+    run: &mut Option<Pending<CsResult<Transfer>>>,
+) -> bool {
     if transfer_settle(cx, run, "Exported", "Export failed", false) {
         return false;
     }
@@ -1280,7 +1523,14 @@ fn export_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: Option<&Accoun
                 12.5,
                 t.text_2,
             );
-            switch_row(ui, t, "Full export (same-PC backup)", "Include the whole ~/.claude.json and credential object.", full, "Full export");
+            switch_row(
+                ui,
+                t,
+                "Full export (same-PC backup)",
+                "Include the whole ~/.claude.json and credential object.",
+                full,
+                "Full export",
+            );
         },
         |ui| {
             go = Btn::new("Choose file & export").variant(Variant::Primary).loading(busy).show(ui, t).clicked();
@@ -1298,7 +1548,13 @@ fn export_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, a: Option<&Accoun
     !(out.close || cancel)
 }
 
-fn import_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, force: &mut bool, run: &mut Option<Pending<CsResult<Transfer>>>) -> bool {
+fn import_dialog(
+    ctx: &egui::Context,
+    cx: &mut Cx,
+    t: &Tokens,
+    force: &mut bool,
+    run: &mut Option<Pending<CsResult<Transfer>>>,
+) -> bool {
     if transfer_settle(cx, run, "Import finished", "Import failed", true) {
         return false;
     }
@@ -1317,7 +1573,14 @@ fn import_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, force: &mut bool,
                 12.5,
                 t.text_2,
             );
-            switch_row(ui, t, "Overwrite existing accounts", "Passes --force. A stale export can carry an already-superseded token.", force, "Overwrite existing");
+            switch_row(
+                ui,
+                t,
+                "Overwrite existing accounts",
+                "Passes --force. A stale export can carry an already-superseded token.",
+                force,
+                "Overwrite existing",
+            );
         },
         |ui| {
             go = Btn::new("Choose file & import").variant(Variant::Primary).loading(busy).show(ui, t).clicked();
@@ -1333,7 +1596,12 @@ fn import_dialog(ctx: &egui::Context, cx: &mut Cx, t: &Tokens, force: &mut bool,
     !(out.close || cancel)
 }
 
-fn diag_dialog(ctx: &egui::Context, t: &Tokens, run: &mut Pending<CsResult<PlainOutput>>, out_text: &mut Option<Result<String, String>>) -> bool {
+fn diag_dialog(
+    ctx: &egui::Context,
+    t: &Tokens,
+    run: &mut Pending<CsResult<PlainOutput>>,
+    out_text: &mut Option<Result<String, String>>,
+) -> bool {
     if out_text.is_none() {
         match run.take() {
             Some(Ok(v)) => *out_text = Some(Ok(view::strip_ansi(&v.stdout))),
@@ -1353,7 +1621,12 @@ fn diag_dialog(ctx: &egui::Context, t: &Tokens, run: &mut Pending<CsResult<Plain
             ui.horizontal_wrapped(|ui| {
                 kit::text(ui, "Output of", 12.5, t.text_2);
                 kit::code(ui, t, "cswap list --token-status");
-                kit::text(ui, ": where each account's OAuth token comes from and whether it is still valid.", 12.5, t.text_2);
+                kit::text(
+                    ui,
+                    ": where each account's OAuth token comes from and whether it is still valid.",
+                    12.5,
+                    t.text_2,
+                );
             });
             match out_text {
                 None => {
@@ -1371,9 +1644,18 @@ fn diag_dialog(ctx: &egui::Context, t: &Tokens, run: &mut Pending<CsResult<Plain
                         .inner_margin(Margin::symmetric(12, 8))
                         .show(ui, |ui| {
                             ui.set_width(w - 26.0);
-                            egui::ScrollArea::vertical().max_height(ctx.content_rect().height() * 0.46).show(ui, |ui| {
-                                ui.add(egui::Label::new(egui::RichText::new(s.trim()).font(kit::mono(12.0)).color(t.text_2)).selectable(true).wrap());
-                            });
+                            egui::ScrollArea::vertical().max_height(ctx.content_rect().height() * 0.46).show(
+                                ui,
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(s.trim()).font(kit::mono(12.0)).color(t.text_2),
+                                        )
+                                        .selectable(true)
+                                        .wrap(),
+                                    );
+                                },
+                            );
                         });
                 }
             }
@@ -1437,7 +1719,9 @@ fn run_dialog(
             let who = a.alias.clone().unwrap_or_else(|| a.email.clone());
             kit::para(
                 ui,
-                format!("Session mode: Claude Code runs as {who} in that terminal only. Your default login and every other terminal are untouched."),
+                format!(
+                    "Session mode: Claude Code runs as {who} in that terminal only. Your default login and every other terminal are untouched."
+                ),
                 12.5,
                 t.text_2,
             );
@@ -1450,23 +1734,36 @@ fn run_dialog(
                 });
             });
             if !mappings.is_empty() {
-                kit::field(ui, t, "Or pick a mapped directory", Some("Directories you have mapped with cswap map."), |ui| {
-                    let current = if mappings.iter().any(|m| &m.path == dir) { dir.clone() } else { "—".into() };
-                    egui::ComboBox::from_id_salt("run-mapped").width(ui.available_width() - 8.0).selected_text(current).show_ui(ui, |ui| {
-                        if ui.selectable_label(false, "—").clicked() {
-                            dir.clear();
-                        }
-                        for m in mappings.iter() {
-                            let label = match &m.account {
-                                Some(x) => format!("{} — {}", m.path, x.alias.clone().unwrap_or_else(|| x.email.clone())),
-                                None => m.path.clone(),
-                            };
-                            if ui.selectable_label(&m.path == dir, label).clicked() {
-                                *dir = m.path.clone();
-                            }
-                        }
-                    });
-                });
+                kit::field(
+                    ui,
+                    t,
+                    "Or pick a mapped directory",
+                    Some("Directories you have mapped with cswap map."),
+                    |ui| {
+                        let current = if mappings.iter().any(|m| &m.path == dir) { dir.clone() } else { "—".into() };
+                        egui::ComboBox::from_id_salt("run-mapped")
+                            .width(ui.available_width() - 8.0)
+                            .selected_text(current)
+                            .show_ui(ui, |ui| {
+                                if ui.selectable_label(false, "—").clicked() {
+                                    dir.clear();
+                                }
+                                for m in mappings.iter() {
+                                    let label = match &m.account {
+                                        Some(x) => format!(
+                                            "{} — {}",
+                                            m.path,
+                                            x.alias.clone().unwrap_or_else(|| x.email.clone())
+                                        ),
+                                        None => m.path.clone(),
+                                    };
+                                    if ui.selectable_label(&m.path == dir, label).clicked() {
+                                        *dir = m.path.clone();
+                                    }
+                                }
+                            });
+                    },
+                );
             }
             let w = ui.available_width();
             egui::Frame::new()
@@ -1485,7 +1782,12 @@ fn run_dialog(
                 });
         },
         |ui| {
-            go = Btn::new("Open terminal").variant(Variant::Primary).icon(Icon::Terminal).loading(busy).show(ui, t).clicked();
+            go = Btn::new("Open terminal")
+                .variant(Variant::Primary)
+                .icon(Icon::Terminal)
+                .loading(busy)
+                .show(ui, t)
+                .clicked();
             cancel = Btn::new("Cancel").variant(Variant::Ghost).show(ui, t).clicked();
         },
     );

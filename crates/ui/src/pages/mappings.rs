@@ -102,7 +102,12 @@ impl MappingsPage {
 
     fn open(&mut self, cx: &mut Cx, m: &Mapping) {
         match &m.account {
-            None => notify(cx, ToastKind::Error, "No account for this directory", Some(&format!("{} is no longer managed by cswap.", m.email))),
+            None => notify(
+                cx,
+                ToastKind::Error,
+                "No account for this directory",
+                Some(&format!("{} is no longer managed by cswap.", m.email)),
+            ),
             Some(a) => self.launching.push(cx.services.cswap.launch_session(&a.number.to_string(), Some(&m.path))),
         }
     }
@@ -216,16 +221,27 @@ impl MappingsPage {
             440.0,
             |ui| {
                 kit::field(ui, t, "Account", None, |ui| {
-                    let label = |a: &Account| format!("{}. {}{}", a.number, a.alias.as_ref().map(|s| format!("{s} — ")).unwrap_or_default(), a.email);
-                    let current = list.iter().find(|a| a.number.to_string() == st.target).map(label).unwrap_or_default();
-                    egui::ComboBox::from_id_salt("map-account").width(ui.available_width() - 8.0).selected_text(current).show_ui(ui, |ui| {
-                        for a in list {
-                            let n = a.number.to_string();
-                            if ui.selectable_label(st.target == n, label(a)).clicked() {
-                                st.target = n;
+                    let label = |a: &Account| {
+                        format!(
+                            "{}. {}{}",
+                            a.number,
+                            a.alias.as_ref().map(|s| format!("{s} — ")).unwrap_or_default(),
+                            a.email
+                        )
+                    };
+                    let current =
+                        list.iter().find(|a| a.number.to_string() == st.target).map(label).unwrap_or_default();
+                    egui::ComboBox::from_id_salt("map-account")
+                        .width(ui.available_width() - 8.0)
+                        .selected_text(current)
+                        .show_ui(ui, |ui| {
+                            for a in list {
+                                let n = a.number.to_string();
+                                if ui.selectable_label(st.target == n, label(a)).clicked() {
+                                    st.target = n;
+                                }
                             }
-                        }
-                    });
+                        });
                 });
                 kit::field(ui, t, "Directory", None, |ui| {
                     ui.horizontal(|ui| {
@@ -277,25 +293,33 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
     let path_rect = Rect::from_min_size(pos2(text_x, rect.min.y + 10.0), g.size());
     ui.painter().galley(path_rect.min, g, t.text);
     let _ = ui.interact(path_rect, ui.scope_id().with(("map-path", &m.path)), Sense::hover()).on_hover_text(&m.path);
-    kit::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))), |ui| {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            match &m.account {
-                Some(a) => {
-                    kit::text(ui, "→", 11.5, t.text_3);
-                    let who = a.alias.clone().unwrap_or_else(|| a.email.clone());
-                    kit::text(ui, format!("Account-{} · {who}", a.number), 11.5, t.text_2);
+    kit::place(
+        ui,
+        UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))),
+        |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                match &m.account {
+                    Some(a) => {
+                        kit::text(ui, "→", 11.5, t.text_3);
+                        let who = a.alias.clone().unwrap_or_else(|| a.email.clone());
+                        kit::text(ui, format!("Account-{} · {who}", a.number), 11.5, t.text_2);
+                    }
+                    None => {
+                        kit::text(ui, format!("→ {}", m.email), 11.5, t.text_3);
+                        kit::chip(ui, t, "account removed", ChipTone::Warn);
+                    }
                 }
-                None => {
-                    kit::text(ui, format!("→ {}", m.email), 11.5, t.text_3);
-                    kit::chip(ui, t, "account removed", ChipTone::Warn);
-                }
-            }
-        });
-    });
-    kit::place(ui, 
+            });
+        },
+    );
+    kit::place(
+        ui,
         UiBuilder::new()
-            .max_rect(Rect::from_min_max(pos2(rect.max.x - 12.0 - buttons_w, rect.min.y), pos2(rect.max.x - 12.0, rect.max.y)))
+            .max_rect(Rect::from_min_max(
+                pos2(rect.max.x - 12.0 - buttons_w, rect.min.y),
+                pos2(rect.max.x - 12.0, rect.max.y),
+            ))
             .layout(Layout::right_to_left(Align::Center)),
         |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;

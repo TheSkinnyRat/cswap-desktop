@@ -185,8 +185,18 @@ impl MockCswap {
             next_log_id: 1,
             binary: Some(binary),
             mappings: vec![
-                Mapping { path: "/home/you/work/client-app".into(), email: "work@example.com".into(), organization_uuid: Some("org-2".into()), account: None },
-                Mapping { path: "D:\\Projects\\side-project".into(), email: "gone@example.com".into(), organization_uuid: None, account: None },
+                Mapping {
+                    path: "/home/you/work/client-app".into(),
+                    email: "work@example.com".into(),
+                    organization_uuid: Some("org-2".into()),
+                    account: None,
+                },
+                Mapping {
+                    path: "D:\\Projects\\side-project".into(),
+                    email: "gone@example.com".into(),
+                    organization_uuid: None,
+                    account: None,
+                },
             ],
         };
         Self { st: Mutex::new(st), sink, now_ms: now, fixed: true }
@@ -589,8 +599,11 @@ impl Cswap for MockCswap {
     }
 
     fn auto_once(&self, _dry_run: bool) -> Pending<CsResult<AutoOnceResult>> {
-        let ev =
-            auto_event(self.clock(), "no-switch", json!({ "reason": "below-threshold", "detail": "active headroom 55%" }));
+        let ev = auto_event(
+            self.clock(),
+            "no-switch",
+            json!({ "reason": "below-threshold", "detail": "active headroom 55%" }),
+        );
         Pending::ready(Ok(AutoOnceResult { exit_code: Some(2), outcome: AutoOutcome::NoAction, events: vec![ev] }))
     }
 
