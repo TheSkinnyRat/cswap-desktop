@@ -10,8 +10,8 @@ use std::f32::consts::TAU;
 use egui::{Color32, CornerRadius, Id, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, pos2, vec2};
 
 use crate::style;
-use crate::widgets;
 use crate::theme::Tokens;
+use crate::widgets;
 use cswap_core::format::{Tone, pct};
 
 /// Grow animation of bars and rings (`duration-500 ease-out`).

@@ -22,12 +22,12 @@ use cswap_core::{
     UsageView,
 };
 
-use crate::style;
-use crate::widgets::{self, Button, Variant, icon, item, item_hint};
 use crate::cx::Cx;
+use crate::style;
 use crate::theme::Tokens;
 use crate::toast::ToastKind;
 use crate::usage;
+use crate::widgets::{self, Button, Variant, icon, item, item_hint};
 
 /// Local UTC offset in seconds, for reset clocks.
 pub(crate) fn local_offset() -> i64 {
@@ -224,13 +224,17 @@ impl AccountsPage {
     fn header(&mut self, ui: &mut Ui, cx: &mut Cx, t: &Tokens, list: &[Account], s: &AppSettings) {
         let rings = s.usage_view == UsageView::Rings;
         let active = list.iter().find(|a| a.active);
-        let rotate = Button::new("Rotate").icon(icon::SHUFFLE).trailing(icon::CHEVRON_DOWN).loading(self.busy("rotate"));
+        let rotate =
+            Button::new("Rotate").icon(icon::SHUFFLE).trailing(icon::CHEVRON_DOWN).loading(self.busy("rotate"));
         let add = Button::new("Add account").variant(Variant::Primary).icon(icon::PLUS).trailing(icon::CHEVRON_DOWN);
         let actions_w = 32.0 * 4.0 + rotate.width(ui) + add.width(ui) + 8.0 * 5.0;
         let mask = s.mask_emails;
         let mut picked: (Option<usize>, Option<usize>, Option<usize>) = (None, None, None);
         let mut toggles = (false, false, false);
-        widgets::page_header(ui, "Accounts", |ui| {
+        widgets::page_header(
+            ui,
+            "Accounts",
+            |ui| {
                 if let Some(a) = active {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -244,26 +248,40 @@ impl AccountsPage {
                 } else if !list.is_empty() {
                     widgets::line(ui, "No active managed account", style::body(12.5), t.text_2);
                 }
-            }, actions_w, |ui| {
+            },
+            actions_w,
+            |ui| {
                 // right-to-left: the last control first
                 let more = Button::new("").variant(Variant::Ghost).icon(icon::ELLIPSIS).label("More").show(ui);
-                picked.2 = widgets::menu_list(&more, 260.0, &[
+                picked.2 = widgets::menu_list(
+                    &more,
+                    260.0,
+                    &[
                         with(item("Export all accounts"), icon::DOWNLOAD),
                         with(item("Import accounts"), icon::UPLOAD),
                         None,
                         with(item_hint("Token diagnostics", "--token-status"), icon::STETHOSCOPE),
-                    ]);
+                    ],
+                );
                 let add_r = add.show(ui);
-                picked.1 = widgets::menu_list(&add_r, 240.0, &[
+                picked.1 = widgets::menu_list(
+                    &add_r,
+                    240.0,
+                    &[
                         with(item("From current Claude login"), icon::USER_PLUS),
                         with(item("From setup-token or API key"), icon::KEY_ROUND),
-                    ]);
+                    ],
+                );
                 let rot = rotate.show(ui);
-                picked.0 = widgets::menu_list(&rot, 260.0, &[
+                picked.0 = widgets::menu_list(
+                    &rot,
+                    260.0,
+                    &[
                         with(item_hint("Next account", "rotation"), icon::ARROW_RIGHT_LEFT),
                         with(item_hint("Best (most quota left)", "best"), icon::SPARKLES),
                         with(item("Next available (skip limited)"), icon::SHUFFLE),
-                    ]);
+                    ],
+                );
                 let (m_icon, m_tip) = if mask {
                     (icon::EYE_OFF, "Show email addresses")
                 } else {
@@ -288,8 +306,11 @@ impl AccountsPage {
                     .show(ui)
                     .on_hover_text(p_tip)
                     .clicked();
-                let (v_icon, v_tip) =
-                    if rings { (icon::TEXT_ALIGN_START, "Show usage as bars") } else { (icon::CIRCLE_DASHED, "Show usage as rings") };
+                let (v_icon, v_tip) = if rings {
+                    (icon::TEXT_ALIGN_START, "Show usage as bars")
+                } else {
+                    (icon::CIRCLE_DASHED, "Show usage as rings")
+                };
                 toggles.0 = Button::new("")
                     .variant(Variant::Ghost)
                     .icon(v_icon)
@@ -297,7 +318,8 @@ impl AccountsPage {
                     .show(ui)
                     .on_hover_text(v_tip)
                     .clicked();
-            });
+            },
+        );
         if toggles.0 {
             let v = if rings { UsageView::Bars } else { UsageView::Rings };
             cx.services.cswap.edit_settings(Box::new(move |s| s.usage_view = v));
@@ -350,7 +372,11 @@ impl AccountsPage {
             if state.payload.is_none() {
                 widgets::notice(ui, &e.message, ChipTone::Danger);
             } else {
-                widgets::notice(ui, &format!("Showing the last successful list — refresh failed: {}", e.message), ChipTone::Warn);
+                widgets::notice(
+                    ui,
+                    &format!("Showing the last successful list — refresh failed: {}", e.message),
+                    ChipTone::Warn,
+                );
             }
         }
         if state.payload.is_none() && state.error.is_none() {
@@ -369,9 +395,15 @@ impl AccountsPage {
         }
         if state.payload.is_some() && list.is_empty() {
             let mut add = false;
-            widgets::empty(ui, None, "No managed accounts yet", "Log into Claude Code with the account you want to keep, then add it here. cswap backs up its login so you can switch back to it any time.", |ui| {
+            widgets::empty(
+                ui,
+                None,
+                "No managed accounts yet",
+                "Log into Claude Code with the account you want to keep, then add it here. cswap backs up its login so you can switch back to it any time.",
+                |ui| {
                     add = Button::new("Add current login").variant(Variant::Primary).icon(icon::PLUS).show(ui).clicked()
-                });
+                },
+            );
             if add {
                 self.open_add();
             }
@@ -507,7 +539,12 @@ impl AccountsPage {
             with(item("Export this account"), icon::DOWNLOAD),
             with(item_hint("Re-add from the current login", &slot_hint), icon::PENCIL),
             None,
-            Some(widgets::MenuItem { label: "Remove account", danger: true, icon: Some(icon::TRASH_2), ..Default::default() }),
+            Some(widgets::MenuItem {
+                label: "Remove account",
+                danger: true,
+                icon: Some(icon::TRASH_2),
+                ..Default::default()
+            }),
         ];
         if let Some(i) = widgets::menu_list(&m, 280.0, &items) {
             out = Some(RowAct::Menu(i));
@@ -563,10 +600,14 @@ impl AccountsPage {
             row.multiply_opacity(0.7);
         }
         let cell = |row: &mut Ui, i: usize, f: &mut dyn FnMut(&mut Ui)| -> f32 {
-            widgets::place(row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
+            widgets::place(
+                row,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))),
+                |ui| {
                     ui.set_width(cols[i]);
                     f(ui)
-                })
+                },
+            )
             .response
             .rect
             .height()
@@ -612,15 +653,23 @@ impl AccountsPage {
         }
         let si = cols.len() - 2;
         let status_h = status_height(a);
-        widgets::place(&mut row, UiBuilder::new()
-                .max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))), |ui| status_block(ui, t, a));
+        widgets::place(
+            &mut row,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))),
+            |ui| status_block(ui, t, a),
+        );
         let ai = cols.len() - 1;
-        let act = widgets::place(&mut row, UiBuilder::new()
+        let act = widgets::place(
+            &mut row,
+            UiBuilder::new()
                 .max_rect(Rect::from_min_size(pos2(xs[ai], mid - 14.0), vec2(cols[ai], 28.0)))
-                .layout(Layout::right_to_left(Align::Center)), |ui| {
+                .layout(Layout::right_to_left(Align::Center)),
+            |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 self.actions(ui, t, a)
-            })
+            },
+        )
         .inner;
         let rect = Rect::from_min_size(top_left, vec2(width, h + 20.0));
         let hovered = ui.rect_contains_pointer(rect);
@@ -657,9 +706,12 @@ impl AccountsPage {
         let width = ui.available_width();
         let bg = ui.painter().add(Shape::Noop);
         let mut act = None;
-        let inner = widgets::place(ui, UiBuilder::new()
+        let inner = widgets::place(
+            ui,
+            UiBuilder::new()
                 .max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0)))
-                .id_salt(("acct-card", a.number)), |ui| {
+                .id_salt(("acct-card", a.number)),
+            |ui| {
                 if a.disabled == Some(true) {
                     ui.multiply_opacity(0.7);
                 }
@@ -685,17 +737,25 @@ impl AccountsPage {
                         t.text_3,
                     );
                     let name_w = (w - num_w - act_w).max(60.0);
-                    let nh = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))), |ui| {
+                    let nh = widgets::place(
+                        ui,
+                        UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))),
+                        |ui| {
                             ui.set_width(name_w);
                             name_block(ui, t, a, plan, s.mask_emails, now, off)
-                        })
+                        },
+                    )
                     .inner;
-                    act = widgets::place(ui, UiBuilder::new()
+                    act = widgets::place(
+                        ui,
+                        UiBuilder::new()
                             .max_rect(Rect::from_min_size(pos2(top.x + w - act_w, top.y - 4.0), vec2(act_w, 28.0)))
-                            .layout(Layout::right_to_left(Align::Center)), |ui| {
+                            .layout(Layout::right_to_left(Align::Center)),
+                        |ui| {
                             ui.spacing_mut().item_spacing.x = 4.0;
                             self.actions(ui, t, a)
-                        })
+                        },
+                    )
                     .inner;
                     ui.allocate_space(vec2(w, nh.max(20.0)));
                     // windows; models this account lacks are absent, not dashes
@@ -720,7 +780,8 @@ impl AccountsPage {
                         status_inline(ui, t, a);
                     });
                 });
-            })
+            },
+        )
         .response;
         let rect = Rect::from_min_size(top_left, vec2(width, inner.rect.height()));
         let fill = if a.active { t.accent_soft.gamma_multiply(0.4) } else { Color32::TRANSPARENT };
@@ -890,12 +951,14 @@ fn window_cell(
     }
     let mut x = top.min.x;
     if card {
-        let g = widgets::galley(ui, format!("{} ", c.card_name), style::body(12.0), t.text_3, (right - x - 8.0).max(10.0));
+        let g =
+            widgets::galley(ui, format!("{} ", c.card_name), style::body(12.0), t.text_3, (right - x - 8.0).max(10.0));
         let gw = g.size().x;
         p.galley(pos2(x, top.center().y - g.size().y / 2.0), g, t.text_3);
         x += gw;
     }
-    let g = widgets::galley(ui, pct(Some(w.pct)), style::body(12.0), usage::pct_color(t, tn), (right - x - 4.0).max(10.0));
+    let g =
+        widgets::galley(ui, pct(Some(w.pct)), style::body(12.0), usage::pct_color(t, tn), (right - x - 4.0).max(10.0));
     p.galley(pos2(x, top.center().y - g.size().y / 2.0), g, t.text);
     ui.add_space(4.0);
     usage::bar(ui, t, id, Some(w.pct), tn, pace, width);
@@ -1026,7 +1089,12 @@ fn add_dialog(
     let mut cancel = false;
     let busy = run.is_some();
     let can_submit = !slot_taken || *overwrite;
-    let out = widgets::dialog(ctx, "add", "Add the current Claude login", 440.0, |ui| {
+    let out = widgets::dialog(
+        ctx,
+        "add",
+        "Add the current Claude login",
+        440.0,
+        |ui| {
             steps(ui, t, 1, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     widgets::line(ui, "Open a terminal anywhere and start Claude Code:", style::body(12.5), t.text_2);
@@ -1039,12 +1107,27 @@ fn add_dialog(
                     widgets::code(ui, "/login");
                     widgets::line(ui, "and finish the sign-in in the browser.", style::body(12.5), t.text_2);
                 });
-                widgets::wrap_text(ui, "Do not run /logout on the account you are leaving — Claude Code may revoke the token cswap stored for it.", style::body(12.5), t.text_2);
+                widgets::wrap_text(
+                    ui,
+                    "Do not run /logout on the account you are leaving — Claude Code may revoke the token cswap stored for it.",
+                    style::body(12.5),
+                    t.text_2,
+                );
             });
             steps(ui, t, 3, |ui| {
-                widgets::wrap_text(ui, "Come back here and add it. cswap stores that login so you can switch back to it later.", style::body(12.5), t.text_2);
+                widgets::wrap_text(
+                    ui,
+                    "Come back here and add it. cswap stores that login so you can switch back to it later.",
+                    style::body(12.5),
+                    t.text_2,
+                );
             });
-            widgets::wrap_text(ui, "Adding an account that is already managed refreshes its stored credentials instead of creating a duplicate.", style::body(12.5), t.text_3);
+            widgets::wrap_text(
+                ui,
+                "Adding an account that is already managed refreshes its stored credentials instead of creating a duplicate.",
+                style::body(12.5),
+                t.text_3,
+            );
             two_fields(
                 ui,
                 |ui| {
@@ -1065,7 +1148,8 @@ fn add_dialog(
             if let Some(n) = slot_num.filter(|_| slot_taken) {
                 slot_warning(ui, t, &format!("Slot {n} is taken. Overwrite it with the current login?"), overwrite);
             }
-        }, |ui| {
+        },
+        |ui| {
             submit = Button::new("Add account")
                 .variant(Variant::Primary)
                 .loading(busy)
@@ -1073,7 +1157,8 @@ fn add_dialog(
                 .show(ui)
                 .clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if submit {
         let opts = AddAccountOptions {
             slot: slot_num,
@@ -1107,8 +1192,18 @@ fn token_dialog(
     let (mut submit, mut cancel) = (false, false);
     let busy = run.is_some();
     let can_submit = !token.trim().is_empty() && (!slot_taken || *overwrite);
-    let out = widgets::dialog(ctx, "token", "Add from a token", 440.0, |ui| {
-            widgets::wrap_text(ui, "A long-lived setup-token (claude setup-token) or a managed API key. The token is handed to cswap over stdin, never as a command-line argument, and is not kept by this app.", style::body(12.5), t.text_2);
+    let out = widgets::dialog(
+        ctx,
+        "token",
+        "Add from a token",
+        440.0,
+        |ui| {
+            widgets::wrap_text(
+                ui,
+                "A long-lived setup-token (claude setup-token) or a managed API key. The token is handed to cswap over stdin, never as a command-line argument, and is not kept by this app.",
+                style::body(12.5),
+                t.text_2,
+            );
             let hint = view::token_kind(token)
                 .map(|k| format!("Detected: {k}"))
                 .unwrap_or_else(|| "sk-ant-oat01-… or sk-ant-api03-…".into());
@@ -1149,7 +1244,8 @@ fn token_dialog(
             if let Some(n) = slot_num.filter(|_| slot_taken) {
                 slot_warning(ui, t, &format!("Slot {n} is taken. Overwrite it?"), overwrite);
             }
-        }, |ui| {
+        },
+        |ui| {
             submit = Button::new("Register token")
                 .variant(Variant::Primary)
                 .loading(busy)
@@ -1157,7 +1253,8 @@ fn token_dialog(
                 .show(ui)
                 .clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if submit {
         let opts = AddTokenOptions {
             token: token.clone(),
@@ -1199,9 +1296,19 @@ fn alias_dialog(
     let (mut save, mut unset, mut cancel, mut enter) = (false, false, false, false);
     let can_save = !alias.is_empty() && valid && Some(alias.as_str()) != a.alias.as_deref();
     let preview = format!("cswap switch {}", if alias.is_empty() { "dev" } else { alias.as_str() });
-    let out = widgets::dialog(ctx, "alias", &format!("Alias for Account-{n}"), 440.0, |ui| {
+    let out = widgets::dialog(
+        ctx,
+        "alias",
+        &format!("Alias for Account-{n}"),
+        440.0,
+        |ui| {
             ui.horizontal_wrapped(|ui| {
-                widgets::line(ui, format!("{}. An alias works anywhere a slot number or email does:", a.email), style::body(12.5), t.text_2);
+                widgets::line(
+                    ui,
+                    format!("{}. An alias works anywhere a slot number or email does:", a.email),
+                    style::body(12.5),
+                    t.text_2,
+                );
                 widgets::code(ui, &preview);
             });
             widgets::field(ui, "Alias", Some("Letters, digits, . - _ — not purely numeric."), false, |ui| {
@@ -1215,13 +1322,15 @@ fn alias_dialog(
             if !valid {
                 widgets::line(ui, "Invalid alias.", style::body(12.0), t.danger);
             }
-        }, |ui| {
+        },
+        |ui| {
             save = Button::new("Save").variant(Variant::Primary).loading(busy).enabled(can_save).show(ui).clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
             if a.alias.is_some() {
                 unset = Button::new("Remove alias").variant(Variant::Ghost).loading(busy).show(ui).clicked();
             }
-        });
+        },
+    );
     if (save || (enter && !alias.is_empty() && valid)) && !busy {
         let p = cx.services.cswap.set_alias(&n.to_string(), Some(alias));
         *run = Some((p, format!("Account-{n} is now “{alias}”")));
@@ -1249,8 +1358,18 @@ fn move_dialog(
     let busy = run.is_some();
     let (mut go, mut cancel) = (false, false);
     let can_go = !slot.is_empty() && n >= 1 && n != a.number;
-    let out = widgets::dialog(ctx, "move", &format!("Move Account-{} to a slot", a.number), 440.0, |ui| {
-            widgets::wrap_text(ui, "Slot numbers are the shortcuts you type (cswap switch 1) and the list order. Aliases, backups and session history move with the account.", style::body(12.5), t.text_2);
+    let out = widgets::dialog(
+        ctx,
+        "move",
+        &format!("Move Account-{} to a slot", a.number),
+        440.0,
+        |ui| {
+            widgets::wrap_text(
+                ui,
+                "Slot numbers are the shortcuts you type (cswap switch 1) and the list order. Aliases, backups and session history move with the account.",
+                style::body(12.5),
+                t.text_2,
+            );
             widgets::field(ui, "Destination slot", None, false, |ui| {
                 let w = ui.available_width();
                 if widgets::input_opts(ui, "", slot, "", false, w, false).changed() {
@@ -1259,9 +1378,15 @@ fn move_dialog(
             });
             if let Some(o) = occupant {
                 let name = o.alias.clone().unwrap_or_else(|| o.email.clone());
-                widgets::wrap_text(ui, format!("Slot {n} holds {name} — the two will trade places."), style::body(12.0), t.text_2);
+                widgets::wrap_text(
+                    ui,
+                    format!("Slot {n} holds {name} — the two will trade places."),
+                    style::body(12.0),
+                    t.text_2,
+                );
             }
-        }, |ui| {
+        },
+        |ui| {
             go = Button::new(if occupant.is_some() { "Swap" } else { "Move" })
                 .variant(Variant::Primary)
                 .loading(busy)
@@ -1269,7 +1394,8 @@ fn move_dialog(
                 .show(ui)
                 .clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if go {
         let msg = if occupant.is_some() {
             format!("Swapped slots {} and {n}", a.number)
@@ -1296,25 +1422,37 @@ fn remove_dialog(
     let ok = view::remove_confirmed(typed, a);
     let busy = run.is_some();
     let (mut go, mut cancel) = (false, false);
-    let out = widgets::dialog(ctx, "remove", "Remove account", 440.0, |ui| {
+    let out = widgets::dialog(
+        ctx,
+        "remove",
+        "Remove account",
+        440.0,
+        |ui| {
             let live = if a.active {
                 ", but this is the active account — the live login stays until you switch or /logout"
             } else {
                 ""
             };
-            widgets::wrap_text(ui, format!(
+            widgets::wrap_text(
+                ui,
+                format!(
                     "This deletes the stored login for {} (slot {n}) from cswap. Claude Code itself is not logged out{live}. Recovery means logging in with that account again and re-adding it.",
                     a.email
-                ), style::body(12.5), t.text_2);
+                ),
+                style::body(12.5),
+                t.text_2,
+            );
             widgets::field(ui, &format!("Type {n} or the email to confirm"), None, false, |ui| {
                 let w = ui.available_width();
                 widgets::input_opts(ui, "", typed, "", false, w, false);
             });
-        }, |ui| {
+        },
+        |ui| {
             go =
                 Button::new("Remove permanently").variant(Variant::Danger).loading(busy).enabled(ok).show(ui).clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if go {
         *run = Some(cx.services.cswap.remove_account(&n.to_string()));
     }
@@ -1388,8 +1526,18 @@ fn export_dialog(
     let busy = run.is_some();
     let (mut go, mut cancel) = (false, false);
     let title = a.map(|a| format!("Export Account-{}", a.number)).unwrap_or_else(|| "Export all accounts".into());
-    let out = widgets::dialog(ctx, "export", &title, 440.0, |ui| {
-            widgets::wrap_text(ui, "The export is plaintext JSON containing login credentials. Keep it somewhere private, or encrypt it. By default only each account's own login is included — machine-shared MCP/plugin OAuth tokens stay on this machine.", style::body(12.5), t.text_2);
+    let out = widgets::dialog(
+        ctx,
+        "export",
+        &title,
+        440.0,
+        |ui| {
+            widgets::wrap_text(
+                ui,
+                "The export is plaintext JSON containing login credentials. Keep it somewhere private, or encrypt it. By default only each account's own login is included — machine-shared MCP/plugin OAuth tokens stay on this machine.",
+                style::body(12.5),
+                t.text_2,
+            );
             switch_row(
                 ui,
                 t,
@@ -1398,10 +1546,12 @@ fn export_dialog(
                 full,
                 "Full export",
             );
-        }, |ui| {
+        },
+        |ui| {
             go = Button::new("Choose file & export").variant(Variant::Primary).loading(busy).show(ui).clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if go {
         let name = format!("claude-swap-{}.cswap", &iso_from_ms(now_ms())[..10]);
         // A cancelled save dialog does nothing, as in 0.1.23.
@@ -1425,8 +1575,18 @@ fn import_dialog(
     }
     let busy = run.is_some();
     let (mut go, mut cancel) = (false, false);
-    let out = widgets::dialog(ctx, "import", "Import accounts", 440.0, |ui| {
-            widgets::wrap_text(ui, "Accounts that already exist are skipped, except slots whose refresh token has died — those are replaced automatically. If the imported account is the one you are logged in as, activate it afterwards with Switch (use --force from the CLI to bypass the backup of the current login).", style::body(12.5), t.text_2);
+    let out = widgets::dialog(
+        ctx,
+        "import",
+        "Import accounts",
+        440.0,
+        |ui| {
+            widgets::wrap_text(
+                ui,
+                "Accounts that already exist are skipped, except slots whose refresh token has died — those are replaced automatically. If the imported account is the one you are logged in as, activate it afterwards with Switch (use --force from the CLI to bypass the backup of the current login).",
+                style::body(12.5),
+                t.text_2,
+            );
             switch_row(
                 ui,
                 t,
@@ -1435,10 +1595,12 @@ fn import_dialog(
                 force,
                 "Overwrite existing",
             );
-        }, |ui| {
+        },
+        |ui| {
             go = Button::new("Choose file & import").variant(Variant::Primary).loading(busy).show(ui).clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if go {
         let filters: [(&str, &[&str]); 2] = [("cswap export", &["cswap", "json"]), ("All files", &["*"])];
         if let Some(path) = cx.services.host.pick_file("Import accounts", &filters) {
@@ -1463,11 +1625,21 @@ fn diag_dialog(
         }
     }
     let mut close = false;
-    let out = widgets::dialog(ctx, "diag", "Token diagnostics", 640.0, |ui| {
+    let out = widgets::dialog(
+        ctx,
+        "diag",
+        "Token diagnostics",
+        640.0,
+        |ui| {
             ui.horizontal_wrapped(|ui| {
                 widgets::line(ui, "Output of", style::body(12.5), t.text_2);
                 widgets::code(ui, "cswap list --token-status");
-                widgets::line(ui, ": where each account's OAuth token comes from and whether it is still valid.", style::body(12.5), t.text_2);
+                widgets::line(
+                    ui,
+                    ": where each account's OAuth token comes from and whether it is still valid.",
+                    style::body(12.5),
+                    t.text_2,
+                );
             });
             match out_text {
                 None => {
@@ -1500,9 +1672,11 @@ fn diag_dialog(
                         });
                 }
             }
-        }, |ui| {
+        },
+        |ui| {
             close = Button::new("Close").show(ui).clicked();
-        });
+        },
+    );
     !(out.close || close)
 }
 
@@ -1548,11 +1722,21 @@ fn run_dialog(
     }
     let busy = run.is_some();
     let (mut go, mut cancel, mut browse) = (false, false, false);
-    let out = widgets::dialog(ctx, "run", &format!("Open a terminal as Account-{}", a.number), 520.0, |ui| {
+    let out = widgets::dialog(
+        ctx,
+        "run",
+        &format!("Open a terminal as Account-{}", a.number),
+        520.0,
+        |ui| {
             let who = a.alias.clone().unwrap_or_else(|| a.email.clone());
-            widgets::wrap_text(ui, format!(
+            widgets::wrap_text(
+                ui,
+                format!(
                     "Session mode: Claude Code runs as {who} in that terminal only. Your default login and every other terminal are untouched."
-                ), style::body(12.5), t.text_2);
+                ),
+                style::body(12.5),
+                t.text_2,
+            );
             widgets::field(ui, "Start in", Some("Leave empty for your home directory."), false, |ui| {
                 ui.horizontal(|ui| {
                     let b = Button::new("Browse").icon(icon::FOLDER_OPEN);
@@ -1562,11 +1746,18 @@ fn run_dialog(
                 });
             });
             if !mappings.is_empty() {
-                widgets::field(ui, "Or pick a mapped directory", Some("Directories you have mapped with cswap map."), false, |ui| {
+                widgets::field(
+                    ui,
+                    "Or pick a mapped directory",
+                    Some("Directories you have mapped with cswap map."),
+                    false,
+                    |ui| {
                         let mut opts: Vec<(String, String)> = vec![(String::new(), "—".to_owned())];
                         opts.extend(mappings.iter().map(|m| {
                             let label = match &m.account {
-                                Some(x) => format!("{} — {}", m.path, x.alias.clone().unwrap_or_else(|| x.email.clone())),
+                                Some(x) => {
+                                    format!("{} — {}", m.path, x.alias.clone().unwrap_or_else(|| x.email.clone()))
+                                }
                                 None => m.path.clone(),
                             };
                             (m.path.clone(), label)
@@ -1576,7 +1767,8 @@ fn run_dialog(
                         if widgets::select(ui, "Or pick a mapped directory", &mut v, &opts, w) {
                             *dir = v;
                         }
-                    });
+                    },
+                );
             }
             let w = ui.available_width();
             egui::Frame::new()
@@ -1593,7 +1785,8 @@ fn run_dialog(
                         widgets::line(ui, format!("cswap run {}", a.number), style::mono(12.0), t.text_2);
                     });
                 });
-        }, |ui| {
+        },
+        |ui| {
             go = Button::new("Open terminal")
                 .variant(Variant::Primary)
                 .icon(icon::SQUARE_TERMINAL)
@@ -1601,7 +1794,8 @@ fn run_dialog(
                 .show(ui)
                 .clicked();
             cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-        });
+        },
+    );
     if browse && let Some(p) = cx.services.host.pick_directory("Start in") {
         *dir = p;
     }

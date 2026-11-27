@@ -10,11 +10,11 @@ use cswap_core::view::ChipTone;
 use cswap_core::{Account, CsResult, Event, LaunchedSession, Mapping, Pending, PlainOutput};
 
 use super::accounts::notify;
-use crate::style;
-use crate::widgets::{self, Button, Variant, icon};
 use crate::cx::Cx;
+use crate::style;
 use crate::theme::Tokens;
 use crate::toast::ToastKind;
+use crate::widgets::{self, Button, Variant, icon};
 
 struct AddMap {
     target: String,
@@ -201,7 +201,12 @@ impl MappingsPage {
         let busy = st.run.is_some();
         let can = !st.path.trim().is_empty() && !st.target.is_empty();
         let (mut go, mut cancel, mut browse) = (false, false, false);
-        let out = widgets::dialog(ctx, "map", "Map a directory to an account", 440.0, |ui| {
+        let out = widgets::dialog(
+            ctx,
+            "map",
+            "Map a directory to an account",
+            440.0,
+            |ui| {
                 widgets::field(ui, "Account", None, false, |ui| {
                     let label = |a: &Account| {
                         format!(
@@ -223,10 +228,12 @@ impl MappingsPage {
                         browse = b.show(ui).clicked();
                     });
                 });
-            }, |ui| {
+            },
+            |ui| {
                 go = Button::new("Map").variant(Variant::Primary).loading(busy).enabled(can).show(ui).clicked();
                 cancel = Button::new("Cancel").variant(Variant::Ghost).show(ui).clicked();
-            });
+            },
+        );
         if browse && let Some(p) = cx.services.host.pick_directory("Map a directory") {
             st.path = p;
         }
@@ -263,7 +270,10 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
     let path_rect = Rect::from_min_size(pos2(text_x, rect.min.y + 10.0), g.size());
     ui.painter().galley(path_rect.min, g, t.text);
     let _ = ui.interact(path_rect, ui.scope_id().with(("map-path", &m.path)), Sense::hover()).on_hover_text(&m.path);
-    widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))), |ui| {
+    widgets::place(
+        ui,
+        UiBuilder::new().max_rect(Rect::from_min_size(pos2(text_x, rect.min.y + 30.0), vec2(text_w, 18.0))),
+        |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 match &m.account {
@@ -278,13 +288,17 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
                     }
                 }
             });
-        });
-    widgets::place(ui, UiBuilder::new()
+        },
+    );
+    widgets::place(
+        ui,
+        UiBuilder::new()
             .max_rect(Rect::from_min_max(
                 pos2(rect.max.x - 12.0 - buttons_w, rect.min.y),
                 pos2(rect.max.x - 12.0, rect.max.y),
             ))
-            .layout(Layout::right_to_left(Align::Center)), |ui| {
+            .layout(Layout::right_to_left(Align::Center)),
+        |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             if unmap_b.show(ui).clicked() {
                 out = Some(false);
@@ -292,7 +306,8 @@ fn mapping_row(ui: &mut Ui, t: &Tokens, m: &Mapping, last: bool) -> Option<bool>
             if open_b.show(ui).on_hover_text(open_tip).clicked() {
                 out = Some(true);
             }
-        });
+        },
+    );
     if !last {
         ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border));
     }

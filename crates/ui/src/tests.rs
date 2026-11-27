@@ -515,9 +515,15 @@ fn confirm_dialog() {
             ui.painter().rect_filled(ui.ctx().content_rect(), 0.0, t.bg);
             let add = Button::new("Add account").primary().icon(icon::PLUS);
             let w = add.width(ui);
-            widgets::page_header(ui, "Accounts", |_| {}, w, |ui| {
-                add.show(ui);
-            });
+            widgets::page_header(
+                ui,
+                "Accounts",
+                |_| {},
+                w,
+                |ui| {
+                    add.show(ui);
+                },
+            );
             widgets::confirm(
                 ui.ctx(),
                 "rm",

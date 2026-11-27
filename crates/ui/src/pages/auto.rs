@@ -15,11 +15,11 @@ use cswap_core::{
 };
 
 use super::accounts::{local_offset, notify};
-use crate::style;
-use crate::widgets::{self, Button, Variant, icon};
 use crate::cx::Cx;
+use crate::style;
 use crate::theme::Tokens;
 use crate::toast::ToastKind;
+use crate::widgets::{self, Button, Variant, icon};
 
 /// The window keeps the last 500 events, as 0.1.23's store did.
 const MAX_EVENTS: usize = 500;
@@ -184,23 +184,32 @@ impl AutoPage {
             let once = Button::new("Check now").icon(icon::ZAP).loading(self.checking.is_some()).enabled(!auto.running);
             let dry_w = 30.0 + 8.0 + widgets::measure(ui, "Dry run", style::body(12.5)).x;
             let actions_w = start.width(ui) + once.width(ui) + dry_w + 16.0;
-            widgets::page_header(ui, "Auto-switch", |ui| {
+            widgets::page_header(
+                ui,
+                "Auto-switch",
+                |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = vec2(0.0, 2.0);
                         widgets::line(ui, "Runs ", style::body(12.5), t.text_2);
                         widgets::line(ui, "cswap auto --json", style::mono(12.0), t.text_2);
-                        widgets::line(ui, " as a child process and switches before you hit a limit.", style::body(12.5), t.text_2);
+                        widgets::line(
+                            ui,
+                            " as a child process and switches before you hit a limit.",
+                            style::body(12.5),
+                            t.text_2,
+                        );
                     });
-                }, actions_w, |ui| {
+                },
+                actions_w,
+                |ui| {
                     toggle = start.show(ui).clicked();
-                    check = once
-                        .show(ui)
-                        .on_hover_text("cswap auto --once: evaluate once and switch if needed")
-                        .clicked();
+                    check =
+                        once.show(ui).on_hover_text("cswap auto --once: evaluate once and switch if needed").clicked();
                     widgets::line(ui, "Dry run", style::body(12.5), t.text_2);
                     ui.add_space(-4.0);
                     widgets::toggle(ui, &mut dry, "Dry run", !auto.running);
-                });
+                },
+            );
             egui::Frame::new().inner_margin(Margin { left: 24, right: 24, top: 0, bottom: 32 }).show(ui, |ui| {
                 let w = ui.available_width();
                 ui.set_width(w);
@@ -208,20 +217,28 @@ impl AutoPage {
                 let wide = w >= 760.0;
                 let left_w = if wide { w - 340.0 - 16.0 } else { w };
                 let top = ui.cursor().min;
-                let left = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))), |ui| {
+                let left = widgets::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(left_w, 100_000.0))),
+                    |ui| {
                         ui.set_width(left_w);
                         ui.spacing_mut().item_spacing = vec2(12.0, 16.0);
                         self.stats(ui, &t, &auto, &all, now);
                         self.feed(ui, &t, &auto, &all, off, now);
-                    })
+                    },
+                )
                 .response
                 .rect;
                 let right_top = if wide { pos2(top.x + left_w + 16.0, top.y) } else { pos2(top.x, left.max.y + 16.0) };
                 let right_w = if wide { 340.0 } else { w };
-                let right = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))), |ui| {
+                let right = widgets::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(right_top, vec2(right_w, 100_000.0))),
+                    |ui| {
                         ui.set_width(right_w);
                         self.settings_card(ui, &t, &mut saves);
-                    })
+                    },
+                )
                 .response
                 .rect;
                 ui.allocate_space(vec2(w, left.max.y.max(right.max.y) - top.y));
@@ -444,8 +461,12 @@ fn feed_line(ui: &mut Ui, t: &Tokens, ev: &AutoEvent, last: bool, off: i64, now:
         style::mono(11.5),
         t.text_3,
     );
-    widgets::place(ui, UiBuilder::new()
-            .max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))), |ui| widgets::chip(ui, &ev.event, view::event_tone(&ev.event)));
+    widgets::place(
+        ui,
+        UiBuilder::new()
+            .max_rect(Rect::from_min_size(pos2(top.x + 12.0 + time_w + 8.0, top.y + 6.0), vec2(chip_w, 18.0))),
+        |ui| widgets::chip(ui, &ev.event, view::event_tone(&ev.event)),
+    );
     ui.painter().galley(pos2(text_x, top.y + 6.0 + 1.0), g, t.text_2);
     if !last {
         ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border.gamma_multiply(0.6)));
@@ -465,31 +486,32 @@ fn setting_row(
     let control_w = 120.0;
     let text_w = w - control_w - 12.0;
     let top = ui.cursor().min;
-    let label_rect = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(text_w, 200.0))), |ui| {
-        ui.set_width(text_w);
-        ui.spacing_mut().item_spacing.y = 2.0;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            widgets::line(ui, spec.label, style::body_medium(13.0), t.text);
-            if row.is_set {
-                let g = widgets::galley(ui, "reset", style::body(10.5), t.text_3, 60.0);
-                let (r, resp) = ui.allocate_exact_size(g.size(), Sense::click());
-                resp.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("Reset {}", spec.label))
-                });
-                ui.painter().galley(r.min, g, t.text_3);
-                if resp.hovered() {
-                    ui.painter().hline(r.x_range(), r.max.y, Stroke::new(1.0, t.text_3));
+    let label_rect =
+        widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(text_w, 200.0))), |ui| {
+            ui.set_width(text_w);
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                widgets::line(ui, spec.label, style::body_medium(13.0), t.text);
+                if row.is_set {
+                    let g = widgets::galley(ui, "reset", style::body(10.5), t.text_3, 60.0);
+                    let (r, resp) = ui.allocate_exact_size(g.size(), Sense::click());
+                    resp.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, format!("Reset {}", spec.label))
+                    });
+                    ui.painter().galley(r.min, g, t.text_3);
+                    if resp.hovered() {
+                        ui.painter().hline(r.x_range(), r.max.y, Stroke::new(1.0, t.text_3));
+                    }
+                    if resp.on_hover_text("Back to the default").clicked() {
+                        saves.push((spec.key.to_string(), None));
+                    }
                 }
-                if resp.on_hover_text("Back to the default").clicked() {
-                    saves.push((spec.key.to_string(), None));
-                }
-            }
-        });
-        widgets::wrap_text(ui, spec.hint, style::body(11.5), t.text_3);
-    })
-    .response
-    .rect;
+            });
+            widgets::wrap_text(ui, spec.hint, style::body(11.5), t.text_3);
+        })
+        .response
+        .rect;
     let current = view::config_text(&row.value);
     let crect = Rect::from_min_size(pos2(top.x + w - control_w, top.y), vec2(control_w, 32.0));
     widgets::place(ui, UiBuilder::new().max_rect(crect).layout(Layout::right_to_left(Align::Center)), |ui| {

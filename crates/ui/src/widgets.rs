@@ -834,7 +834,8 @@ pub fn page_header(
         } else {
             Rect::from_min_size(pos2(top.x, left.max.y + 12.0), vec2(actions_width.min(w), act_h))
         };
-        let mut a = ui.new_child(egui::UiBuilder::new().max_rect(act_rect).layout(Layout::right_to_left(Align::Center)));
+        let mut a =
+            ui.new_child(egui::UiBuilder::new().max_rect(act_rect).layout(Layout::right_to_left(Align::Center)));
         a.spacing_mut().item_spacing.x = 8.0;
         actions(&mut a);
         let bottom = left.max.y.max(act_rect.max.y);
@@ -1121,14 +1122,26 @@ pub fn confirm(ctx: &egui::Context, id: &str, title: &str, body: &str, yes: &str
 // their size and add no accesskit node, so a page's own `widget_info` names stay unique.
 
 /// One line cut to `width` with an ellipsis.
-pub fn galley(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+pub fn galley(
+    ui: &Ui,
+    text: impl Into<String>,
+    font: FontId,
+    color: Color32,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
     let mut job = LayoutJob::simple_singleline(text.into(), font, color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(1.0));
     ui.painter().layout_job(job)
 }
 
 /// Text wrapped at `width`.
-pub fn wrapped(ui: &Ui, text: impl Into<String>, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+pub fn wrapped(
+    ui: &Ui,
+    text: impl Into<String>,
+    font: FontId,
+    color: Color32,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
     ui.painter().layout(text.into(), font, color, width.max(1.0))
 }
 

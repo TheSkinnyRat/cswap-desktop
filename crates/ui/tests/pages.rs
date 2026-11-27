@@ -11,7 +11,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use cswap_core::mock::{MockCswap, MockUpdates, auto_event};
-use cswap_core::{AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, ThemeSetting, UsageView};
+use cswap_core::{
+    AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, ThemeSetting, UsageView,
+};
 use cswap_ui::Services;
 use cswap_ui::cx::Cx;
 use cswap_ui::pages::{accounts::AccountsPage, auto::AutoPage, mappings::MappingsPage};
