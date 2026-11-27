@@ -16,3 +16,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+# Vault watch (sync with terminal/TUI changes). CC0-1.0, named as acceptable in the v1 brief.
+notify = "8"
+
+[target.'cfg(unix)'.dependencies]
+# kill(2) on a process group: SIGTERM for `cswap auto`, SIGKILL for a hung command's tree.
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
