@@ -697,8 +697,12 @@ fn with_field_label<R>(ui: &mut Ui, label: &str, control: impl FnOnce(&mut Ui) -
     ui.data_mut(|d| d.insert_temp(field_label_key(), label.to_owned()));
     let r = control(ui);
     ui.data_mut(|d| match prev {
-        Some(p) => d.insert_temp(field_label_key(), p),
-        None => d.remove::<String>(field_label_key()),
+        Some(p) => {
+            d.insert_temp(field_label_key(), p);
+        }
+        None => {
+            d.remove::<String>(field_label_key());
+        }
     });
     r
 }

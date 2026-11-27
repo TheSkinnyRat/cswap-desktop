@@ -179,7 +179,7 @@ impl MappingsPage {
         self.add_dialog(ui.ctx(), cx, &t, &list);
     }
 
-    fn add_dialog(&mut self, ctx: &egui::Context, cx: &mut Cx, t: &Tokens, list: &[Account]) {
+    fn add_dialog(&mut self, ctx: &egui::Context, cx: &mut Cx, _t: &Tokens, list: &[Account]) {
         let Some(st) = self.adding.as_mut() else { return };
         if let Some(p) = st.run.as_mut() {
             match p.take() {

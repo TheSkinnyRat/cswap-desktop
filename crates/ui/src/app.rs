@@ -22,7 +22,6 @@ use crate::palette::Palette;
 use crate::shell::{self, ShellAction, ShellView};
 use crate::style;
 use crate::toast::Toasts;
-use crate::widgets;
 
 /// Window shown or focused: re-read the list once, but not more often than this. Kept for
 /// the whole process (a static), because the app builds a fresh window each time it opens.

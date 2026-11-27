@@ -496,7 +496,7 @@ impl AccountsPage {
             item("Export this account"),
             item_hint("Re-add from the current login", &slot_hint),
             None,
-            Some(widgets::MenuItem { label: "Remove account", hint: None, danger: true }),
+            Some(widgets::MenuItem { label: "Remove account", danger: true, icon: Some(icon::TRASH_2), ..Default::default() }),
         ];
         if let Some(i) = widgets::menu_list(&m, 280.0, &items) {
             out = Some(RowAct::Menu(i));
@@ -908,7 +908,7 @@ fn status_extra(a: &Account) -> Option<(String, Option<&'static str>)> {
 
 fn status_block(ui: &mut Ui, t: &Tokens, a: &Account) {
     ui.spacing_mut().item_spacing.y = 4.0;
-    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status).into());
+    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status));
     let _ = r.on_hover_text(&a.usage_status);
     if let Some((s, tip)) = status_extra(a) {
         let r = widgets::line(ui, s, style::body(11.0), t.text_3);
@@ -919,7 +919,7 @@ fn status_block(ui: &mut Ui, t: &Tokens, a: &Account) {
 }
 
 fn status_inline(ui: &mut Ui, t: &Tokens, a: &Account) {
-    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status).into());
+    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status));
     let _ = r.on_hover_text(&a.usage_status);
     if let Some((s, _)) = status_extra(a) {
         widgets::line(ui, s, style::body(11.0), t.text_3);
