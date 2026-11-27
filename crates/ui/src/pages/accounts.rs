@@ -76,8 +76,8 @@ pub struct AccountsPage {
     ops: Vec<Op>,
     dlg: Option<Dlg>,
     /// What the last frame laid out, for tests: list width and whether it was cards.
-    pub(crate) last_list_width: f32,
-    pub(crate) last_cards: bool,
+    pub last_list_width: f32,
+    pub last_cards: bool,
 }
 
 impl Default for AccountsPage {
@@ -515,6 +515,12 @@ impl AccountsPage {
         for col in empty_cols {
             // A plain hyphen, not an em dash (Purwa, 10 Sep), centred in the stretched cell.
             p.text(pos2(xs[col], mid), egui::Align2::LEFT_CENTER, "-", kit::font(12.0), t.text_3);
+            // The empty cell is a node of its own, named like a filled one, so a test can
+            // point at the cell that holds the column.
+            let key = &cells[col - 2].key;
+            let r = row.interact(Rect::from_min_size(pos2(xs[col], y0), vec2(cols[col], h)), Id::unique(("window", a.number, key)), Sense::hover());
+            let name = format!("{} {key}: -", a.number);
+            r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
         }
         let si = cols.len() - 2;
         let status_h = status_height(a);
@@ -739,16 +745,20 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
 fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, rings: bool, pace: bool, now: i64, off: i64) {
     let id = Id::unique(("window", n, &c.key));
     let Some(w) = &c.window else {
-        kit::text(ui, "-", 12.0, t.text_3);
+        let r = kit::text(ui, "-", 12.0, t.text_3);
+        let name = format!("{n} {}: -", c.key);
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
         return;
     };
     let tip = view::window_tooltip(w, &c.tooltip_name, now, off);
     let reset = w.resets_at.as_deref().map(|r| reset_text(Some(r), now));
     let pace = if pace { w.expected_pct } else { None };
     let tn = tone(Some(w.pct));
+    let a11y = format!("{n} {}: {}", c.key, pct(Some(w.pct)));
     if rings {
         let label = card.then_some(c.card_name.as_str());
         let r = usage::ring(ui, t, id, Some(w.pct), pace, label, reset.as_deref(), ui.available_width());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
         let _ = r.on_hover_text(tip);
         return;
     }
@@ -781,7 +791,9 @@ fn window_cell(ui: &mut Ui, t: &Tokens, n: u32, c: &WindowCell, card: bool, ring
     ui.add_space(4.0);
     usage::bar(ui, t, id, Some(w.pct), tn, pace, width);
     let whole = Rect::from_min_max(top.min, pos2(top.max.x, top.max.y + 9.0));
-    let _ = ui.interact(whole, id.with("tip"), Sense::hover()).on_hover_text(tip);
+    let r = ui.interact(whole, id.with("tip"), Sense::hover());
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
+    let _ = r.on_hover_text(tip);
 }
 
 fn status_height(a: &Account) -> f32 {
