@@ -262,8 +262,8 @@ fn overlapping_reads_and_mutations_all_succeed() {
             panic!("an overlapping call failed: {e}");
         }
     }
-    // Every call is in the fake's own log: none of the writes was lost.
-    assert_eq!(t.state()["log"].as_array().unwrap().len(), 2 + 24);
+    // Every call (the seeding list + 24) is in the fake's own log: no write was lost.
+    assert_eq!(t.state()["log"].as_array().unwrap().len(), 1 + 24);
 }
 
 #[test]
