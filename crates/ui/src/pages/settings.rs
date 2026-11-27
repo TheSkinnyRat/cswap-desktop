@@ -30,6 +30,8 @@ enum Busy {
 
 #[derive(Default)]
 pub struct SettingsPage {
+    /// Fixed UTC offset (seconds) for tests and screenshots; the OS's otherwise.
+    pub utc_offset: Option<i64>,
     init: bool,
     path_draft: String,
     /// The setting the draft was last synced from, so a change elsewhere resets the draft.
@@ -528,7 +530,8 @@ impl SettingsPage {
         let t = cx.tokens.clone();
         let u = self.updater.clone();
         let version = u.version.clone().unwrap_or_default();
-        let (title, sub) = updater_text(&u);
+        let offset = self.utc_offset.unwrap_or_else(crate::pages::accounts::local_offset);
+        let (title, sub) = updater_text(&u, offset);
         let r = Frame::new()
             .fill(t.bg.gamma_multiply(0.5))
             .stroke(Stroke::new(1.0, t.border))
@@ -632,7 +635,7 @@ impl SettingsPage {
 }
 
 /// The two lines of the updater box for a state (titles of 0.1.23).
-fn updater_text(u: &UpdaterState) -> (String, String) {
+fn updater_text(u: &UpdaterState, offset: i64) -> (String, String) {
     let v = u.version.as_deref().unwrap_or("");
     let title = match u.status {
         UpdaterStatus::Disabled => "Automatic updates are off".to_owned(),
@@ -650,7 +653,7 @@ fn updater_text(u: &UpdaterState) -> (String, String) {
             .disabled_reason
             .clone()
             .unwrap_or_else(|| "Running from source or a dev build — use the release page.".into()),
-        _ => match u.checked_at.as_deref().and_then(local_hm) {
+        _ => match u.checked_at.as_deref().and_then(|c| local_hm(c, offset)) {
             Some(hm) => format!("Checked {hm} · installs on quit or on request"),
             None => "Checks at start and every 6 hours; installs on quit or on request.".into(),
         },
@@ -673,10 +676,10 @@ pub fn newer_than(latest: &str, current: &str) -> bool {
     false
 }
 
-/// `HH:MM` in local time for an ISO timestamp.
-pub fn local_hm(iso: &str) -> Option<String> {
-    let dt = chrono::DateTime::parse_from_rfc3339(iso).ok()?;
-    Some(dt.with_timezone(&chrono::Local).format("%H:%M").to_string())
+/// `HH:MM` at `offset` seconds from UTC for an ISO timestamp.
+pub fn local_hm(iso: &str, offset: i64) -> Option<String> {
+    let t = cswap_core::format::time_of(iso, offset);
+    (!t.is_empty()).then(|| t[..5].to_owned())
 }
 
 fn source_text(s: BinarySource) -> String {
@@ -811,6 +814,12 @@ mod tests {
     }
 
     #[test]
+    fn checked_time_uses_the_given_offset() {
+        assert_eq!(local_hm("2026-11-27T17:06:51.000Z", 7 * 3600).as_deref(), Some("00:06"));
+        assert_eq!(local_hm("garbage", 0), None);
+    }
+
+    #[test]
     fn updater_lines_follow_the_state() {
         let mut u = UpdaterState {
             status: UpdaterStatus::Downloading,
@@ -818,15 +827,15 @@ mod tests {
             percent: Some(41.6),
             ..Default::default()
         };
-        assert_eq!(updater_text(&u).0, "Downloading 1.2.0… 42%");
+        assert_eq!(updater_text(&u, 0).0, "Downloading 1.2.0… 42%");
         u.status = UpdaterStatus::Disabled;
         u.disabled_reason = Some("Installed from a .deb — update with your package manager.".into());
         assert_eq!(
-            updater_text(&u),
+            updater_text(&u, 0),
             ("Automatic updates are off".into(), "Installed from a .deb — update with your package manager.".into())
         );
         u.status = UpdaterStatus::Error;
         u.error = Some("signature mismatch".into());
-        assert_eq!(updater_text(&u).1, "signature mismatch");
+        assert_eq!(updater_text(&u, 0).1, "signature mismatch");
     }
 }

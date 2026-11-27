@@ -3,6 +3,7 @@
 //! Every cswap invocation the app made, newest first: time, arguments, duration, exit code;
 //! a click expands stdout/stderr. Tokens never appear here (they travel over stdin).
 
+use cswap_core::format::time_of;
 use cswap_core::{CommandLogEntry, Event};
 use egui::{Align, CornerRadius, Frame, Layout, Margin, Sense, Stroke, Ui, pos2, vec2};
 
@@ -18,6 +19,9 @@ pub const LOG_CAP: usize = 300;
 
 #[derive(Default)]
 pub struct LogPage {
+    /// Fixed UTC offset (seconds) for tests and screenshots; the OS's otherwise. The times
+    /// are wall-clock text, so a render would otherwise depend on the machine's time zone.
+    pub utc_offset: Option<i64>,
     init: bool,
     log: Vec<CommandLogEntry>,
     open: Option<u64>,
@@ -32,12 +36,6 @@ pub fn push_capped(log: &mut Vec<CommandLogEntry>, e: CommandLogEntry) {
     }
 }
 
-/// `toLocaleTimeString([], { hour12: false })`.
-fn local_hms(iso: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(iso)
-        .map(|d| d.with_timezone(&chrono::Local).format("%H:%M:%S").to_string())
-        .unwrap_or_default()
-}
 
 impl LogPage {
     pub fn new() -> Self {
@@ -114,9 +112,10 @@ impl LogPage {
                     ui.set_width(ui.available_width());
                     ui.spacing_mut().item_spacing.y = 0.0;
                     let n = self.log.len();
+                    let offset = self.utc_offset.unwrap_or_else(crate::pages::accounts::local_offset);
                     let mut toggled = None;
                     for (k, e) in self.log.iter().rev().enumerate() {
-                        if row(ui, e, self.open == Some(e.id), k + 1 == n, &t) {
+                        if row(ui, e, self.open == Some(e.id), k + 1 == n, &t, offset) {
                             toggled = Some(e.id);
                         }
                     }
@@ -129,7 +128,7 @@ impl LogPage {
 }
 
 /// One log row (and its output when `open`). Returns true when clicked.
-fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::theme::Tokens) -> bool {
+fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::theme::Tokens, offset: i64) -> bool {
     {
         let w = ui.available_width();
         let (r, resp) = ui.allocate_exact_size(vec2(w, 36.0), Sense::click());
@@ -160,7 +159,8 @@ fn row(ui: &mut Ui, e: &CommandLogEntry, open: bool, last: bool, t: &crate::them
         // command a pixel or two from row to row.
         child.allocate_ui_with_layout(vec2(TIME_W, 20.0), Layout::left_to_right(Align::Center), |ui| {
             ui.set_width(TIME_W);
-            widgets::text(ui, local_hms(&e.at), style::body(11.5), t.text_3);
+            // `toLocaleTimeString([], { hour12: false })`
+            widgets::text(ui, time_of(&e.at, offset), style::body(11.5), t.text_3);
         });
         child.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 12.0;

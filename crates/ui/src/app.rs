@@ -101,6 +101,18 @@ impl CswapApp {
         }
     }
 
+    /// Fixes the clock the pages read (Unix ms; `None` keeps the wall clock) and the UTC
+    /// offset of every wall-clock text, so tests and README renders come out the same on
+    /// any machine.
+    pub fn pin_clock(&mut self, now_ms: Option<i64>, utc_offset: i64) {
+        self.accounts_page.now_ms = now_ms;
+        self.accounts_page.utc_offset = Some(utc_offset);
+        self.auto_page.now_ms = now_ms;
+        self.auto_page.utc_offset = Some(utc_offset);
+        self.log_page.utc_offset = Some(utc_offset);
+        self.settings_page.utc_offset = Some(utc_offset);
+    }
+
     pub fn settings(&self) -> &AppSettings {
         &self.settings
     }

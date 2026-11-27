@@ -81,6 +81,8 @@ fn harness_sized(f: &Fixture, rx: Receiver<Event>, width: f32, height: f32) -> H
     let services = Services { cswap: f.cswap.clone(), updates: f.updates.clone(), host: f.host.clone() };
     let theme = f.cswap.settings().theme;
     let world = World { app: None, init: Some((services, rx)) };
+    // The fixture's clock and UTC: every wall-clock text renders the same on any machine.
+    let now = f.cswap.now_ms();
     Harness::builder()
         .with_size(vec2(width, height))
         .with_render_cursor(false)
@@ -91,7 +93,9 @@ fn harness_sized(f: &Fixture, rx: Receiver<Event>, width: f32, height: f32) -> H
             |ui, w: &mut World| {
                 if w.app.is_none() {
                     let (s, rx) = w.init.take().expect("services");
-                    w.app = Some(CswapApp::with_context(ui.ctx(), s, rx));
+                    let mut app = CswapApp::with_context(ui.ctx(), s, rx);
+                    app.pin_clock(Some(now), 0);
+                    w.app = Some(app);
                 }
                 // The harness frames its ui with a margin; the real window has none.
                 let rect = ui.ctx().content_rect();
@@ -119,32 +123,7 @@ fn nav(h: &mut Harness<'_, World>, label: &str) {
 }
 
 fn shot(h: &mut Harness<'_, World>, name: &str) {
-    // Wall-clock text ("15:04:05" in the log) depends on the machine's time zone; masked
-    // so a snapshot taken in one zone still matches in another.
-    let clocks: Vec<egui::Rect> = h
-        .query_all_by_role(Role::Label)
-        .filter(|n| {
-            n.accesskit_node().value().is_some_and(|v| is_clock(&v))
-                || n.accesskit_node().label().is_some_and(|v| is_clock(&v))
-        })
-        // the whole time column, whatever the digits' widths, and a little bleed around it
-        .map(|n| {
-            let r = n.rect();
-            egui::Rect::from_min_max(
-                r.min - vec2(2.0, 2.0),
-                egui::pos2(r.min.x + crate::pages::log::TIME_W + 2.0, r.max.y + 2.0),
-            )
-        })
-        .collect();
-    for r in clocks {
-        h.mask(r);
-    }
     h.snapshot(name);
-}
-
-fn is_clock(s: &str) -> bool {
-    let b = s.as_bytes();
-    b.len() == 8 && b[2] == b':' && b[5] == b':' && s.chars().filter(char::is_ascii_digit).count() == 6
 }
 
 #[test]
