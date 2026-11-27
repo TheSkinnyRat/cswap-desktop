@@ -481,7 +481,7 @@ impl AccountsPage {
             row.multiply_opacity(0.7);
         }
         let cell = |row: &mut Ui, i: usize, f: &mut dyn FnMut(&mut Ui)| -> f32 {
-            kit::place(&mut row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
+            kit::place(row, UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))), |ui| {
                 ui.set_width(cols[i]);
                 f(ui)
             })
