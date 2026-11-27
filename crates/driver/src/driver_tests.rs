@@ -361,10 +361,17 @@ struct N {
     dir: tempfile::TempDir,
     native: Arc<crate::Native>,
     rx: std::sync::mpsc::Receiver<Event>,
+    /// The app's runtime, when the test starts `Native` the way the app does. Declared
+    /// after `native`, so it outlives it.
+    _rt: Option<Runtime>,
 }
 
 impl N {
     fn new(settings: Option<&str>) -> N {
+        Self::start(settings, None)
+    }
+
+    fn start(settings: Option<&str>, rt: Option<Runtime>) -> N {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path().join("data");
         let claude = dir.path().join("claude");
@@ -385,8 +392,15 @@ impl N {
             claude_config_dir: Some(claude),
             no_spawn: true,
         };
-        let native = crate::Native::start_with(crate::DriverConfig { data_dir: data }, sink, opts);
-        N { dir, native, rx }
+        let config = crate::DriverConfig { data_dir: data };
+        let native = match &rt {
+            Some(rt) => {
+                let _enter = rt.enter();
+                crate::Native::start_with(config, sink, opts)
+            }
+            None => crate::Native::start_with(config, sink, opts),
+        };
+        N { dir, native, rx, _rt: rt }
     }
 
     /// Waits for the first event `f` accepts.
@@ -510,6 +524,38 @@ fn native_launch_session_uses_the_detected_binary() {
     let d = n.dir.path().display().to_string();
     let r = wait(n.native.launch_session("2", Some(&d))).unwrap();
     assert_eq!(r.command, "cswap run 2");
+}
+
+/// The app's convention: one runtime, `start` inside `rt.enter()`, then trait calls from
+/// threads that are in no runtime at all (tray, second launch, router). Any ambient
+/// `tokio::spawn` / `Handle::current()` behind a trait method panics here.
+#[test]
+fn native_trait_methods_work_from_a_plain_thread() {
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+    let n = N::start(Some(r#"{"refreshSeconds":15}"#), Some(rt));
+    assert!(crate::lock(&n.native.own_rt).is_none(), "started inside a runtime: no runtime of its own");
+    let native = n.native.clone();
+    let dir = n.dir.path().display().to_string();
+    std::thread::spawn(move || {
+        assert!(tokio::runtime::Handle::try_current().is_err(), "the test thread must be outside any runtime");
+        let info = wait(native.detect_binary());
+        assert_eq!(info.version.as_deref(), Some("0.25.0"));
+        assert_eq!(wait(native.refresh()).payload.unwrap().accounts.len(), 4);
+        assert!(wait(native.switch_to("2", false)).unwrap().switched);
+        assert!(wait(native.status()).is_ok());
+        assert!(wait(native.config()).is_ok());
+        assert_eq!(wait(native.list_mappings()).unwrap().len(), 1);
+        assert!(wait(native.list_unclaimed()).unwrap().is_empty());
+        assert!(wait(native.launch_session("2", Some(&dir))).is_ok());
+        native.edit_settings(Box::new(|s| s.refresh_seconds = 30)); // reschedules the timer
+        native.edit_settings(Box::new(|s| s.cswap_path = None)); // unchanged path: no re-detect
+        assert!(wait(native.auto_start(true)).running);
+        assert!(!wait(native.auto_stop()).running);
+        assert_eq!(wait(native.auto_once(true)).unwrap().outcome, AutoOutcome::NoAction);
+        native.shutdown();
+    })
+    .join()
+    .expect("trait calls from a plain thread");
 }
 
 /// Opt-in (`CSWAP_REAL=1 cargo test -p cswap-driver -- --ignored real_`): proves

@@ -7,9 +7,11 @@
 //! CONTRACT: [`DriverConfig`], [`Native::start`], [`Native::shutdown`], [`data_dir`].
 //! OWNER: driver.
 //!
-//! Threads: `Native` runs its work on the tokio runtime it is started in (the app's one
-//! runtime, `Handle::current()`), or on a small runtime of its own when started outside
-//! one (tests, examples). Every trait method returns at once.
+//! Threads: the app calls [`Native::start`] inside `rt.enter()` of its one runtime; the
+//! `Handle` is captured there and every trait method spawns through it, so the tray,
+//! second-launch and router threads (outside any runtime) may call them freely. Nothing
+//! after `start` uses an ambient runtime. Started outside one (examples), `Native` builds
+//! a small runtime of its own. Every trait method returns at once.
 
 mod auto;
 mod cli;

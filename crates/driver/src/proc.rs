@@ -104,56 +104,59 @@ pub async fn run(spec: Spec<'_>) -> RawOutcome {
         }
     };
     let pid = child.id();
+    // No task spawning in here: stdin, both pipes and the wait are driven together in
+    // this one future, so it needs nothing from the runtime but its timers and reaper.
+    let (stdin, stdout, stderr) = (child.stdin.take(), child.stdout.take(), child.stderr.take());
     // Always close stdin, even with nothing to say: a prompt then reads EOF instead of
     // waiting forever.
-    if let Some(mut w) = child.stdin.take() {
-        let input = spec.stdin.map(str::to_owned);
-        tokio::spawn(async move {
-            if let Some(input) = input {
+    let write_in = async {
+        if let Some(mut w) = stdin {
+            if let Some(input) = spec.stdin {
                 let _ = w.write_all(input.as_bytes()).await;
             }
             let _ = w.shutdown().await;
-        });
-    }
-    let out_task = child.stdout.take().map(|mut r| {
-        tokio::spawn(async move {
-            let mut b = Vec::new();
-            let _ = r.read_to_end(&mut b).await;
-            b
-        })
-    });
-    let err_task = child.stderr.take().map(|mut r| {
-        tokio::spawn(async move {
-            let mut b = Vec::new();
-            let _ = r.read_to_end(&mut b).await;
-            b
-        })
-    });
-
-    let mut timed_out = false;
-    let status = match tokio::time::timeout(spec.timeout, child.wait()).await {
-        Ok(s) => s.ok(),
-        Err(_) => {
-            timed_out = true;
-            if let Some(pid) = pid {
-                kill_tree(pid).await;
+        }
+    };
+    let (exited_tx, exited_rx) = tokio::sync::oneshot::channel::<()>();
+    let wait = async {
+        let r = match tokio::time::timeout(spec.timeout, child.wait()).await {
+            Ok(s) => (s.ok(), false),
+            Err(_) => {
+                if let Some(pid) = pid {
+                    kill_tree(pid).await;
+                }
+                let _ = child.start_kill();
+                (child.wait().await.ok(), true)
             }
-            let _ = child.start_kill();
-            child.wait().await.ok()
+        };
+        let _ = exited_tx.send(());
+        r
+    };
+    let (mut out_b, mut err_b) = (Vec::new(), Vec::new());
+    let reads = async {
+        let read_out = async {
+            if let Some(mut r) = stdout {
+                let _ = r.read_to_end(&mut out_b).await;
+            }
+        };
+        let read_err = async {
+            if let Some(mut r) = stderr {
+                let _ = r.read_to_end(&mut err_b).await;
+            }
+        };
+        // Bounded once the child is gone: a grandchild that escaped the kill may hold
+        // the pipe open. What was read so far is kept.
+        tokio::select! {
+            _ = async { tokio::join!(read_out, read_err) } => {}
+            _ = async {
+                let _ = exited_rx.await;
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            } => {}
         }
     };
-    // Bounded: a grandchild that escaped the kill may hold the pipe open.
-    let collect = |t: Option<tokio::task::JoinHandle<Vec<u8>>>| async move {
-        match t {
-            Some(t) => match tokio::time::timeout(Duration::from_secs(3), t).await {
-                Ok(Ok(b)) => String::from_utf8_lossy(&b).into_owned(),
-                _ => String::new(),
-            },
-            None => String::new(),
-        }
-    };
-    let stdout = collect(out_task).await;
-    let mut stderr = collect(err_task).await;
+    let ((), (status, timed_out), ()) = tokio::join!(write_in, wait, reads);
+    let stdout = String::from_utf8_lossy(&out_b).into_owned();
+    let mut stderr = String::from_utf8_lossy(&err_b).into_owned();
     if timed_out {
         stderr.push_str(&format!("\n[cswap-desktop] timed out after {} ms", spec.timeout.as_millis()));
     }
