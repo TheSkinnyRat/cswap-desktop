@@ -6,7 +6,7 @@
 //!
 //! CONTRACT: [`Services`], [`CswapApp::new`], [`cx::Cx`], [`theme::Tokens`] and the page
 //! shape (`new` / `on_event` / `ui`). OWNERS: ui-shell owns `app`, `shell`, `widgets`,
-//! `palette`, `toast` rendering and `pages::{settings, log, onboarding}`; ui-accounts owns
+//! `palette`, `style`, `testing`, `toast` rendering and `pages::{settings, log, onboarding}`; ui-accounts owns
 //! `usage` and `pages::{accounts, auto, mappings}`; `theme` and `cx` are the main session's.
 
 use std::sync::Arc;
@@ -18,6 +18,9 @@ pub mod cx;
 pub mod pages;
 pub mod palette;
 pub mod shell;
+pub mod style;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod theme;
 pub mod toast;
 pub mod usage;
@@ -32,3 +35,6 @@ pub struct Services {
     pub updates: Arc<dyn Updates>,
     pub host: Arc<dyn Host>,
 }
+
+#[cfg(test)]
+mod tests;
