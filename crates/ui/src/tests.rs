@@ -214,7 +214,11 @@ fn without_cswap_onboarding_shows_and_a_custom_path_recovers() {
     assert!(app(&h).toasts.items.iter().any(|t| t.text.starts_with("Install failed")));
 
     // the Settings button leaves onboarding; a saved path is detected at once
-    h.get_by_role_and_label(Role::Button, "Settings").click();
+    // the card's own Settings button, not the sidebar's
+    h.query_all_by_role_and_label(Role::Button, "Settings")
+        .find(|n| n.rect().left() > crate::shell::SIDEBAR_WIDE)
+        .expect("onboarding Settings button")
+        .click();
     settle(&mut h);
     assert_eq!(app(&h).page, Page::Settings);
     f.cswap.st().detect = Some(CswapBinaryInfo {
