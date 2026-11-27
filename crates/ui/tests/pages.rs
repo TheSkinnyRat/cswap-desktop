@@ -20,7 +20,7 @@ use cswap_ui::toast::Toasts;
 use egui::accesskit::Role;
 use egui::vec2;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use serde_json::json;
 
 const NOW: i64 = 1_795_800_000_000;
