@@ -365,6 +365,212 @@ fn sidebar_collapses_by_itself_when_narrow_and_by_hand_when_not() {
     h.get_by_role_and_label(Role::Button, "Expand the sidebar");
 }
 
+// Purwa saw the refresh tooltip sit on the refresh button (the title bar is the top edge,
+// there is no room above): every title-bar tooltip must keep off its own control.
+#[test]
+fn title_bar_tooltips_keep_off_their_buttons() {
+    for chrome in [crate::WindowChrome::Native, crate::WindowChrome::Custom] {
+        let (f, rx) = fixture();
+        let mut h = harness(&f, rx, 900.0);
+        settle(&mut h);
+        h.state_mut().app.as_mut().expect("app").set_chrome(chrome);
+        settle(&mut h);
+        let labels: &[&str] = if chrome == crate::WindowChrome::Custom {
+            &["Refresh usage", "Minimize", "Maximize", "Close"]
+        } else {
+            &["Refresh usage"]
+        };
+        for label in labels {
+            h.get_by_role_and_label(Role::Button, label).hover();
+            settle(&mut h);
+            let button = h.get_by_role_and_label(Role::Button, label).rect();
+            let tip = h.get_by_role(Role::Tooltip).rect();
+            assert!(!tip.intersects(button), "{chrome:?} {label}: tip {tip:?} over button {button:?}");
+            assert!(tip.right() <= 900.0 && tip.top() >= 0.0, "{chrome:?} {label}: inside the window: {tip:?}");
+        }
+    }
+}
+
+// The header as the window's title bar (Windows / Linux), in both themes: caption buttons at
+// the right (close hovered, red), nothing of the header under them. Checked by eye.
+#[test]
+fn title_bar_with_caption_buttons_light() {
+    title_bar_with_caption_buttons(ThemeSetting::Light, "titlebar-custom-light");
+}
+
+#[test]
+fn title_bar_with_caption_buttons_dark() {
+    title_bar_with_caption_buttons(ThemeSetting::Dark, "titlebar-custom-dark");
+}
+
+fn title_bar_with_caption_buttons(theme: ThemeSetting, name: &str) {
+    let (f, rx) = fixture();
+    f.cswap.edit_settings(Box::new(move |s: &mut AppSettings| s.theme = theme));
+    let mut h = harness_sized(&f, rx, 900.0, 560.0);
+    settle(&mut h);
+    h.state_mut().app.as_mut().expect("app").set_chrome(crate::WindowChrome::Custom);
+    settle(&mut h);
+    h.get_by_role_and_label(Role::Button, "Close").hover();
+    settle(&mut h);
+    shot(&mut h, name);
+}
+
+/// Every tooltip on screen right now: its rect, its text and the rect it was placed against
+/// (egui's own: `Popup::default_response_id` = owner.with("popup"), placed against the owner's
+/// `interact_rect`; ours, `widgets::tooltip`: owner.with("tip"), against `rect`).
+fn tooltips_on_screen(h: &Harness<'_, World>) -> Vec<(egui::Rect, String, Option<egui::Rect>)> {
+    let layers: Vec<(egui::Id, egui::Rect)> = h.ctx.memory(|m| {
+        m.areas()
+            .visible_layer_ids()
+            .into_iter()
+            .filter(|l| l.order == egui::Order::Tooltip)
+            .filter_map(|l| m.area_rect(l.id).map(|r| (l.id, r)))
+            .collect()
+    });
+    let hovered = h.ctx.interaction_snapshot(|i| i.hovered.clone());
+    // Drawn this frame = has a `Role::Tooltip` node (egui's tooltip Ui, our tooltip's label);
+    // egui still lists an area as visible for a frame after it was last shown.
+    // (egui's tooltip Ui node has no bounds of its own: its contents do.)
+    let any = || egui_kittest::kittest::by().predicate(|n| n.bounding_box().is_some());
+    let mut drawn: Vec<egui::Rect> = Vec::new();
+    for t in h.query_all(egui_kittest::kittest::by().role(Role::Tooltip)) {
+        if t.accesskit_node().bounding_box().is_some() {
+            drawn.push(t.rect());
+        }
+        drawn.extend(t.query_all(any()).map(|n| n.rect()));
+    }
+    layers
+        .into_iter()
+        .filter(|(_, r)| drawn.iter().any(|t| r.expand(1.0).contains_rect(*t)))
+        .map(|(id, r)| {
+            let text = h
+                .query_all(egui_kittest::kittest::by().predicate(|n| n.bounding_box().is_some()))
+                .filter(|n| r.expand(1.0).contains_rect(n.rect()))
+                .filter_map(|n| n.accesskit_node().value().or(n.accesskit_node().label()))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let anchor = hovered.iter().find_map(|w| {
+                let resp = h.ctx.read_response(*w)?;
+                if w.with("popup") == id {
+                    Some(resp.interact_rect)
+                } else if w.with("tip") == id {
+                    Some(resp.rect)
+                } else {
+                    None
+                }
+            });
+            (r, text, anchor)
+        })
+        .collect()
+}
+
+/// Rects of the widgets that could own a tooltip summoned from `at`: egui's hovered widgets and
+/// the accessibility nodes within its 5 px hover radius (`interact_radius`).
+fn candidates_under(h: &Harness<'_, World>, at: egui::Pos2) -> Vec<egui::Rect> {
+    let hovered = h.ctx.interaction_snapshot(|i| i.hovered.clone());
+    let mut out: Vec<egui::Rect> =
+        hovered.into_iter().filter_map(|id| h.ctx.read_response(id)).flat_map(|r| [r.interact_rect, r.rect]).collect();
+    out.extend(h.query_all(egui_kittest::kittest::by().predicate(|n| n.bounding_box().is_some())).map(|n| n.rect()));
+    out.retain(|r| r.expand(5.0).contains(at));
+    out
+}
+
+/// `tip` sits `gap` off one side of `anchor` (egui's tooltips: 4; ours: 6 or 14), as placed
+/// against it rather than clamped onto it.
+fn placed_beside(tip: egui::Rect, anchor: egui::Rect) -> bool {
+    let near = |a: f32, b: f32| [4.0, 6.0, 14.0].iter().any(|g| (a - b - g).abs() < 0.75);
+    (near(tip.top(), anchor.bottom())
+        || near(anchor.top(), tip.bottom())
+        || near(tip.left(), anchor.right())
+        || near(anchor.left(), tip.right()))
+        && !tip.intersects(anchor.shrink(0.5))
+}
+
+/// Hovers a grid over the window and checks every tooltip that appears: inside the window and
+/// clear of the widget it describes. Returns the tooltips seen, for the audit list.
+fn audit_tooltips(h: &mut Harness<'_, World>, size: egui::Vec2, step: f32) -> std::collections::BTreeSet<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+    let mut y = step / 2.0;
+    while y < size.y {
+        let mut x = step / 2.0;
+        while x < size.x {
+            let at = egui::pos2(x, y);
+            h.hover_at(at);
+            h.run_steps(6);
+            for (r, text, anchor) in tooltips_on_screen(h) {
+                match anchor {
+                    Some(a) => {
+                        assert!(
+                            !r.intersects(a.shrink(0.5)),
+                            "{text:?} at {at:?}: tip {r:?} on its anchor {a:?} ({size:?})"
+                        )
+                    }
+                    // Owner not among egui's hovered set (a widget that re-interacts under
+                    // another id): some widget at the pointer must have the tip placed beside it.
+                    None => {
+                        let c = candidates_under(h, at);
+                        assert!(
+                            c.iter().any(|a| placed_beside(r, *a)),
+                            "{text:?} at {at:?}: tip {r:?} is beside none of {c:?} ({size:?})"
+                        );
+                    }
+                }
+                assert!(window.expand(0.5).contains_rect(r), "{text:?} at {at:?} leaves the window: {r:?} ({size:?})");
+                seen.insert(text);
+            }
+            x += step;
+        }
+        y += step;
+    }
+    seen
+}
+
+// Every tooltip in the app, on every page, at a wide, the minimum and a narrow window (cards,
+// icon sidebar): none may sit on what it describes or run off the window. Slow (a few
+// thousand hovers), so on demand: `cargo test -p cswap-ui tooltip_audit -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn tooltip_audit() {
+    let step: f32 = std::env::var("TIP_AUDIT_STEP").ok().and_then(|s| s.parse().ok()).unwrap_or(10.0);
+    // (width, height, usage as rings, sidebar collapsed by hand + the header's own caption buttons)
+    let mut configs = vec![];
+    for (w, hgt) in [(1240.0, 780.0), (760.0, 520.0), (560.0, 520.0)] {
+        configs.push((w, hgt, false, false));
+        configs.push((w, hgt, true, false));
+    }
+    configs.push((1240.0, 780.0, false, true));
+    // TIP_AUDIT_ONLY=560 or =Mappings: one width or page, to re-run a failure quickly
+    let only = std::env::var("TIP_AUDIT_ONLY").unwrap_or_default();
+    for (w, hgt, rings, custom) in configs {
+        for page in ["Accounts", "Auto-switch", "Mappings", "Log", "Settings"] {
+            if (rings && page != "Accounts") || !(only.is_empty() || only == w.to_string() || only == page) {
+                continue;
+            }
+            let (f, rx) = fixture();
+            f.cswap.edit_settings(Box::new(move |s| {
+                if rings {
+                    s.usage_view = cswap_core::UsageView::Rings;
+                }
+                s.sidebar_collapsed = custom;
+            }));
+            let mut h = harness_sized(&f, rx, w, hgt);
+            settle(&mut h);
+            if custom {
+                h.state_mut().app.as_mut().expect("app").set_chrome(crate::WindowChrome::Custom);
+            }
+            nav(&mut h, page);
+            let seen = audit_tooltips(&mut h, vec2(w, hgt), step);
+            let what = match (rings, custom) {
+                (true, _) => " (rings)",
+                (_, true) => " (sidebar collapsed, caption buttons)",
+                _ => "",
+            };
+            println!("{w}x{hgt} {page}{what}: {seen:?}");
+        }
+    }
+}
+
 /// Every shared control in both themes, with a menu open, and a confirm dialog: the look of
 /// what ui-accounts builds on, checked by eye in the snapshots.
 #[test]
