@@ -27,8 +27,10 @@ mod tests {
 
     #[test]
     fn appends_and_rotates_past_the_cap() {
-        let dir = std::env::temp_dir().join(format!("cswap-applog-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        // A dir `line` has to create itself, inside a guard that deletes it on drop (also
+        // when an assert panics).
+        let tmp = tempfile::Builder::new().prefix("cswap-applog-").tempdir().unwrap();
+        let dir = tmp.path().join("data");
         line(&dir, "first");
         line(&dir, "second");
         let s = std::fs::read_to_string(dir.join(FILE)).unwrap();
@@ -37,6 +39,5 @@ mod tests {
         line(&dir, "after the cap");
         assert!(dir.join(format!("{FILE}.old")).exists());
         assert!(std::fs::read_to_string(dir.join(FILE)).unwrap().ends_with(" after the cap\n"));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

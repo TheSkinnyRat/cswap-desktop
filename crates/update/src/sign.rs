@@ -153,12 +153,11 @@ pub(crate) mod tests {
 
     #[test]
     fn file_digest_matches_in_memory_digest() {
-        let dir = std::env::temp_dir().join(format!("cswap-sign-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("a.bin");
+        // Deleted on drop, also when an assert panics.
+        let tmp = tempfile::Builder::new().prefix("cswap-sign-").tempdir().unwrap();
+        let f = tmp.path().join("a.bin");
         let data: Vec<u8> = (0..200_000u32).map(|i| i as u8).collect();
         std::fs::write(&f, &data).unwrap();
         assert_eq!(sha512_file(&f).unwrap(), digest(&data));
-        let _ = std::fs::remove_dir_all(dir);
     }
 }
