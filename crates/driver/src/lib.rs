@@ -300,8 +300,11 @@ impl Inner {
             let r = me.cli.list().await;
             let plans = {
                 let mut p = lock(&me.plans);
+                // The credential file is only the fallback for a cswap that does not
+                // report `plan` (< 0.30): with one, reading it again would be a needless
+                // touch of a file that also holds the live tokens.
                 if let Ok(list) = &r {
-                    p.observe(list.accounts.iter().find(|a| a.active).map(|a| a.email.as_str()));
+                    p.observe(list.accounts.iter().find(|a| a.active && a.plan.is_none()).map(|a| a.email.as_str()));
                 }
                 p.all()
             };

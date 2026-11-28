@@ -211,6 +211,45 @@ fn model_columns_and_empty_cells() {
     assert!(!has_label(&h, "1 model-Sonnet: -"));
 }
 
+// TESTED RULE: cswap's `plan` badges every account that has one (a seat with its tier),
+// plans.json covers the rest, and canceled / lapsed get a chip of their own, with a
+// tooltip, in the table AND on the cards (one `name_block`, two layouts calling it).
+#[test]
+fn plan_chips_in_table_and_cards() {
+    for width in [1400.0, 700.0] {
+        let mut h = harness(Which::Accounts, width, false);
+        assert_eq!(h.state().accounts_page.last_cards, width < 1000.0);
+        for label in ["Max 5x", "Team · Max 5x", "Max 20x", "canceled", "Free", "lapsed"] {
+            assert!(has_label(&h, label), "{label} at {width}px");
+        }
+        assert!(!has_label(&h, "Pro"), "plans.json's label for account 2 lost to cswap's plan");
+        // account 5's card is below the fold at 780 px high, so cards hover account 3's
+        let (chip, says) = if width < 1000.0 {
+            ("canceled", "until the paid period ends")
+        } else {
+            ("lapsed", "back on the free tier")
+        };
+        h.get_by_label(chip).hover();
+        h.run_steps(8);
+        assert!(h.query_by_label_contains(says).is_some(), "{chip} tooltip at {width}px");
+    }
+}
+
+// TESTED RULE: the stored login's expiry is a chip only within 7 days or once past, in
+// the table AND on the cards; its hover says how long and what to do.
+#[test]
+fn login_expiry_chips_in_table_and_cards() {
+    for width in [1400.0, 700.0] {
+        let mut h = harness(Which::Accounts, width, false);
+        assert!(has_label(&h, "login 3d 5h"), "account 1 at {width}px");
+        assert!(has_label(&h, "login expired"), "account 5 at {width}px");
+        assert!(h.query_by_label_contains("login 19d").is_none(), "20 days off: no chip");
+        h.get_by_label("login 3d 5h").hover();
+        h.run_steps(8);
+        assert!(h.query_by_label_contains("Before then: run /login").is_some(), "tooltip at {width}px");
+    }
+}
+
 // e2e "switch, rotate ... change the active account through the CLI".
 #[test]
 fn switch_and_rotate_go_through_the_cli() {

@@ -34,5 +34,9 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-no-p
 rustls = { version = "0.23.31", default-features = false, features = ["std", "ring", "tls12", "logging"] }
 rustls-native-certs = "0.8"
 
+[dev-dependencies]
+# Test dirs that delete themselves, also on a panic.
+tempfile = "3"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
