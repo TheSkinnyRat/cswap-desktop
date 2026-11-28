@@ -3,7 +3,8 @@ name: macOS launch check
 # Nobody on the team owns a Mac, so this is the only place the .dmg is ever opened. It
 # checks what Gatekeeper checks (the code signature) on both the published release and a
 # fresh build of this commit, and starts the app to see whether it keeps running. It
-# cannot click Gatekeeper's dialog.
+# cannot click Gatekeeper's dialog. The fresh build is also checked for the Dock setting
+# (what macOS says the app is) and uploaded, so a Mac tester can try a pull request.
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - packaging/macos/**
+      - apps/cswap-desktop/**
       - .github/workflows/mac-check.yml
 
 permissions:
@@ -46,6 +48,14 @@ jobs:
           arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
           packaging/macos/build.sh --arch "$arch"
           mkdir dmg && cp packaging/macos/out/*.dmg dmg/
+
+      - name: Upload the .dmg for testers
+        if: matrix.source == 'build'
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-swap-desktop-mac-${{ runner.arch }}
+          path: dmg/*.dmg
+          retention-days: 7
 
       - name: Install the way a browser download would
         run: |
@@ -90,6 +100,72 @@ jobs:
             echo "running=no" >> "$GITHUB_OUTPUT"
           fi
           tail -20 launch.log
+
+      # The Dock setting, as macOS sees it: `lsappinfo` reports a Regular app (Dock icon,
+      # Cmd+Tab) as Foreground and an Accessory one (menu bar only) as UIElement. Only the
+      # fresh build has the setting. How the Dock and the menu bar LOOK needs a real Mac.
+      - name: Show in Dock
+        if: matrix.source == 'build'
+        run: |
+          app="$RUNNER_TEMP/Claude Swap.app"
+          bin="$app/Contents/MacOS/Claude Swap"
+          export CSWAP_DESKTOP_BIN="$GITHUB_WORKSPACE/test/fake-cswap/fake-cswap.mjs"
+          export FAKE_CSWAP_STATE="$RUNNER_TEMP/fake-cswap-state.json"
+          app_type() {
+            local asn
+            asn=$(lsappinfo find "pid=$1")
+            [ -n "$asn" ] && lsappinfo info -only ApplicationType "$asn"
+          }
+          # expect <pid> <label> <type>: waits up to 15 s for macOS to report <type>, and
+          # checks it is still that 3 s later (not a passing state on the way to another)
+          expect() {
+            local got=""
+            for _ in $(seq 30); do
+              got=$(app_type "$1")
+              case "$got" in *"\"$3\""*)
+                sleep 3
+                got=$(app_type "$1")
+                case "$got" in *"\"$3\""*) echo "$2: $got"; return 0 ;; esac
+                break ;;
+              esac
+              sleep 0.5
+            done
+            echo "::error::$2: expected $3, lsappinfo said: ${got:-nothing}"
+            return 1
+          }
+          # start <mode> <startMinimized>: a fresh data dir whose settings.json has the mode
+          start() {
+            export CSWAP_DESKTOP_USERDATA="$RUNNER_TEMP/dock-$1"
+            mkdir -p "$CSWAP_DESKTOP_USERDATA"
+            printf '{"dockIcon":"%s","startMinimized":%s,"autoUpdate":false}' "$1" "$2" \
+              > "$CSWAP_DESKTOP_USERDATA/settings.json"
+            "$bin" > "$RUNNER_TEMP/dock-$1.log" 2>&1 &
+            pid=$!
+            sleep 3
+          }
+          stop() { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true; }
+          ok=yes
+
+          start never false
+          expect "$pid" "never" UIElement || ok=no
+          stop
+
+          start always false
+          expect "$pid" "always" Foreground || ok=no
+          stop
+
+          # whileWindowOpen, changed at runtime: started in the menu bar (no window), then a
+          # second launch asks the running copy for its window, which brings the Dock icon.
+          start whileWindowOpen true
+          expect "$pid" "whileWindowOpen, window closed" UIElement || ok=no
+          "$bin" >> "$RUNNER_TEMP/dock-whileWindowOpen.log" 2>&1 || true
+          expect "$pid" "whileWindowOpen, window shown" Foreground || ok=no
+          stop
+
+          if [ $ok = no ]; then
+            tail -n 20 "$RUNNER_TEMP"/dock-*.log
+            exit 1
+          fi
 
       - name: Verdict
         run: |

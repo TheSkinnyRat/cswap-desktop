@@ -15,6 +15,10 @@
 //! (as Cmd+H; craft-launcher's choice): the Dock, Finder and Cmd+Tab bring a hidden app
 //! back by themselves, while an ordered-out window would stay gone (winit does not pass
 //! the Dock's "reopen" on). Memory is not given back there.
+//!
+//! Also macOS only: the Dock icon follows the `dockIcon` setting (1.2.0) by switching the
+//! app's activation policy at runtime ([`Core::sync_dock`]); without one the app is in the
+//! menu bar alone, like Docker or Herd.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
@@ -151,6 +155,9 @@ pub struct Core {
     glow_error: Option<String>,
     renderer_logged: bool,
     data_dir: std::path::PathBuf,
+    /// The activation policy last given to AppKit, so it is set on a change only.
+    #[cfg(target_os = "macos")]
+    dock: Option<cswap_core::DockPolicy>,
 }
 
 impl Core {
@@ -175,6 +182,8 @@ impl Core {
             glow_error: None,
             renderer_logged: false,
             data_dir,
+            #[cfg(target_os = "macos")]
+            dock: None,
         };
         // macOS: an NSStatusItem made before AppKit's event loop runs does not work; there
         // the window's creation (the event loop is up by then) makes it.
@@ -194,6 +203,32 @@ impl Core {
 
     pub fn has_tray(&self) -> bool {
         self.tray.is_some()
+    }
+
+    /// The Dock policy for now: the setting's, except that with no menu-bar item to come
+    /// back from the Dock icon stays, or a closed window could never be reopened.
+    #[cfg(target_os = "macos")]
+    fn dock_policy(&self) -> cswap_core::DockPolicy {
+        if !self.has_tray() {
+            return cswap_core::DockPolicy::Regular;
+        }
+        self.services.cswap.settings().dock_icon.policy(self.visible)
+    }
+
+    /// Applies [`Self::dock_policy`] if it changed: every frame (a changed setting shows at
+    /// once, no restart), and as the window is shown or put away. Main thread only.
+    #[cfg(target_os = "macos")]
+    fn sync_dock(&mut self) {
+        let want = self.dock_policy();
+        if self.dock != Some(want) {
+            self.dock = Some(want);
+            mac::set_policy(want);
+            // Dropping the Dock icon deactivates the app; an open window would fall behind
+            // whatever is under it.
+            if self.visible && want == cswap_core::DockPolicy::Accessory {
+                mac::activate();
+            }
+        }
     }
 
     /// One look at the world, window or not.
@@ -341,7 +376,8 @@ fn run_platform(core: &mut Core, show: bool) -> Result<(), String> {
     open_window(core, show)
 }
 
-fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOptions {
+fn native_options(core: &Core, visible: bool) -> eframe::NativeOptions {
+    let renderer = core.renderer;
     // 0.1.23's BrowserWindow: 1120x720, min 760x520.
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Claude Swap")
@@ -367,7 +403,8 @@ fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOp
     } else if let Some((rgba, width, height)) = tray::decode_png(tray::APP_ICON) {
         viewport = viewport.with_icon(Arc::new(egui::IconData { rgba, width, height }));
     }
-    eframe::NativeOptions {
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+    let mut options = eframe::NativeOptions {
         viewport,
         renderer,
         wgpu_options: wgpu_options(),
@@ -376,7 +413,23 @@ fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOp
         run_and_return: true,
         centered: true,
         ..Default::default()
+    };
+    // winit sets the activation policy as AppKit finishes launching; giving it the
+    // setting's here keeps a `never` app from flashing a Dock icon at every start.
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+        // The menu-bar item does not exist yet (the window makes it); if it then cannot be
+        // made, `sync_dock` gives the Dock icon back in the window's first frame.
+        let policy = match core.services.cswap.settings().dock_icon.policy(visible) {
+            cswap_core::DockPolicy::Accessory => ActivationPolicy::Accessory,
+            cswap_core::DockPolicy::Regular => ActivationPolicy::Regular,
+        };
+        options.event_loop_builder = Some(Box::new(move |b| {
+            b.with_activation_policy(policy);
+        }));
     }
+    options
 }
 
 /// Who draws the title bar, matching [`native_options`].
@@ -418,7 +471,7 @@ fn open_window(core: &mut Core, visible: bool) -> Result<(), String> {
         let c = &mut *core;
         let r = eframe::run_native(
             "Claude Swap",
-            native_options(visible, c.renderer),
+            native_options(c, visible),
             Box::new(move |cc| Ok(Box::new(Window::new(cc, c, visible)))),
         );
         // Whether or not eframe called `on_exit`: nothing may reach a window that is gone.
@@ -493,6 +546,8 @@ impl<'a> Window<'a> {
         // Started hidden but there is no tray to come back from: show it after all.
         let visible = visible || !core.has_tray();
         core.visible = visible;
+        #[cfg(target_os = "macos")]
+        core.sync_dock();
         let mut w = Window { core, app, raise_frames: 0, closing: false };
         if visible {
             w.raise(&ctx);
@@ -504,9 +559,18 @@ impl<'a> Window<'a> {
     }
 
     fn raise(&mut self, ctx: &egui::Context) {
-        #[cfg(target_os = "macos")]
-        mac::unhide();
         self.core.visible = true;
+        #[cfg(target_os = "macos")]
+        {
+            // Dock icon first (`whileWindowOpen`), then back from `put_away`'s hide.
+            self.core.sync_dock();
+            mac::unhide();
+            // With no Dock icon macOS opens the window behind the app in front: nothing
+            // activates an Accessory app but the app itself.
+            if self.core.dock == Some(cswap_core::DockPolicy::Accessory) {
+                mac::activate();
+            }
+        }
         ctx.send_viewport_cmd(ViewportCommand::Visible(true));
         ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
         ctx.send_viewport_cmd(ViewportCommand::Focus);
@@ -522,6 +586,7 @@ impl<'a> Window<'a> {
         #[cfg(target_os = "macos")]
         {
             let _ = ctx;
+            self.core.sync_dock();
             mac::hide();
         }
         #[cfg(not(target_os = "macos"))]
@@ -561,6 +626,8 @@ impl eframe::App for Window<'_> {
                 self.core.exiting = true;
             }
         }
+        #[cfg(target_os = "macos")]
+        self.core.sync_dock();
         if self.raise_frames > 0 {
             self.raise_frames -= 1;
             if self.raise_frames == 0 {
@@ -584,8 +651,30 @@ impl eframe::App for Window<'_> {
 
 #[cfg(target_os = "macos")]
 mod mac {
+    use cswap_core::DockPolicy;
     use objc2::MainThreadMarker;
-    use objc2_app_kit::NSApplication;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+
+    /// Regular: Dock icon and Cmd+Tab; Accessory: the menu-bar item only. Main thread only.
+    pub fn set_policy(p: DockPolicy) {
+        if let Some(mtm) = MainThreadMarker::new() {
+            let policy = match p {
+                DockPolicy::Regular => NSApplicationActivationPolicy::Regular,
+                DockPolicy::Accessory => NSApplicationActivationPolicy::Accessory,
+            };
+            NSApplication::sharedApplication(mtm).setActivationPolicy(policy);
+        }
+    }
+
+    /// Brings the app (and its window) in front of the one the user is in. The deprecated
+    /// call, as winit's own: macOS 14's `activate` may decline when asked from the
+    /// menu-bar item's click.
+    pub fn activate() {
+        if let Some(mtm) = MainThreadMarker::new() {
+            #[allow(deprecated)]
+            NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+        }
+    }
 
     /// Hides the app and its window (Cmd+H). Main thread only; elsewhere a no-op.
     pub fn hide() {

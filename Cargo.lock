@@ -849,7 +849,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-desktop"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "cswap-core",
  "cswap-driver",
@@ -876,13 +876,14 @@ dependencies = [
  "tracing",
  "tray-icon",
  "windows-sys 0.61.2",
+ "winit",
  "winreg",
  "winresource",
 ]
 
 [[package]]
 name = "cswap-driver"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "cswap-core",
  "libc",
@@ -896,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-ui"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "cswap-core",
@@ -909,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-update"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "base64 0.22.1",
  "cswap-core",

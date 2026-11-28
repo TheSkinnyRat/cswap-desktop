@@ -26,6 +26,37 @@ pub enum AccountsLayout {
     Tiles,
 }
 
+/// Whether the app has a Dock icon (macOS only, 1.2.0; other platforms ignore it). Without
+/// one it lives in the menu bar alone, like Docker or Herd; `Always` is how 1.1 behaved.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DockIcon {
+    #[default]
+    Always,
+    WhileWindowOpen,
+    Never,
+}
+
+/// What the app should be to macOS: `Regular` has a Dock icon and is in Cmd+Tab,
+/// `Accessory` only has its menu-bar item (NSApplicationActivationPolicy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockPolicy {
+    Regular,
+    Accessory,
+}
+
+impl DockIcon {
+    /// The policy for this setting while the window is (not) on screen. Kept apart from
+    /// AppKit so it is tested on every platform.
+    pub fn policy(self, window_visible: bool) -> DockPolicy {
+        match self {
+            DockIcon::Always => DockPolicy::Regular,
+            DockIcon::WhileWindowOpen if window_visible => DockPolicy::Regular,
+            DockIcon::WhileWindowOpen | DockIcon::Never => DockPolicy::Accessory,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
@@ -47,6 +78,7 @@ pub struct AppSettings {
     pub show_hero: bool,
     pub accounts_layout: AccountsLayout,
     pub sidebar_collapsed: bool,
+    pub dock_icon: DockIcon,
 }
 
 impl Default for AppSettings {
@@ -68,6 +100,7 @@ impl Default for AppSettings {
             show_hero: true,
             accounts_layout: AccountsLayout::Rows,
             sidebar_collapsed: false,
+            dock_icon: DockIcon::Always,
         }
     }
 }
@@ -95,5 +128,34 @@ mod tests {
         assert!(old.show_hero);
         assert_eq!(old.accounts_layout, AccountsLayout::Rows);
         assert_eq!((old.theme, old.show_pace), (ThemeSetting::Dark, false));
+    }
+
+    // TESTED RULE: `dockIcon` round-trips under its camelCase values, and a 1.1 file without
+    // the key opens with `always` (a Dock icon, as before).
+    #[test]
+    fn dock_icon_round_trips_and_defaults_to_always() {
+        for (d, name) in
+            [(DockIcon::Always, "always"), (DockIcon::WhileWindowOpen, "whileWindowOpen"), (DockIcon::Never, "never")]
+        {
+            let s = AppSettings { dock_icon: d, ..Default::default() };
+            let v = serde_json::to_value(&s).unwrap();
+            assert_eq!(v["dockIcon"], name);
+            assert_eq!(serde_json::from_value::<AppSettings>(v).unwrap(), s);
+        }
+        let old: AppSettings = serde_json::from_str(r#"{"theme":"dark","showHero":false}"#).unwrap();
+        assert_eq!(old.dock_icon, DockIcon::Always);
+    }
+
+    // TESTED RULE: only `always` keeps the Dock icon while the window is closed, and only
+    // `never` drops it while the window is open.
+    #[test]
+    fn dock_policy_follows_the_setting_and_the_window() {
+        use DockPolicy::*;
+        assert_eq!(DockIcon::Always.policy(true), Regular);
+        assert_eq!(DockIcon::Always.policy(false), Regular);
+        assert_eq!(DockIcon::WhileWindowOpen.policy(true), Regular);
+        assert_eq!(DockIcon::WhileWindowOpen.policy(false), Accessory);
+        assert_eq!(DockIcon::Never.policy(true), Accessory);
+        assert_eq!(DockIcon::Never.policy(false), Accessory);
     }
 }

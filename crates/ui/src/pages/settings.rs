@@ -6,8 +6,8 @@
 //! (version, updater). Cards in one grid row share a height, as CSS grid rows do.
 
 use cswap_core::{
-    AccountsLayout, AppSettings, BinarySource, CsResult, CswapBinaryInfo, Event, Pending, PlainOutput, ThemeSetting,
-    UnclaimedEntry, UpdaterState, UpdaterStatus,
+    AccountsLayout, AppSettings, BinarySource, CsResult, CswapBinaryInfo, DockIcon, Event, Pending, PlainOutput,
+    ThemeSetting, UnclaimedEntry, UpdaterState, UpdaterStatus,
 };
 use egui::{Align, CornerRadius, Frame, Layout, Margin, Stroke, Ui, text::LayoutJob, vec2};
 
@@ -763,6 +763,27 @@ fn appearance_card(ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
                         }
                     },
                 );
+                // Only macOS has a Dock (and an activation policy to switch); the app crate
+                // ignores the setting elsewhere, so showing it there would be a dead control.
+                if cx.services.host.platform() == "macos" {
+                    widgets::field(
+                        ui,
+                        "Show in Dock",
+                        Some("Hidden from the Dock, Claude Swap lives in the menu bar."),
+                        true,
+                        |ui| {
+                            let opts = [
+                                (DockIcon::Always, "Always".to_owned()),
+                                (DockIcon::WhileWindowOpen, "While the window is open".to_owned()),
+                                (DockIcon::Never, "Never".to_owned()),
+                            ];
+                            let mut v = s.dock_icon;
+                            if widgets::select(ui, "Show in Dock", &mut v, &opts, 200.0) {
+                                edit(Box::new(move |s| s.dock_icon = v));
+                            }
+                        },
+                    );
+                }
                 type Flag = fn(&mut AppSettings) -> &mut bool;
                 let toggles: [(&str, Option<&str>, bool, Flag); 8] = [
                     (

@@ -31,6 +31,8 @@ No build is signed by Microsoft or Apple, so Windows SmartScreen and macOS Gatek
 
 On macOS the first launch is blocked as coming from an unidentified developer: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Claude Swap. Builds up to v0.1.21 were not signed at all and macOS calls them *damaged*; update, or clear the download flag once with `xattr -cr "/Applications/Claude Swap.app"`.
 
+To keep Claude Swap out of the Dock on macOS, set **Settings → Appearance & behaviour → Show in Dock** to *Never* (menu bar only) or *While the window is open*; it takes effect at once.
+
 **3. Add your first account** — log into Claude Code (`claude`, then `/login`), then **Add account → From the current Claude login**. Repeat for each account you want to keep.
 
 ## What it does

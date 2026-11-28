@@ -16,5 +16,5 @@ pub mod types;
 pub mod view;
 
 pub use api::{Cswap, Event, EventSink, Host, Pending, Updates, Waker};
-pub use settings::{AccountsLayout, AppSettings, ThemeSetting};
+pub use settings::{AccountsLayout, AppSettings, DockIcon, DockPolicy, ThemeSetting};
 pub use types::*;
