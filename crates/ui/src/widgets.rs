@@ -847,13 +847,71 @@ pub fn page_header(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
     Top,
+    Bottom,
     Right,
+    Left,
+}
+
+impl Side {
+    /// The side to try next, in order: the asked-for side, the one opposite, then the two
+    /// across from them.
+    fn order(self) -> [Side; 4] {
+        match self {
+            Side::Top => [Side::Top, Side::Bottom, Side::Right, Side::Left],
+            Side::Bottom => [Side::Bottom, Side::Top, Side::Right, Side::Left],
+            Side::Right => [Side::Right, Side::Left, Side::Bottom, Side::Top],
+            Side::Left => [Side::Left, Side::Right, Side::Bottom, Side::Top],
+        }
+    }
+}
+
+/// How far a tooltip keeps from the window's edges.
+const TIP_MARGIN: f32 = 4.0;
+
+/// Where a `size` tooltip goes for `anchor` inside `screen`: on `side`, `gap` away, centred on
+/// the anchor and slid along that edge to stay inside the window. A side the card does not fit
+/// on is skipped for the next in [`Side::order`]; with no side that fits, the one with the most
+/// room takes it and the card runs off the window there. The card is never moved over the
+/// anchor: 1.0.0 clamped it into the window instead, so the title bar's refresh tooltip (no room
+/// above) landed on the button it describes.
+pub fn place_tip(anchor: Rect, size: Vec2, screen: Rect, side: Side, gap: f32) -> Rect {
+    let inner = screen.shrink(TIP_MARGIN);
+    // Centred on the anchor along the edge it sits on, then slid inside the window; a card
+    // wider than the window starts at its left (top) edge.
+    let along = |centre: f32, len: f32, lo: f32, hi: f32| (centre - len / 2.0).min(hi - len).max(lo);
+    let at = |s: Side| -> Rect {
+        let min = match s {
+            Side::Top => {
+                pos2(along(anchor.center().x, size.x, inner.left(), inner.right()), anchor.top() - gap - size.y)
+            }
+            Side::Bottom => pos2(along(anchor.center().x, size.x, inner.left(), inner.right()), anchor.bottom() + gap),
+            Side::Right => pos2(anchor.right() + gap, along(anchor.center().y, size.y, inner.top(), inner.bottom())),
+            Side::Left => {
+                pos2(anchor.left() - gap - size.x, along(anchor.center().y, size.y, inner.top(), inner.bottom()))
+            }
+        };
+        Rect::from_min_size(min, size)
+    };
+    let room = |s: Side| match s {
+        Side::Top => anchor.top() - gap - inner.top(),
+        Side::Bottom => inner.bottom() - anchor.bottom() - gap,
+        Side::Right => inner.right() - anchor.right() - gap,
+        Side::Left => anchor.left() - gap - inner.left(),
+    };
+    let need = |s: Side| if matches!(s, Side::Top | Side::Bottom) { size.y } else { size.x };
+    let order = side.order();
+    let s = order
+        .into_iter()
+        .find(|s| room(*s) >= need(*s))
+        .unwrap_or_else(|| order.into_iter().fold(side, |best, s| if room(s) > room(best) { s } else { best }));
+    at(s)
 }
 
 /// The app's own tooltip (Tooltip.tsx): after 120 ms of hover (or on keyboard focus), a small
-/// card above the trigger or beside it. Beside is what a collapsed sidebar needs: above, the
-/// topmost item's card would be cut off by the top of the window. Multi-line labels keep
-/// their line breaks (`whitespace-pre`).
+/// card on `side` of the trigger, or on another side where that one has no room
+/// ([`place_tip`]): it never covers what it describes. Beside is what a collapsed sidebar
+/// needs. Multi-line labels keep their line breaks (`whitespace-pre`); a line wider than the
+/// window wraps.
 pub fn tooltip(ui: &Ui, resp: &Response, label: &str, side: Side) {
     if label.is_empty() {
         return;
@@ -879,17 +937,21 @@ pub fn tooltip(ui: &Ui, resp: &Response, label: &str, side: Side) {
         return;
     }
     let t = tokens(ui);
-    let r = resp.rect;
-    let (pivot, pos) = match side {
-        Side::Top => (Align2::CENTER_BOTTOM, pos2(r.center().x, r.top() - 6.0)),
-        Side::Right => (Align2::LEFT_CENTER, pos2(r.right() + 14.0, r.center().y)),
-    };
     let screen = ctx.content_rect();
+    // Laid out here, not by the Area, because where the card goes depends on its size.
+    let pad = vec2(8.0, 4.0);
+    let mut j = job(label, style::body(11.5), t.text);
+    j.wrap.max_width = (screen.width() - 2.0 * (TIP_MARGIN + pad.x + 1.0)).max(40.0);
+    let galley = ui.painter().layout_job(j);
+    // galley + inner margin + the 1 px stroke on each side
+    let size = galley.size() + 2.0 * pad + vec2(2.0, 2.0);
+    let gap = if side == Side::Right || side == Side::Left { 14.0 } else { 6.0 };
+    let at = place_tip(resp.rect, size, screen, side, gap);
     egui::Area::new(resp.id.with("tip"))
         .order(egui::Order::Tooltip)
-        .fixed_pos(pos)
-        .pivot(pivot)
-        .constrain_to(screen)
+        .fixed_pos(at.min)
+        .pivot(Align2::LEFT_TOP)
+        .constrain(false)
         .interactable(false)
         .show(ctx, |ui| {
             Frame::new()
@@ -897,11 +959,9 @@ pub fn tooltip(ui: &Ui, resp: &Response, label: &str, side: Side) {
                 .stroke(Stroke::new(1.0, t.border))
                 .corner_radius(CornerRadius::same(RADIUS_MD))
                 .shadow(style::tip_shadow(&t))
-                .inner_margin(Margin::symmetric(8, 4))
+                .inner_margin(Margin::symmetric(pad.x as i8, pad.y as i8))
                 .show(ui, |ui| {
-                    let mut j = job(label, style::body(11.5), t.text);
-                    j.wrap.max_width = f32::INFINITY;
-                    let r = ui.add(egui::Label::new(j).selectable(false).extend());
+                    let r = ui.add(egui::Label::new(galley).selectable(false));
                     ui.ctx().accesskit_node_builder(r.id, |n| n.set_role(Role::Tooltip));
                 });
         });
@@ -1266,4 +1326,66 @@ pub fn name(ui: &Ui, resp: &Response, label: &str) {
 /// `WidgetText` in a font/colour, for egui widgets that take one.
 pub fn rich(s: &str, font: FontId, color: Color32) -> WidgetText {
     RichText::new(s).font(font).color(color).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SCREEN: Rect = Rect { min: Pos2::ZERO, max: Pos2 { x: 800.0, y: 600.0 } };
+
+    fn every_side() -> [Side; 4] {
+        [Side::Top, Side::Bottom, Side::Right, Side::Left]
+    }
+
+    // 1.0.0 clamped the card into the window, so with no room on its side it slid onto the
+    // anchor: the title bar's refresh tooltip covered the refresh button.
+    #[test]
+    fn a_tooltip_with_no_room_on_its_side_flips_instead_of_covering_the_anchor() {
+        let refresh = Rect::from_min_size(pos2(600.0, 6.0), vec2(60.0, 26.0));
+        let tip = place_tip(refresh, vec2(180.0, 24.0), SCREEN, Side::Top, 6.0);
+        assert!(!tip.intersects(refresh), "{tip:?}");
+        assert!(tip.top() >= refresh.bottom(), "flipped below: {tip:?}");
+        assert!(SCREEN.contains_rect(tip));
+
+        let edge = Rect::from_min_size(pos2(760.0, 300.0), vec2(40.0, 32.0));
+        let tip = place_tip(edge, vec2(120.0, 24.0), SCREEN, Side::Right, 14.0);
+        assert!(tip.right() <= edge.left(), "flipped to the left: {tip:?}");
+    }
+
+    // Near a corner the card slides along its edge to stay inside, but never over the anchor.
+    #[test]
+    fn a_tooltip_slides_along_its_edge_to_stay_in_the_window() {
+        let corner = Rect::from_min_size(pos2(770.0, 560.0), vec2(30.0, 30.0));
+        for side in every_side() {
+            let tip = place_tip(corner, vec2(200.0, 40.0), SCREEN, side, 6.0);
+            assert!(!tip.intersects(corner), "{side:?}: {tip:?}");
+            assert!(SCREEN.contains_rect(tip), "{side:?}: {tip:?}");
+        }
+    }
+
+    // Whatever the sizes, the card never lands on what it describes; when it cannot fit
+    // anywhere it takes the roomiest side and runs off the window there.
+    #[test]
+    fn a_tooltip_never_overlaps_its_anchor() {
+        let anchors = [
+            Rect::from_min_size(pos2(0.0, 0.0), vec2(40.0, 40.0)),
+            Rect::from_min_size(pos2(380.0, 280.0), vec2(40.0, 40.0)),
+            Rect::from_min_size(pos2(10.0, 10.0), vec2(780.0, 580.0)),
+            Rect::from_min_size(pos2(0.0, 500.0), vec2(800.0, 100.0)),
+        ];
+        let sizes = [vec2(60.0, 20.0), vec2(500.0, 120.0), vec2(1000.0, 30.0), vec2(30.0, 900.0)];
+        for a in anchors {
+            for s in sizes {
+                for side in every_side() {
+                    let tip = place_tip(a, s, SCREEN, side, 6.0);
+                    assert!(!tip.intersects(a), "{a:?} {s:?} {side:?}: {tip:?}");
+                    assert_eq!(tip.size(), s);
+                }
+            }
+        }
+        // A full-width strip at the bottom: above is the only room.
+        let strip = Rect::from_min_size(pos2(0.0, 500.0), vec2(800.0, 100.0));
+        assert!(place_tip(strip, vec2(60.0, 20.0), SCREEN, Side::Bottom, 6.0).bottom() <= strip.top());
+    }
 }

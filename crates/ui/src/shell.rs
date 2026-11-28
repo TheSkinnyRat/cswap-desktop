@@ -7,6 +7,7 @@
 use cswap_core::{AccountsState, AppSettings, AutoStatus, CswapBinaryInfo, Page, UpdaterState, UpdaterStatus};
 use egui::{Align, Align2, Color32, CornerRadius, Layout, Rect, Sense, Stroke, Ui, pos2, vec2};
 
+use crate::chrome::{self, CAPTION_W, TRAFFIC_LIGHTS_W, WindowChrome};
 use crate::style::{self, mix};
 use crate::theme::{RADIUS_MD, Tokens};
 use crate::widgets::{self, Side, icon};
@@ -28,6 +29,8 @@ pub struct ShellView<'a> {
     pub binary: Option<&'a CswapBinaryInfo>,
     pub updater: &'a UpdaterState,
     pub mac: bool,
+    /// Who draws the window's title bar: with anything but `Native` this header is it.
+    pub chrome: WindowChrome,
     /// Unix milliseconds, for "updated 3m ago".
     pub now_ms: i64,
 }
@@ -63,7 +66,23 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, mix(t.bg, t.surface, 0.7));
     ui.painter().hline(rect.x_range(), rect.bottom() - 0.5, Stroke::new(1.0, t.border));
-    let inner = rect.shrink2(vec2(12.0, 0.0));
+    // The OS bar is gone (one bar, as 0.1.23): this header moves the window, and on Windows /
+    // Linux carries the caption buttons; on macOS it leaves room for the traffic lights.
+    // The drag area goes first so every control drawn after it keeps its clicks.
+    if view.chrome != WindowChrome::Native {
+        chrome::title_bar_drag(ui, rect);
+    }
+    let left = if view.chrome == WindowChrome::MacOs { TRAFFIC_LIGHTS_W } else { 12.0 };
+    // 0.1.23: `pr-[140px]` beside the 138 px overlay
+    let right = if view.chrome == WindowChrome::Custom { 3.0 * CAPTION_W + 2.0 } else { 12.0 };
+    if view.chrome == WindowChrome::Custom {
+        let caps = Rect::from_min_max(
+            pos2(rect.right() - 3.0 * CAPTION_W, rect.top()),
+            pos2(rect.right(), rect.bottom() - 1.0),
+        );
+        chrome::window_buttons(ui, caps);
+    }
+    let inner = Rect::from_min_max(pos2(rect.left() + left, rect.top()), pos2(rect.right() - right, rect.bottom()));
     let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(Layout::left_to_right(Align::Center)));
     ui.spacing_mut().item_spacing.x = 8.0;
     let (logo, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
@@ -99,7 +118,7 @@ pub fn title_bar(ui: &mut Ui, view: &ShellView, act: &mut ShellAction) {
             Some(a) => format!("Refresh usage · updated {a}"),
             None => "Refresh usage".into(),
         };
-        widgets::tooltip(ui, &resp, &tip, Side::Top);
+        widgets::tooltip(ui, &resp, &tip, Side::Bottom);
         if resp.clicked() {
             act.refresh = true;
         }

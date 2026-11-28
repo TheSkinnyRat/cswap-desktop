@@ -5,7 +5,7 @@
 //! state the user would miss must come back from the services' getters).
 //!
 //! CONTRACT: [`Services`], [`CswapApp::new`], [`cx::Cx`], [`theme::Tokens`] and the page
-//! shape (`new` / `on_event` / `ui`). OWNERS: ui-shell owns `app`, `shell`, `widgets`,
+//! shape (`new` / `on_event` / `ui`). OWNERS: ui-shell owns `app`, `chrome`, `shell`, `widgets`,
 //! `palette`, `style`, `testing`, `toast` rendering and `pages::{settings, log, onboarding}`; ui-accounts owns
 //! `usage` and `pages::{accounts, auto, mappings}`; `theme` and `cx` are the main session's.
 
@@ -14,6 +14,7 @@ use std::sync::Arc;
 use cswap_core::{Cswap, Host, Updates};
 
 pub mod app;
+pub mod chrome;
 pub mod cx;
 pub mod pages;
 pub mod palette;
@@ -27,6 +28,7 @@ pub mod usage;
 pub mod widgets;
 
 pub use app::CswapApp;
+pub use chrome::WindowChrome;
 
 /// The services a window talks to.
 #[derive(Clone)]
