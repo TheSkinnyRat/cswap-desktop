@@ -686,9 +686,9 @@ impl AccountsPage {
         r.inner.clicked().then_some(RowAct::Switch)
     }
 
-    /// Width of a row's actions: [`Self::switch_button`], the ⋯ button, the expand chevron.
+    /// Width of a row's actions: [`Self::switch_button`] + 4 + the ⋯ button.
     fn actions_width(ui: &Ui) -> f32 {
-        Button::new("Switch").small().width(ui) + 4.0 + 28.0 + 4.0 + CHEV_W
+        Button::new("Switch").small().width(ui) + 4.0 + 28.0
     }
 
     // ---- rows ------------------------------------------------------------------------
@@ -710,10 +710,13 @@ impl AccountsPage {
         // The name column takes what its widest name line needs (up to leaving the bars 110
         // each), so its chips do not wrap beside an empty readiness column.
         let inner = width - 2.0 - 2.0 * ROW_PAD;
-        let free = inner - NUM_W - READY_W - act_w - 5.0 * GAP;
+        let free = inner - CHEV_W - CHEV_GAP - READY_W - act_w - 4.0 * GAP;
         let need = rows
             .iter()
-            .map(|(a, _)| name_line_width(ui, a, &chips_of(a, state.plans.get(&a.email), p, true)))
+            .map(|(a, _)| {
+                num_prefix_width(ui, a.number)
+                    + name_line_width(ui, a, &chips_of(a, state.plans.get(&a.email), p, true))
+            })
             .fold(0.0, f32::max);
         let share = free * 1.4 / 3.4;
         let name_w = if need > share { need.min(free - 2.0 * BAR_MIN).max(share) } else { share };
@@ -766,8 +769,8 @@ impl AccountsPage {
             row.multiply_opacity(0.6);
         }
         let mut out = None;
-        let x_num = top_left.x + ROW_PAD;
-        let x_name = x_num + NUM_W + GAP;
+        let x_chev = top_left.x + ROW_PAD;
+        let x_name = x_chev + CHEV_W + CHEV_GAP;
         let y0 = top_left.y + 11.0;
         let right = top_left.x + width - ROW_PAD;
         let chips = chips_of(a, plan, p, !narrow);
@@ -775,7 +778,7 @@ impl AccountsPage {
         let name_h = widgets::place(
             &mut row,
             UiBuilder::new().max_rect(Rect::from_min_size(pos2(x_name, y0), vec2(name_w, 400.0))),
-            |ui| name_block(ui, p, a, &chips, style::body_medium(13.0), name_w),
+            |ui| name_block(ui, p, a, Some(n), &chips, style::body_medium(13.0), name_w),
         )
         .inner;
         let bars_h = 26.0;
@@ -786,11 +789,12 @@ impl AccountsPage {
             let h = name_h.max(bars_h).max(34.0);
             (h, y0 + h / 2.0, y0 + (h - bars_h) / 2.0)
         };
-        // the slot number alone on the left: beside it, the chevron read as part of it
-        // (Purwa, PR #9); the chevron sits after ⋯ instead
+        // the expand chevron alone at the left edge, turning 90° as the row opens; not a
+        // button of its own: the whole row is the click target. The slot number leads the
+        // name line (`name_block`). Narrow: beside the name line, wide: the row's middle.
         let turn = row.ctx().animate_bool_with_time(id.with("open"), open, TRANSITION_SECS);
-        let pnt = row.painter().clone();
-        pnt.text(pos2(x_num, line1_mid), Align2::LEFT_CENTER, n.to_string(), style::body(12.0), t.text_3);
+        let chev_y = if narrow { y0 + 10.0 } else { line1_mid };
+        chevron(row.painter(), pos2(x_chev + CHEV_W / 2.0, chev_y), turn, t.text_3);
         // bars
         let u = view::usage_of(a);
         let five = u.and_then(|u| u.five_hour.clone());
@@ -827,10 +831,6 @@ impl AccountsPage {
                 .layout(Layout::right_to_left(Align::Center)),
             |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                // the expand chevron, far right, turning 90° as the row opens; not a
-                // button of its own: the whole row is the click target
-                let (slot, _) = ui.allocate_exact_size(vec2(CHEV_W, 28.0), Sense::hover());
-                chevron(ui.painter(), slot.center(), turn, t.text_3);
                 let m = self.menu(ui, a);
                 let s = self.switch_button(ui, a, r.kind);
                 m.or(s)
@@ -1058,10 +1058,22 @@ impl AccountsPage {
 /// The mockup's row: 11 px top and bottom, 16 px sides, 16 px gaps, `#` 18, readiness 120.
 const ROW_PAD: f32 = 16.0;
 const GAP: f32 = 16.0;
-const NUM_W: f32 = 18.0;
 const READY_W: f32 = 120.0;
-/// The expand chevron's slot at the right end of a row.
+/// The expand chevron's column at the left edge of a row (Purwa's variant E, PR #9): the
+/// chevron alone there; beside the slot number it read as one glyph ("› 6"), and at the
+/// row's right end, after ⋯, it looked out of place. The number leads the name line.
 const CHEV_W: f32 = 14.0;
+const CHEV_GAP: f32 = 10.0;
+/// Room on each side of the `·` between the slot number and the name.
+const DOT_PAD: f32 = 6.0;
+
+/// Width of a row's `6 · ` before the name.
+fn num_prefix_width(ui: &Ui, n: u32) -> f32 {
+    widgets::measure(ui, &n.to_string(), style::body(12.0)).x
+        + DOT_PAD
+        + widgets::measure(ui, "·", style::body(12.0)).x
+        + DOT_PAD
+}
 /// The bars never get narrower than this to make room for a long name line: `5-hour 100%`
 /// and `2d 21h` side by side still fit.
 const BAR_MIN: f32 = 120.0;
@@ -1166,18 +1178,38 @@ fn name_tooltip(ui: &mut Ui, p: &Paint, a: &Account, rect: Rect) {
 
 /// Name, its chips, and the email / org line under them. A chip goes to a new line only
 /// when it does not fit on the current one. Returns the height used.
-fn name_block(ui: &mut Ui, p: &Paint, a: &Account, chips: &[ChipSpec], font: egui::FontId, w: f32) -> f32 {
+fn name_block(
+    ui: &mut Ui,
+    p: &Paint,
+    a: &Account,
+    num: Option<u32>,
+    chips: &[ChipSpec],
+    font: egui::FontId,
+    w: f32,
+) -> f32 {
     let t = p.t;
     let top = ui.cursor().min;
     let line_h = font.size.max(18.0) + 2.0;
-    let g = widgets::galley(ui, display_name(a, p.mask), font, t.text, w);
-    let name_rect = Rect::from_min_size(pos2(top.x, top.y + (line_h - g.size().y) / 2.0), g.size());
+    // A row's name line reads `6 · name [chips]`, number and dot muted; a wrapped chip
+    // and the meta line start flush with the number (variant E).
+    let lead = if let Some(n) = num {
+        let y = top.y + line_h / 2.0;
+        let pnt = ui.painter();
+        let r = pnt.text(pos2(top.x, y), Align2::LEFT_CENTER, n.to_string(), style::body(12.0), t.text_3);
+        let d = pnt.text(pos2(r.max.x + DOT_PAD, y), Align2::LEFT_CENTER, "·", style::body(12.0), t.text_3);
+        d.max.x + DOT_PAD - top.x
+    } else {
+        0.0
+    };
+    let left = top.x + lead;
+    let g = widgets::galley(ui, display_name(a, p.mask), font, t.text, w - lead);
+    let name_rect = Rect::from_min_size(pos2(left, top.y + (line_h - g.size().y) / 2.0), g.size());
     ui.painter().galley(name_rect.min, g, t.text);
     name_tooltip(ui, p, a, name_rect);
     let (mut x, mut y) = (name_rect.max.x + 6.0, top.y);
     for (i, c) in chips.iter().enumerate() {
         let cw = widgets::chip_width(ui, &c.label);
-        if x + cw > top.x + w && x > top.x {
+        if x + cw > top.x + w && x > left {
             x = top.x;
             y += 22.0;
         }
@@ -1557,7 +1589,7 @@ fn hero_who(ui: &mut Ui, p: &Paint, a: &Account, plan: Option<&PlanInfo>, w: f32
     let nh = widgets::place(
         ui,
         UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x, top.y + lh + 4.0), vec2(w, 300.0))),
-        |ui| name_block(ui, p, a, &chips, style::body_semibold(18.0), w),
+        |ui| name_block(ui, p, a, None, &chips, style::body_semibold(18.0), w),
     )
     .inner;
     let mut y = top.y + lh + 4.0 + nh;
