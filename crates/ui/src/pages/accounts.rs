@@ -686,9 +686,9 @@ impl AccountsPage {
         r.inner.clicked().then_some(RowAct::Switch)
     }
 
-    /// Width of [`Self::switch_button`] + 4 + the ⋯ button.
+    /// Width of a row's actions: [`Self::switch_button`], the ⋯ button, the expand chevron.
     fn actions_width(ui: &Ui) -> f32 {
-        Button::new("Switch").small().width(ui) + 4.0 + 28.0
+        Button::new("Switch").small().width(ui) + 4.0 + 28.0 + 4.0 + CHEV_W
     }
 
     // ---- rows ------------------------------------------------------------------------
@@ -786,12 +786,11 @@ impl AccountsPage {
             let h = name_h.max(bars_h).max(34.0);
             (h, y0 + h / 2.0, y0 + (h - bars_h) / 2.0)
         };
-        // number with its chevron, turning 90° as the row opens
+        // the slot number alone on the left: beside it, the chevron read as part of it
+        // (Purwa, PR #9); the chevron sits after ⋯ instead
         let turn = row.ctx().animate_bool_with_time(id.with("open"), open, TRANSITION_SECS);
         let pnt = row.painter().clone();
-        let chev_c = pos2(x_num + 4.0, line1_mid);
-        chevron(&pnt, chev_c, turn, t.text_3);
-        pnt.text(pos2(x_num + 12.0, line1_mid), Align2::LEFT_CENTER, n.to_string(), style::body(12.0), t.text_3);
+        pnt.text(pos2(x_num, line1_mid), Align2::LEFT_CENTER, n.to_string(), style::body(12.0), t.text_3);
         // bars
         let u = view::usage_of(a);
         let five = u.and_then(|u| u.five_hour.clone());
@@ -828,6 +827,10 @@ impl AccountsPage {
                 .layout(Layout::right_to_left(Align::Center)),
             |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
+                // the expand chevron, far right, turning 90° as the row opens; not a
+                // button of its own: the whole row is the click target
+                let (slot, _) = ui.allocate_exact_size(vec2(CHEV_W, 28.0), Sense::hover());
+                chevron(ui.painter(), slot.center(), turn, t.text_3);
                 let m = self.menu(ui, a);
                 let s = self.switch_button(ui, a, r.kind);
                 m.or(s)
@@ -1052,14 +1055,16 @@ impl AccountsPage {
 
 // ---- shared pieces ----------------------------------------------------------------------
 
-/// The mockup's row: 11 px top and bottom, 16 px sides, 16 px gaps, `#` 22, readiness 120.
+/// The mockup's row: 11 px top and bottom, 16 px sides, 16 px gaps, `#` 18, readiness 120.
 const ROW_PAD: f32 = 16.0;
 const GAP: f32 = 16.0;
-const NUM_W: f32 = 22.0;
+const NUM_W: f32 = 18.0;
 const READY_W: f32 = 120.0;
+/// The expand chevron's slot at the right end of a row.
+const CHEV_W: f32 = 14.0;
 /// The bars never get narrower than this to make room for a long name line: `5-hour 100%`
 /// and `2d 21h` side by side still fit.
-const BAR_MIN: f32 = 128.0;
+const BAR_MIN: f32 = 120.0;
 
 /// Column widths of the wide row template.
 struct Cols {

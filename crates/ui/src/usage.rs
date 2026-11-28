@@ -74,37 +74,80 @@ pub fn bar(ui: &mut Ui, t: &Tokens, id: Id, pct: Option<f64>, tone: Tone, pace: 
     resp
 }
 
+/// Where a ring's strokes go: ONE centre radius and ONE width for the track, the arc and
+/// the pace tick. 1.1.0 drew the track with `circle_stroke`, which egui 0.37 paints OUTSIDE
+/// its radius, and the arc as a centred polyline: the arc sat 3.5 px inside its track.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RingGeom {
+    pub center: Pos2,
+    /// Centre line of the stroke.
+    pub radius: f32,
+    pub width: f32,
+}
+
+impl RingGeom {
+    /// The ring in a `size` px square: the stroke's outer edge 2.5 px inside the square.
+    pub fn in_rect(rect: Rect) -> Self {
+        let size = rect.width().min(rect.height());
+        RingGeom { center: rect.center(), radius: size / 2.0 - 2.5 - RING_STROKE / 2.0, width: RING_STROKE }
+    }
+
+    /// Points on the centre line from twelve o'clock clockwise to `frac` of a turn.
+    fn points(&self, frac: f32) -> Vec<Pos2> {
+        let n = ((frac * 128.0).ceil() as usize).max(2);
+        (0..=n).map(|k| clock_point(self.center, self.radius, frac * k as f32 / n as f32)).collect()
+    }
+}
+
+/// The shapes of a ring (track, arc with round caps, pace tick), pure so the geometry can
+/// be tested: every stroke is centred on [`RingGeom::radius`] and is [`RingGeom::width`]
+/// wide; the tick crosses it, from one width inside that radius to one width outside.
+pub fn ring_shapes(
+    g: RingGeom,
+    filled_frac: f32,
+    pace_frac: Option<f32>,
+    track: Color32,
+    arc: Color32,
+    tick: Color32,
+) -> Vec<Shape> {
+    let mut out = Vec::new();
+    let mut ring = g.points(1.0);
+    ring.pop(); // closed: the last point would repeat the first
+    out.push(Shape::closed_line(ring, Stroke::new(g.width, track)));
+    // A zero-length arc with a round cap still paints a dot, which reads as "a little
+    // used" when the answer is none: nothing is drawn at 0.
+    if filled_frac > 0.0 {
+        let pts = g.points(filled_frac.min(1.0));
+        let (first, last) = (pts[0], pts[pts.len() - 1]);
+        out.push(Shape::line(pts, Stroke::new(g.width, arc)));
+        out.push(Shape::circle_filled(first, g.width / 2.0, arc));
+        out.push(Shape::circle_filled(last, g.width / 2.0, arc));
+    }
+    if let Some(f) = pace_frac {
+        let f = f.clamp(0.0, 1.0);
+        let (inner, outer) = (g.radius - g.width, g.radius + g.width);
+        out.push(Shape::line_segment(
+            [clock_point(g.center, inner, f), clock_point(g.center, outer, f)],
+            Stroke::new(1.5, tick),
+        ));
+    }
+    out
+}
+
 /// A `size` px ring filled to `pct` with the percentage in its middle (the hero's 104 px,
 /// a tile's 64 px). Captions under it are the caller's. `None` draws an empty ring and `—`.
 pub fn ring(ui: &mut Ui, t: &Tokens, id: Id, pct_value: Option<f64>, pace: Option<f64>, size: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
-    let p = ui.painter();
-    let c = rect.center();
-    let r = size / 2.0 - 6.0;
-    p.circle_stroke(c, r, Stroke::new(RING_STROKE, t.surface_3));
+    let g = RingGeom::in_rect(rect);
     let value = pct_value.map(|v| v.clamp(0.0, 100.0)).unwrap_or(0.0) as f32;
     let filled = ui.ctx().animate_value_with_time(id.with("grow"), value, GROW_SECS);
     let tn = cswap_core::format::tone(pct_value);
-    // A zero-length arc with a round cap still paints a dot, which reads as "a little
-    // used" when the answer is none: nothing is drawn at 0.
-    if filled > 0.0 {
-        let col = fill_color(t, tn);
-        let frac = filled / 100.0;
-        let n = ((frac * 96.0).ceil() as usize).max(2);
-        let pts: Vec<Pos2> = (0..=n).map(|k| clock_point(c, r, frac * k as f32 / n as f32)).collect();
-        let (first, last) = (pts[0], pts[n]);
-        p.add(Shape::line(pts, Stroke::new(RING_STROKE, col)));
-        p.circle_filled(first, RING_STROKE / 2.0, col);
-        p.circle_filled(last, RING_STROKE / 2.0, col);
-    }
-    if let Some(m) = pace {
-        let frac = m.clamp(0.0, 100.0) as f32 / 100.0;
-        p.line_segment([clock_point(c, r - 7.0, frac), clock_point(c, r + 7.0, frac)], Stroke::new(1.5, t.text));
-    }
+    let pace = pace.map(|m| m.clamp(0.0, 100.0) as f32 / 100.0);
+    ui.painter().extend(ring_shapes(g, filled / 100.0, pace, t.surface_3, fill_color(t, tn), t.text));
     let text = pct(pct_value);
     let font = if size > 90.0 { style::body_semibold(20.0) } else { style::body_semibold(15.0) };
-    let g = widgets::galley(ui, text, font, t.text, size - 14.0);
-    ui.painter().galley(c - g.size() / 2.0, g, t.text);
+    let gl = widgets::galley(ui, text, font, t.text, size - 14.0);
+    ui.painter().galley(g.center - gl.size() / 2.0, gl, t.text);
     resp
 }
 
@@ -129,5 +172,35 @@ mod tests {
         assert!(near(clock_point(c, 10.0, 0.0), pos2(0.0, -10.0)), "twelve o'clock");
         assert!(near(clock_point(c, 10.0, 0.25), pos2(10.0, 0.0)), "three o'clock");
         assert!(near(clock_point(c, 10.0, 0.5), pos2(0.0, 10.0)), "half a turn points down");
+    }
+
+    // TESTED RULE (Purwa, PR #9): the arc lies ON its track. Track, arc and tick share one
+    // centre radius, track and arc one width and a centred stroke, at every ring size.
+    #[test]
+    fn ring_arc_track_and_tick_share_one_radius() {
+        use egui::epaint::{PathShape, StrokeKind};
+        for size in [64.0, 104.0] {
+            let g = RingGeom::in_rect(Rect::from_min_size(pos2(10.0, 20.0), vec2(size, size)));
+            assert!((g.radius + g.width / 2.0 - (size / 2.0 - 2.5)).abs() < 1e-4, "outer edge inside the box");
+            let shapes = ring_shapes(g, 0.45, Some(0.5), Color32::GRAY, Color32::BLUE, Color32::BLACK);
+            let paths: Vec<&PathShape> =
+                shapes.iter().filter_map(|s| if let Shape::Path(p) = s { Some(p) } else { None }).collect();
+            let (track, arc) = (paths[0], paths[1]);
+            assert!(track.closed && !arc.closed);
+            for p in [track, arc] {
+                assert_eq!(p.stroke.width, g.width, "{size}px: one width");
+                assert_eq!(p.stroke.kind, StrokeKind::Middle, "{size}px: centred on the radius");
+                for pt in &p.points {
+                    assert!(((*pt - g.center).length() - g.radius).abs() < 1e-3, "{size}px: on the radius");
+                }
+            }
+            let tick = shapes
+                .iter()
+                .find_map(|s| if let Shape::LineSegment { points, .. } = s { Some(*points) } else { None })
+                .expect("tick");
+            let (a, b) = ((tick[0] - g.center).length(), (tick[1] - g.center).length());
+            assert!(((a + b) / 2.0 - g.radius).abs() < 1e-3, "{size}px: the tick is centred on the radius");
+            assert!(a < g.radius - g.width / 2.0 && b > g.radius + g.width / 2.0, "it crosses the whole stroke");
+        }
     }
 }
