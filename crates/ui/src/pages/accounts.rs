@@ -849,8 +849,14 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
     let top = ui.cursor().min;
     let name = a.alias.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| mask_email(&a.email, mask));
     let mut chips: Vec<(String, ChipTone, Option<String>)> = Vec::new();
-    if let Some(p) = plan {
-        chips.push((p.label.clone(), ChipTone::Muted, Some(view::plan_tooltip(p, a.active, now, off))));
+    // cswap's `plan` for every account, else the label remembered in plans.json; a
+    // canceled or lapsed subscription adds a second chip so it reads without the tooltip.
+    if let Some(b) = view::plan_badge(a, plan, now, off) {
+        let standing = b.standing_chip();
+        chips.push((b.label, ChipTone::Muted, Some(b.tooltip)));
+        if let Some((word, tone, tip)) = standing {
+            chips.push((word.into(), tone, Some(tip.into())));
+        }
     }
     if a.active {
         chips.push(("active".into(), ChipTone::Accent, None));

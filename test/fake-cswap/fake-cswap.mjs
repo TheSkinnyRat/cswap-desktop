@@ -12,16 +12,27 @@ const argv = process.argv.slice(2)
 const out = (s) => process.stdout.write(s + '\n')
 const err = (s) => process.stderr.write(s + '\n')
 
+// `plan` as cswap >= 0.30 reports it (json_output.subscription_plan_fields), one of each
+// case the app tells apart. Account 1 has none on purpose: the app falls back to the
+// credential file for it, as with an older cswap. Account 4 is an API key, which has no
+// profile to read a plan from.
+const PLANS = {
+  teamSeat: { label: 'Team', tier: 'default_claude_max_5x', organizationType: 'claude_team', billingType: 'stripe_subscription', subscriptionStatus: 'active', expired: false },
+  canceled: { label: 'Max 20x', tier: 'default_claude_max_20x', organizationType: 'claude_max', billingType: 'stripe_subscription', subscriptionStatus: 'canceled', expired: false },
+  lapsed: { label: 'Free', tier: 'default_claude_ai', organizationType: 'claude_max', billingType: 'none', subscriptionStatus: 'canceled', expired: true }
+}
+
 const seed = () => ({
   version: '0.25.0',
   activeAccountNumber: 1,
   accounts: {
     1: { email: 'you@example.com', organizationName: "you@example.com's Organization", organizationUuid: 'org-1111', alias: 'main', usage: { five_hour: 45, seven_day: 12, scoped: [{ name: 'Fable', pct: 17 }] } },
-    2: { email: 'work@company.com', organizationName: 'Company Inc', organizationUuid: 'org-2222', usage: { five_hour: 100, seven_day: 61, scoped: [{ name: 'Fable', pct: 100 }] }, resetsIn5h: 1800 },
-    3: { email: 'spare@example.com', organizationName: '', organizationUuid: '', disabled: true, usage: { five_hour: 3, seven_day: 40 } },
-    4: { email: 'api-key-4@token.local', organizationName: '', organizationUuid: '', usageStatus: 'api_key' }
+    2: { email: 'work@company.com', organizationName: 'Company Inc', organizationUuid: 'org-2222', usage: { five_hour: 100, seven_day: 61, scoped: [{ name: 'Fable', pct: 100 }] }, resetsIn5h: 1800, loginExpiresIn: 20 * 86400, plan: PLANS.teamSeat },
+    3: { email: 'spare@example.com', organizationName: '', organizationUuid: '', disabled: true, usage: { five_hour: 3, seven_day: 40 }, plan: PLANS.canceled },
+    4: { email: 'api-key-4@token.local', organizationName: '', organizationUuid: '', usageStatus: 'api_key' },
+    5: { email: 'lapsed@example.com', organizationName: '', organizationUuid: 'org-5555', usage: { five_hour: 70, seven_day: 95 }, plan: PLANS.lapsed }
   },
-  sequence: [1, 2, 3, 4],
+  sequence: [1, 2, 3, 4, 5],
   mappings: { '/home/you/work/client-app': { email: 'work@company.com', organizationUuid: 'org-2222' } },
   settings: {},
   unclaimed: {},
@@ -132,6 +143,8 @@ function row(num, a, active) {
   }
   if (a.alias) r.alias = a.alias
   if (a.disabled) r.disabled = true
+  if (a.loginExpiresIn != null) r.loginExpiresAt = iso(a.loginExpiresIn).replace(/\.\d{3}Z$/, 'Z')
+  if (a.plan) r.plan = { ...a.plan, fetchedAt: iso(-3600) }
   if (!a.usageStatus && a.usage) {
     r.usage = {
       fiveHour: window(a.usage.five_hour, a.resetsIn5h ?? 3.5 * 3600),

@@ -3,7 +3,8 @@
 //! object keeps what it does not know in `extra`: dropping them would lose data on a
 //! round-trip and hide new upstream fields from the LOG page.
 
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 /// Unknown keys of a cswap object, kept verbatim.
@@ -89,8 +90,54 @@ pub struct Account {
     pub last_good_fetched_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_good_age_seconds: Option<f64>,
+    /// cswap >= 0.27 (#331): when the stored login's refresh token runs out (ISO UTC).
+    /// Absent when Claude Code recorded no such date for that login.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_expires_at: Option<String>,
+    /// cswap >= 0.30 (#499): the subscription as cswap last read it from the profile
+    /// endpoint, for EVERY slot. Absent on older cswap and for a slot never read; the
+    /// badge then falls back to `plans.json` ([`crate::plan`]). Read leniently: an
+    /// additive field that changed shape must cost the badge, never the whole list.
+    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    pub plan: Option<CswapPlan>,
     #[serde(flatten)]
     pub extra: Extra,
+}
+
+/// `plan` of a `list --json` row (cswap's `json_output.subscription_plan_fields`).
+/// `subscriptionStatus` does not move when a subscription is canceled, only when it
+/// lapses (cswap's `subscription.py`); `expired` is `canceled` AND back on the free tier.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CswapPlan {
+    /// As cswap's own views print it: `Max 5x`, `Pro`, `Ultra`, `Team`, `Free`, ...
+    #[serde(default)]
+    pub label: String,
+    /// The raw `rate_limit_tier` (`default_claude_max_5x`, `default_claude_ai`, ...).
+    #[serde(default)]
+    pub tier: String,
+    /// `claude_pro`, `claude_max`, `claude_team`, `claude_enterprise`, ...
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_type: Option<String>,
+    /// `active` / `canceled` (open set upstream, so a string).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_display_name: Option<String>,
+    #[serde(default)]
+    pub expired: bool,
+    /// The last successful profile read (ISO); plans refresh every six hours upstream.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<String>,
+    #[serde(flatten)]
+    pub extra: Extra,
+}
+
+/// `None` for a value that does not parse as `T`, instead of failing the parent.
+fn lenient<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Result<Option<T>, D::Error> {
+    Ok(Option::<Value>::deserialize(d)?.and_then(|v| serde_json::from_value(v).ok()))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -460,4 +507,43 @@ pub enum Page {
     Mappings,
     Settings,
     Log,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ROW: &str = r#"{"number":2,"email":"work@example.com","active":false,"usageStatus":"ok","usage":null,
+        "loginExpiresAt":"2026-12-20T08:00:00Z",
+        "plan":{"label":"Team","tier":"default_claude_max_5x","organizationType":"claude_team",
+                "billingType":"stripe_subscription","subscriptionStatus":"active","expired":false,
+                "fetchedAt":"2026-11-28T03:00:00Z","seatNote":"new upstream key"}}"#;
+
+    #[test]
+    fn reads_plan_and_login_expiry_and_keeps_unknown_plan_keys() {
+        let a: Account = serde_json::from_str(ROW).unwrap();
+        assert_eq!(a.login_expires_at.as_deref(), Some("2026-12-20T08:00:00Z"));
+        let p = a.plan.as_ref().unwrap();
+        assert_eq!((p.label.as_str(), p.tier.as_str()), ("Team", "default_claude_max_5x"));
+        assert_eq!(p.organization_type.as_deref(), Some("claude_team"));
+        assert_eq!(p.subscription_status.as_deref(), Some("active"));
+        assert!(!p.expired);
+        assert!(a.extra.is_empty(), "typed fields must not also land in extra: {:?}", a.extra);
+        // a round-trip loses nothing, including keys this version does not know
+        let back: Value = serde_json::to_value(&a).unwrap();
+        assert_eq!(back["plan"]["seatNote"], "new upstream key");
+        assert_eq!(serde_json::from_value::<Account>(back).unwrap(), a);
+    }
+
+    #[test]
+    fn a_plan_of_another_shape_costs_the_badge_not_the_list() {
+        let list = r#"{"schemaVersion":1,"accounts":[
+            {"number":1,"email":"a@example.com","plan":"Pro"},
+            {"number":2,"email":"b@example.com","plan":{"label":7}},
+            {"number":3,"email":"c@example.com","plan":null},
+            {"number":4,"email":"d@example.com"}]}"#;
+        let p: ListPayload = serde_json::from_str(list).unwrap();
+        assert_eq!(p.accounts.len(), 4);
+        assert!(p.accounts.iter().all(|a| a.plan.is_none()));
+    }
 }

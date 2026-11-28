@@ -53,11 +53,24 @@ fn lists_accounts_from_json_and_records_the_call() {
     let t = T::new();
     let r = t.on(t.cli.list()).unwrap();
     assert_eq!(r.schema_version, 1);
-    assert_eq!(r.accounts.iter().map(|a| a.number).collect::<Vec<_>>(), [1, 2, 3, 4]);
+    assert_eq!(r.accounts.iter().map(|a| a.number).collect::<Vec<_>>(), [1, 2, 3, 4, 5]);
     assert!(r.accounts[0].active);
     assert_eq!(r.accounts[2].disabled, Some(true));
     assert_eq!(r.accounts[3].usage_status, "api_key");
     assert_eq!(r.accounts[0].usage.as_ref().unwrap().scoped.as_ref().unwrap()[0].name, "Fable");
+    // cswap >= 0.30's additive `plan` and `loginExpiresAt` arrive typed, through the CLI
+    assert!(r.accounts[0].plan.is_none() && r.accounts[3].plan.is_none());
+    let plans: Vec<_> = r.accounts.iter().filter_map(|a| a.plan.as_ref().and_then(plan::from_cswap)).collect();
+    assert_eq!(
+        plans,
+        [
+            ("Team · Max 5x".to_owned(), plan::Standing::Current),
+            ("Max 20x".to_owned(), plan::Standing::Canceled),
+            ("Free".to_owned(), plan::Standing::Lapsed)
+        ]
+    );
+    assert!(r.accounts[1].plan.as_ref().unwrap().fetched_at.is_some());
+    assert!(r.accounts[1].login_expires_at.as_deref().is_some_and(|t| t.ends_with('Z')));
     let log = t.cli.log();
     assert_eq!(log.len(), 1);
     assert_eq!(
@@ -476,7 +489,8 @@ fn native_detects_refreshes_and_remembers_the_live_plan() {
     });
     assert_eq!((bin.source, bin.version.as_deref()), (BinarySource::Env, Some("0.25.0")));
     let st = n.wait_for(loaded);
-    assert_eq!(st.payload.as_ref().unwrap().accounts.len(), 4);
+    assert_eq!(st.payload.as_ref().unwrap().accounts.len(), 5);
+    // account 1 has no `plan` (as from cswap < 0.30): the credential file still names it
     assert_eq!(st.plans["you@example.com"].label, "Max 5x");
     assert!(!serde_json::to_string(&st).unwrap().contains("sk-secret"));
     assert!(n.dir.path().join("data/plans.json").exists());
@@ -492,6 +506,19 @@ fn native_mutations_are_followed_by_a_pushed_refresh() {
     let st = n.wait_for(|e| loaded(e).filter(|a| a.payload.as_ref().unwrap().active_account_number == Some(2)));
     assert!(st.payload.unwrap().accounts[1].active);
     assert!(n.native.command_log().iter().any(|e| e.args == ["switch", "2", "--json"]));
+}
+
+// TESTED RULE: the credential file is only read for a live account cswap gave no `plan`.
+// The scratch file still says Max 5x after the switch; recording it for account 2 would
+// pin a wrong label on it and touch the token file for nothing.
+#[test]
+fn native_does_not_remember_a_plan_cswap_already_reports() {
+    let n = N::new(None);
+    n.wait_for(loaded);
+    wait(n.native.switch_to("2", false)).unwrap();
+    let st = n.wait_for(|e| loaded(e).filter(|a| a.payload.as_ref().unwrap().active_account_number == Some(2)));
+    assert!(st.plans.contains_key("you@example.com"));
+    assert!(!st.plans.contains_key("work@company.com"), "{:?}", st.plans);
 }
 
 #[test]
@@ -571,7 +598,7 @@ fn native_trait_methods_work_from_a_plain_thread() {
         assert!(tokio::runtime::Handle::try_current().is_err(), "the test thread must be outside any runtime");
         let info = wait(native.detect_binary());
         assert_eq!(info.version.as_deref(), Some("0.25.0"));
-        assert_eq!(wait(native.refresh()).payload.unwrap().accounts.len(), 4);
+        assert_eq!(wait(native.refresh()).payload.unwrap().accounts.len(), 5);
         assert!(wait(native.switch_to("2", false)).unwrap().switched);
         wait(native.status()).unwrap();
         wait(native.config()).unwrap();
