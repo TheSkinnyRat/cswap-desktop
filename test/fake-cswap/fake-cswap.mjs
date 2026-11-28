@@ -4,7 +4,7 @@
 //   FAKE_CSWAP_STATE  path to the state file (default: ./fake-cswap-state.json)
 //   FAKE_CSWAP_DELAY  ms to sleep before answering (default 0)
 //   FAKE_CSWAP_FAIL   verb name that should fail with an error envelope
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const STATE = process.env.FAKE_CSWAP_STATE || 'fake-cswap-state.json'
@@ -28,6 +28,78 @@ const seed = () => ({
   liveIdentity: 'you@example.com',
   log: []
 })
+
+// The state file is read-modify-written by every invocation, and the app runs reads
+// (list, status, config, --version) concurrently with each other and with the mutation
+// queue, as the real cswap allows because it locks its vault. Without a lock here two
+// overlapping writeFileSync calls interleave (truncate, truncate, long write, short
+// write) and the next reader sees the short JSON followed by the long one's tail.
+// So each invocation holds an exclusive lock from its first read to its exit; `auto`
+// holds it per tick. A holder killed mid-command (a timeout, taskkill /t) leaves its pid
+// behind; that lock is taken over only once the pid is dead AND the file is older than
+// STALE_MS. The age matters on Windows: a waiter reading the file keeps it delete-pending
+// after a holder exits normally, sees that holder's pid dead, and would otherwise delete
+// the NEXT holder's fresh lock (two holders, lost writes).
+const STALE_MS = 2000
+const LOCK = `${STATE}.lock`
+let locked = false
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e.code === 'EPERM'
+  }
+}
+function lock() {
+  if (locked) return
+  mkdirSync(dirname(LOCK) || '.', { recursive: true })
+  const deadline = Date.now() + 20000
+  for (;;) {
+    try {
+      const fd = openSync(LOCK, 'wx')
+      writeSync(fd, String(process.pid))
+      closeSync(fd)
+      locked = true
+      return
+    } catch (e) {
+      // Windows may answer EPERM/EBUSY while another process is deleting the file.
+      if (!['EEXIST', 'EPERM', 'EBUSY'].includes(e.code)) throw e
+    }
+    let holder = 0
+    let age = 0
+    try {
+      age = Date.now() - statSync(LOCK).mtimeMs
+      holder = Number(readFileSync(LOCK, 'utf8'))
+    } catch {
+      /* gone or just created and still empty: retry */
+    }
+    if (holder && age > STALE_MS && !alive(holder)) {
+      try {
+        unlinkSync(LOCK)
+      } catch {
+        /* someone else cleared it */
+      }
+      continue
+    }
+    if (Date.now() > deadline) {
+      err(`fake-cswap: state lock held by pid ${holder} for 20 s`)
+      process.exit(4)
+    }
+    pause(5)
+  }
+}
+function unlock() {
+  if (!locked) return
+  locked = false
+  try {
+    unlinkSync(LOCK)
+  } catch {
+    /* already gone */
+  }
+}
+process.on('exit', unlock)
 
 function load() {
   if (!existsSync(STATE)) {
@@ -94,6 +166,7 @@ const fail = (type, message, json) => {
 async function main() {
   const delay = Number(process.env.FAKE_CSWAP_DELAY || 0)
   if (delay) await new Promise((r) => setTimeout(r, delay))
+  lock()
   const s = load()
   const json = argv.includes('--json')
   const verb = argv[0]
@@ -441,6 +514,7 @@ async function main() {
       const emit = (o) => out(JSON.stringify({ schemaVersion: 1, ts: new Date().toISOString(), ...o }))
       let ticks = 0
       const tick = () => {
+        lock()
         const st = load()
         const active = st.activeAccountNumber
         const headroom = {}
@@ -468,9 +542,18 @@ async function main() {
         emit({ event: 'no-switch', reason: 'below-threshold', detail: `active headroom ${headroom[active]}%` })
         return 2
       }
+      const tickUnlocked = () => {
+        try {
+          return tick()
+        } finally {
+          unlock()
+        }
+      }
       if (once) process.exit(tick())
+      // The loop must not hold the lock while it sleeps.
+      unlock()
       const loop = () => {
-        tick()
+        tickUnlocked()
         ticks++
         emit({ event: 'sleep', seconds: interval / 1000, until: iso(interval / 1000) })
         setTimeout(loop, interval)

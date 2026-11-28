@@ -1,41 +1,187 @@
 name: Release
 
-# Tag a version (`git tag v0.1.0 && git push --tags`) to build installers for
-# every platform and attach them to a GitHub release.
+# Bumping `version` under [workspace.package] in the root Cargo.toml IS the decision to
+# release: merge it to main and the release happens. A merge that leaves the version
+# alone builds nothing. Only `main` publishes: pushes to any other branch never start
+# this workflow, and a manual run (workflow_dispatch) builds without publishing.
+#
+# One workflow rather than "tag here, build there": a tag pushed with the built-in
+# GITHUB_TOKEN does not start other workflows, so the split version would sit silent.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  decide:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      mode: ${{ steps.check.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          version="$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" != "push" ] || [ "$REF" != "refs/heads/main" ]; then
+            echo "mode=dry" >> "$GITHUB_OUTPUT"
+            echo "Manual run: building v$version without publishing."
+            exit 0
+          fi
+          # "No such release" and "the query failed" must not look alike: treating every
+          # failure as "not released" would publish over an existing version.
+          if out="$(gh release view "v$version" --json isDraft -q .isDraft 2>&1)"; then
+            if [ "$out" = "true" ]; then
+              echo "mode=publish" >> "$GITHUB_OUTPUT"
+              echo "v$version is a draft left by a failed run: finishing it."
+            else
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              echo "v$version is already released: nothing to do."
+            fi
+          elif printf '%s' "$out" | grep -qi 'release not found'; then
+            echo "mode=publish" >> "$GITHUB_OUTPUT"
+            echo "v$version has no release yet: publishing."
+          else
+            echo "Could not determine whether v$version is released: $out" >&2
+            exit 1
+          fi
+
+  # ONE job creates the release, as a DRAFT, before any build uploads to it: three build
+  # jobs each creating "their" release is the double-release race (LESSONS, CI/release:
+  # electron-builder 0.4.16/0.4.17). /releases/latest, which both updaters read, never
+  # shows a release that is still missing files: it is published last, by `publish`.
+  draft:
+    needs: decide
+    if: needs.decide.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if [ "$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft 2>/dev/null)" != "true" ]; then
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "$VERSION" --notes ""
+          fi
+
   build:
+    needs: [decide, draft]
+    if: always() && needs.decide.result == 'success' && needs.decide.outputs.mode != 'skip' && needs.draft.result != 'failure'
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: windows-latest
-            target: --win
-          - os: ubuntu-latest
-            target: --linux
+            out: packaging/windows/out
+          # The oldest glibc we build on is the oldest the Linux binary runs on.
+          - os: ubuntu-22.04
+            out: packaging/linux/out
           - os: macos-latest
-            target: --mac
+            out: packaging/macos/out
+    env:
+      VERSION: ${{ needs.decide.outputs.version }}
+      MODE: ${{ needs.decide.outputs.mode }}
+      CSWAP_UPDATE_SIGNING_KEY: ${{ secrets.CSWAP_UPDATE_SIGNING_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Package & publish
-        run: npx electron-builder ${{ matrix.target }} --publish always
+      # egui_kittest renders with wgpu: Mesa's software Vulkan on a runner without a GPU.
+      - name: Software renderer (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+      - name: Tests first
+        run: cargo test --workspace --locked
+
+      - name: NSIS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # The community feed answers 504 now and then (seen on this repo's CI): retry.
+          for ($i = 1; $i -le 4; $i++) {
+            if ((Get-Command makensis -ErrorAction SilentlyContinue) -or
+                (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { break }
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 4) { throw "choco install nsis failed ($LASTEXITCODE)" }
+            Start-Sleep (30 * $i)
+          }
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $req = @{}; if ($env:MODE -eq 'publish') { $req.RequireSignature = $true }
+          ./packaging/windows/build.ps1 @req
+          # The takeover of a 0.1.x install, checked on the installer about to ship
+          # (a fake old install, test GUID: nothing real on the runner is touched).
+          pwsh -NoProfile -File packaging/windows/test-installer.ps1 -Exe target/release/claude-swap.exe
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: packaging/linux/build.sh $([ "$MODE" = publish ] && echo --require-signature)
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: packaging/macos/build.sh $([ "$MODE" = publish ] && echo --require-signature)
+
+      - name: Upload to the draft v${{ needs.decide.outputs.version }}
+        if: needs.decide.outputs.mode == 'publish'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # unsigned builds on purpose: no certificates yet
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: gh release upload "v$VERSION" --clobber ${{ matrix.out }}/*
+
+      # A manual run keeps nothing (artifacts are billed per GB-hour); it proves the
+      # branch still packages from a clean checkout.
+      - name: Built (dry run, not published)
+        if: needs.decide.outputs.mode == 'dry'
+        shell: bash
+        run: ls -l ${{ matrix.out }}
+
+  publish:
+    needs: [decide, build]
+    if: needs.decide.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          assets=" $(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json assets -q '[.assets[].name] | join(" ")') "
+          missing=""
+          for f in claude-swap-desktop-win-x64-setup.exe claude-swap-desktop-win-x64-portable.exe \
+                   claude-swap-desktop-mac-arm64.dmg claude-swap-desktop-mac-x64.dmg \
+                   claude-swap-desktop-linux-x86_64.AppImage claude-swap-desktop-linux-amd64.deb; do
+            for g in "$f" "$f.sig"; do
+              case "$assets" in *" $g "*) ;; *) missing="$missing $g" ;; esac
+            done
+          done
+          for g in latest.yml latest-linux.yml; do
+            case "$assets" in *" $g "*) ;; *) missing="$missing $g" ;; esac
+          done
+          if [ -n "$missing" ]; then echo "missing assets:$missing" >&2; exit 1; fi
+          # Not a pre-release: 0.1.x's electron-updater (allowPrerelease=false) skips those.
+          gh release edit "$tag" -R "$GITHUB_REPOSITORY" --draft=false --latest --prerelease=false
+          # What both updaters will read, checked once it is public.
+          sleep 5
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/latest.yml" | grep -q "^version: $VERSION$"
+          curl -fsSIL -o /dev/null "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/claude-swap-desktop-win-x64-setup.exe"

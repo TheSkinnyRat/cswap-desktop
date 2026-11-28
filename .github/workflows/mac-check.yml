@@ -1,9 +1,9 @@
 name: macOS launch check
 
-# Nobody on the team owns a Mac, so this is the only place the .dmg is ever
-# opened. It checks what Gatekeeper checks — the code signature — on both the
-# published release and a fresh build of this commit, and starts the app to see
-# whether the kernel lets it run. It cannot click Gatekeeper's dialog.
+# Nobody on the team owns a Mac, so this is the only place the .dmg is ever opened. It
+# checks what Gatekeeper checks (the code signature) on both the published release and a
+# fresh build of this commit, and starts the app to see whether it keeps running. It
+# cannot click Gatekeeper's dialog.
 on:
   workflow_dispatch:
     inputs:
@@ -12,8 +12,11 @@ on:
         required: false
   pull_request:
     paths:
-      - electron-builder.yml
+      - packaging/macos/**
       - .github/workflows/mac-check.yml
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -25,7 +28,7 @@ jobs:
         runner: [macos-latest]
         source: [release, build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download the published .dmg
         if: matrix.source == 'release'
@@ -34,34 +37,21 @@ jobs:
           TAG: ${{ inputs.release }}
         run: |
           arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
-          gh release download $TAG --repo "$GITHUB_REPOSITORY" \
-            --pattern "claude-swap-desktop-mac-$arch.dmg" --dir dmg
+          gh release download $TAG --repo "$GITHUB_REPOSITORY" --pattern "claude-swap-desktop-mac-$arch.dmg" --dir dmg
           ls -l dmg
 
-      - uses: actions/setup-node@v4
-        if: matrix.source == 'build'
-        with:
-          node-version: 24
-          cache: npm
       - name: Build the .dmg from this commit
         if: matrix.source == 'build'
         run: |
-          npm ci
-          npm run build
           arch=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64)
-          npx electron-builder --mac dmg --$arch --publish never
-          mkdir dmg && cp release/*.dmg dmg/
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          # electron-builder skips signing on PR builds; the tag build does
-          # sign, so without this the check would test a different bundle.
-          CSC_FOR_PULL_REQUEST: true
+          packaging/macos/build.sh --arch "$arch"
+          mkdir dmg && cp packaging/macos/out/*.dmg dmg/
 
       - name: Install the way a browser download would
         run: |
           dmg=$(ls dmg/*.dmg)
-          # Browsers tag downloads with this attribute; it is what makes
-          # Gatekeeper look at the app at all.
+          # Browsers tag downloads with this attribute; it is what makes Gatekeeper look
+          # at the app at all.
           xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$dmg"
           hdiutil attach -nobrowse -mountpoint /tmp/dmg "$dmg"
           ditto /tmp/dmg/"Claude Swap.app" "$RUNNER_TEMP/Claude Swap.app"
@@ -87,6 +77,7 @@ jobs:
         run: |
           app="$RUNNER_TEMP/Claude Swap.app"
           xattr -dr com.apple.quarantine "$app"
+          export CSWAP_DESKTOP_USERDATA="$RUNNER_TEMP/userdata"
           set +e
           "$app/Contents/MacOS/Claude Swap" > launch.log 2>&1 &
           pid=$!

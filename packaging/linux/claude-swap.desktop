@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Claude Swap
+Comment=Manage and switch Claude Code accounts (claude-swap)
+Exec=claude-swap %U
+Icon=claude-swap
+Terminal=false
+Categories=Utility;
+StartupWMClass=claude-swap
