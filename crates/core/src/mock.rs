@@ -93,12 +93,12 @@ pub enum Fixture {
     OneModel,
 }
 
-/// The five fixture accounts (two model columns), with resets relative to `now` (Unix ms).
+/// The six fixture accounts (two models), with resets relative to `now` (Unix ms).
 pub fn fixture_payload(now: i64) -> ListPayload {
     fixture_payload_for(now, Fixture::TwoModels)
 }
 
-/// The five fixture accounts in the chosen [`Fixture`] variant.
+/// The six fixture accounts in the chosen [`Fixture`] variant.
 pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
     let iso = |s: i64| Some(iso_from_ms(now + s * 1000));
     let a1 = Account {
@@ -163,10 +163,28 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         login_expires_at: iso(-86_400),
         ..account(5, "old@example.com")
     };
+    // The one other account with room to spare: what `switch --strategy best` picks (the
+    // Accounts page's Best next), with the mock's `autoswitch.model = Fable` folded in.
+    let a6 = Account {
+        usage: Some(Usage {
+            five_hour: Some(win(now, 8.0, 15_000, false)),
+            seven_day: Some(win(now, 34.0, 435_600, true)),
+            scoped: Some(match fixture {
+                Fixture::TwoModels => vec![scoped(now, "Fable", 20.0, 435_600), scoped(now, "Sonnet", 41.0, 435_600)],
+                Fixture::OneModel => vec![scoped(now, "Fable", 20.0, 435_600)],
+            }),
+            ..Default::default()
+        }),
+        usage_fetched_at: iso(-60),
+        usage_age_seconds: Some(60.0),
+        login_expires_at: iso(40 * 86_400),
+        plan: cswap_plan(now, "Pro", "default_claude_ai", "claude_pro", "active", false),
+        ..account(6, "side@example.com")
+    };
     ListPayload {
         schema_version: 1,
         active_account_number: Some(1),
-        accounts: vec![a1, a2, a3, a4, a5],
+        accounts: vec![a1, a2, a3, a4, a5, a6],
         extra: Default::default(),
     }
 }
@@ -402,7 +420,25 @@ impl Cswap for MockCswap {
         if let Some(n) = name {
             args.extend(["--strategy", n]);
         }
+        let best = strategy == Some(RotateStrategy::Best);
         let r = self.mutate(&args, |list| {
+            if best {
+                // The same pick the page predicts (cswap's rules, ported in `ready`), with the
+                // `autoswitch.model` this mock's config reports.
+                let from = list.iter().find(|a| a.active).cloned();
+                let Some(n) = crate::ready::best_next(list, &crate::ready::parse_models("Fable")) else {
+                    let mut p = Self::switch_payload(from.as_ref(), from.as_ref().unwrap_or(&list[0]), "best");
+                    p.switched = false;
+                    p.reason = "already-best".into();
+                    p.message = "Already on the account with the most remaining quota".into();
+                    return Ok(p);
+                };
+                for a in list.iter_mut() {
+                    a.active = a.number == n;
+                }
+                let to = list.iter().find(|a| a.number == n).cloned().expect("picked from the list");
+                return Ok(Self::switch_payload(from.as_ref(), &to, "best"));
+            }
             let enabled: Vec<&Account> = list.iter().filter(|a| a.disabled != Some(true)).collect();
             if enabled.is_empty() {
                 return Err(CswapError::new("NoAccountsError", "No enabled accounts to rotate to"));
@@ -793,6 +829,7 @@ mod tests {
                 b("Max 20x", Standing::Canceled),
                 None,
                 b("Free", Standing::Lapsed),
+                b("Pro", Standing::Current),
             ]
         );
     }
@@ -807,15 +844,25 @@ mod tests {
             .map(|a| crate::view::login_expiry(a, now, 0).map(|l| l.chip.map(|(t, _)| t)))
             .collect();
         let c = |t: &str| Some(Some(t.to_owned()));
-        assert_eq!(chips, [c("login 3d 5h"), Some(None), None, None, c("login expired")]);
+        assert_eq!(chips, [c("login 3d 5h"), Some(None), None, None, c("login expired"), Some(None)]);
     }
 
     #[test]
     fn rotate_skips_disabled_accounts() {
         let (m, _rx) = mock();
-        // 1 → 2 → 4 (3 is disabled) → 5 → 1
+        // 1 → 2 → 4 (3 is disabled) → 5 → 6 → 1
         let to = |m: &MockCswap| m.rotate(None).take().unwrap().unwrap().to.unwrap().number.unwrap();
-        assert_eq!([to(&m), to(&m), to(&m), to(&m)], [2, 4, 5, 1]);
+        assert_eq!([to(&m), to(&m), to(&m), to(&m), to(&m)], [2, 4, 5, 6, 1]);
+    }
+
+    // The mock's `best` lands where the Accounts page's Best next strip says it will.
+    #[test]
+    fn rotate_best_takes_the_best_next_pick() {
+        let (m, _rx) = mock();
+        let p = m.rotate(Some(RotateStrategy::Best)).take().unwrap().unwrap();
+        assert_eq!(p.to.unwrap().number, Some(6));
+        let again = m.rotate(Some(RotateStrategy::Best)).take().unwrap().unwrap();
+        assert!(!again.switched, "already on the best: stays");
     }
 
     #[test]
@@ -840,7 +887,7 @@ mod tests {
         m.set_disabled("2", false).take().unwrap().unwrap();
         assert_eq!(m.accounts().payload.unwrap().accounts[1].disabled, None);
         m.remove_account("work").take().unwrap().unwrap();
-        assert_eq!(numbers(&m).len(), 4);
+        assert_eq!(numbers(&m).len(), 5);
         assert!(m.remove_account("work").take().unwrap().is_err());
     }
 
@@ -871,10 +918,8 @@ mod tests {
         assert!(models(&p.accounts[2]).is_empty());
         assert!(p.accounts.iter().all(|a| a.email.ends_with("@example.com") || a.email.ends_with("@token.local")));
         let one = fixture_payload_for(0, Fixture::OneModel);
-        assert_eq!(crate::view::models(&one.accounts), ["Fable"]);
-        let (sink, _rx) = EventSink::new();
-        let m = MockCswap::with_fixture(sink, 0, Fixture::OneModel);
-        assert_eq!(crate::view::models(&m.accounts().payload.unwrap().accounts), ["Fable"]);
+        assert!(one.accounts.iter().all(|a| models(a).iter().all(|m| m == "Fable")), "OneModel: Fable only");
+        assert_eq!(models(&p.accounts[5]), ["Fable", "Sonnet"]);
     }
 
     #[test]

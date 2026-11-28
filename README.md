@@ -35,7 +35,7 @@ On macOS the first launch is blocked as coming from an unidentified developer: o
 
 ## What it does
 
-- **Accounts** — every managed account with its 5-hour and 7-day windows, per-model weekly limits, reset countdowns, a pace marker showing where an evenly-spread week would be, subscription (Pro / Max 5x / Max 20x / Team · Max 5x, and whether it was canceled or has lapsed) and status (token expired, API key, …), as bars or as rings. Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
+- **Accounts** — the active account on top with large 5-hour and 7-day rings, its per-model weekly limits and a one-line forecast from cswap's pace ("at this pace the week lasts until it resets"); under it **Best next**, the account `cswap switch --strategy best` would pick, one click away. Then every other account, ready ones first (Ready, Limited, Held out, Re-login needed), as rows with bars (click a row for its per-model limits) or as tiles with rings. Reset countdowns, a pace marker showing where an evenly-spread week would be, subscription (Pro / Max 5x / Max 20x / Team · Max 5x, and whether it was canceled or has lapsed) and login expiry. Switch with one click, rotate to the next / best / next-available account, or hit <kbd>Ctrl</kbd>+<kbd>K</kbd> and type.
 - **Add / remove** — from the current Claude Code login, or from a setup-token / API key (handed to cswap over stdin, never on the command line). Aliases, slot moves and swaps, disable / enable (hold an account out of rotation).
 - **Auto-switch** — runs `cswap auto --json` as a child process, shows its event stream live, edits cswap's own settings (`threshold`, `strategy`, `model`, …) and sends a desktop notification when it switches. **Check now** runs a single `cswap auto --once` tick.
 - **Session mode** — open a terminal running `cswap run <slot>` from an account's menu or straight from a mapped directory, choosing where it starts (that terminal only; the default login is untouched).
@@ -46,7 +46,7 @@ On macOS the first launch is blocked as coming from an unidentified developer: o
 - **Updates** — checks GitHub releases at start and every six hours, downloads in the background, verifies the release signature and installs on quit or on request.
 - **Log** — every cswap call the app made: arguments, exit code, duration, output.
 - **Privacy** — one button masks every email address and organisation name, for a screenshot or a stream.
-- **Responsive** — below a table's worth of room each account becomes a card; in between, the table scrolls sideways inside its own frame rather than dragging the page with it. The sidebar collapses to icons on a narrow window, or on demand.
+- **Responsive** — on a narrow window each row folds into two lines (name, then its two bars) and the active account's card stacks; nothing scrolls sideways. The sidebar collapses to icons on a narrow window, or on demand.
 - Light theme by default (tinted, not plain white), dark theme, or follow the system.
 - Not in the UI on purpose: `cswap purge` (deletes every account) — use the CLI if you really mean it.
 
@@ -54,8 +54,8 @@ On macOS the first launch is blocked as coming from an unidentified developer: o
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/accounts-dark.png" alt="Accounts, dark theme"><br><sub><b>Accounts, dark</b> — the same table, tinted for the dark theme.</sub></td>
-    <td width="50%"><img src="docs/screenshots/accounts-rings.png" alt="Usage as rings"><br><sub><b>Rings</b> — the same numbers as arcs, with the pace notch outside the ring.</sub></td>
+    <td width="50%"><img src="docs/screenshots/accounts-dark.png" alt="Accounts, dark theme"><br><sub><b>Accounts, dark</b> — the same page, tinted for the dark theme.</sub></td>
+    <td width="50%"><img src="docs/screenshots/accounts-tiles.png" alt="Accounts as tiles"><br><sub><b>Tiles</b> — each account as a card with rings and its per-model limits.</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/auto.png" alt="Auto-switch"><br><sub><b>Auto-switch</b> — the live event stream, and cswap's own settings beside it.</sub></td>
@@ -66,7 +66,7 @@ On macOS the first launch is blocked as coming from an unidentified developer: o
     <td><img src="docs/screenshots/mappings.png" alt="Directory mappings"><br><sub><b>Mappings</b> — a project folder to an account, with a terminal a click away.</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/accounts-compact.png" width="52%" alt="A narrow window"><br><sub><b>Narrow window</b> — the table becomes cards and the sidebar becomes icons; at this width nothing scrolls sideways.</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/accounts-compact.png" width="52%" alt="A narrow window"><br><sub><b>Narrow window</b> — rows fold into two lines and the sidebar becomes icons; nothing scrolls sideways.</sub></td>
   </tr>
 </table>
 

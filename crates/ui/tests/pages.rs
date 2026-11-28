@@ -1,18 +1,19 @@
 //! The Accounts, Auto and Mappings pages against `MockCswap` (egui_kittest). The parity
-//! gate for 0.1.23's e2e cases that cover these pages (`alignment.spec.ts`,
-//! `actions.spec.ts`), asserting only the rules the project notes mark as tested: the
-//! column set, the empty cell, and the card/table switch at a 780 px LIST.
+//! gate for 0.1.23's e2e cases that cover these pages (`actions.spec.ts`), plus the rules
+//! of the 1.1.0 Accounts redesign: the narrow shape at a 780 px CONTENT width, readiness
+//! order, the hero owning the active account, Best next, per-model windows.
 //!
-//! `CSWAP_UI_SHOTS=<dir>` also writes a PNG of each page at the widths that matter (cards,
-//! the 780–956 scroll band, the table) in light and dark. Without it nothing is rendered,
-//! so the tests need no GPU.
+//! `CSWAP_UI_SHOTS=<dir>` also writes PNGs of the dialogs, menus and the other pages.
+//! Without it nothing is rendered, so the tests need no GPU. The Accounts page itself is
+//! rendered inside the whole window by `cswap-ui`'s `accounts_renders`.
 
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use cswap_core::mock::{MockCswap, MockUpdates, auto_event};
+use cswap_core::view::PageShape;
 use cswap_core::{
-    AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, ThemeSetting, UsageView,
+    AccountsLayout, AccountsState, AppSettings, AutoStatus, Cswap, Event, EventSink, Host, Page, ThemeSetting,
 };
 use cswap_ui::Services;
 use cswap_ui::cx::Cx;
@@ -173,76 +174,140 @@ fn shot(h: &mut Harness<'_, World>, name: &str) {
     img.save(std::path::Path::new(&dir).join(format!("{name}.png"))).unwrap();
 }
 
+/// At least one node with this label ("Pro" is both a row's chip and the Best next's).
 fn has_label(h: &Harness<'_, World>, label: &str) -> bool {
-    h.query_by_label(label).is_some()
+    h.query_all_by_label(label).next().is_some()
 }
 
-// The list is the window minus the page's 24 px padding on both sides.
+// The content is the page minus its 24 px padding on both sides.
 const PAD: f32 = 48.0;
 
-// TESTED RULE: cards below a fixed 780 px LIST width, a table from 780 up, whatever the
-// columns would want (e2e "a narrow window changes the shape instead of scrolling").
+fn with_settings(f: impl FnOnce(&mut AppSettings), width: f32) -> Harness<'static, World> {
+    let mut world = World::new(Which::Accounts, false);
+    let mut s = AppSettings::default();
+    f(&mut s);
+    world.mock.set_settings(s);
+    world.settings = world.mock.settings();
+    harness_with(world, width)
+}
+
+// TESTED RULE: the page goes narrow below 780 px of CONTENT width (not the window's), the
+// hero's rings centre below 600; a narrow row has no readiness text.
 #[test]
-fn shape_switches_at_a_780px_list() {
-    for (list, cards) in [(560.0, true), (779.0, true), (781.0, false), (900.0, false), (1300.0, false)] {
-        let h = harness(Which::Accounts, list + PAD, false);
-        assert_eq!(h.state().accounts_page.last_cards, cards, "list {list}px");
-        assert!((h.state().accounts_page.last_list_width - list).abs() < 1.5, "measured the list, not the window");
+fn shape_follows_the_content_width() {
+    for (content, shape) in [
+        (520.0, PageShape::Compact),
+        (650.0, PageShape::Narrow),
+        (779.0, PageShape::Narrow),
+        (781.0, PageShape::Wide),
+        (1300.0, PageShape::Wide),
+    ] {
+        let h = harness(Which::Accounts, content + PAD, false);
+        assert_eq!(h.state().accounts_page.last_shape, shape, "content {content}px");
+        assert!((h.state().accounts_page.last_content_width - content).abs() < 1.5, "measured the content");
+        let readiness = has_label(&h, "6 readiness: Ready · 66% left");
+        assert_eq!(readiness, shape == PageShape::Wide, "readiness text only in a wide row ({content}px)");
+        // every shape still carries both windows of every row
+        assert!(has_label(&h, "6 5h: 8%") && has_label(&h, "6 7d: 34%"));
     }
 }
 
-// TESTED RULES: the window columns are the union of models across accounts; an account
-// without a model keeps an empty `-` cell in a table; a card drops it instead.
+// TESTED RULES: Ready, Limited, Held out, Re-login needed; the hero takes the live
+// account; hiding it puts the account back on top as "Active now" and drops Best next.
 #[test]
-fn model_columns_and_empty_cells() {
+fn list_is_sorted_by_readiness_and_the_hero_owns_the_active_account() {
     let h = harness(Which::Accounts, 1400.0, false);
-    // Fable is live on 1 and 2; Sonnet only in account 5's last-good usage.
-    assert!(has_label(&h, "1 model-Fable: 17%"));
-    assert!(has_label(&h, "5 model-Sonnet: 34%"));
-    assert!(has_label(&h, "3 model-Fable: -"), "empty cell holds the Fable column");
-    assert!(has_label(&h, "3 model-Sonnet: -"));
-    assert!(has_label(&h, "1 model-Sonnet: -"));
-    assert!(has_label(&h, "4 5h: -"), "no usage at all: still a 5-hour cell");
+    // 6 ready, 4 ready (API key, usage unknown), 2 limited, 3 disabled, 5 login expired
+    assert_eq!(h.state().accounts_page.last_order, [6, 4, 2, 3, 5]);
+    assert!(has_label(&h, "2 readiness: Limited · free again in 30m"));
+    assert!(has_label(&h, "3 readiness: Held out · disabled"));
+    assert!(has_label(&h, "5 readiness: Re-login needed · login expired"));
+    assert!(!has_label(&h, "1 readiness: Active now · 55% left"), "the hero shows it");
 
-    let h = harness(Which::Accounts, 700.0, false);
-    assert!(h.state().accounts_page.last_cards);
-    assert!(has_label(&h, "1 model-Fable: 17%"));
-    assert!(!has_label(&h, "3 model-Fable: -"), "a card drops a window the account has not got");
-    assert!(!has_label(&h, "1 model-Sonnet: -"));
+    let h = with_settings(|s| s.show_hero = false, 1400.0);
+    assert_eq!(h.state().accounts_page.last_order, [1, 6, 4, 2, 3, 5]);
+    assert!(has_label(&h, "1 readiness: Active now · 55% left"));
+    assert_eq!(h.state().accounts_page.last_best, None, "no hero, no Best next");
+    assert!(h.query_by_label("Switch to the best next account").is_none());
+}
+
+// TESTED RULE: Best next names cswap's `best` pick (with `autoswitch.model` folded in) and
+// its Switch runs `cswap switch --strategy best`, not a switch to the named slot.
+#[test]
+fn best_next_runs_cswaps_own_pick() {
+    let mut h = harness(Which::Accounts, 1400.0, false);
+    assert_eq!(h.state().accounts_page.last_best, Some(6));
+    h.get_by_role_and_label(Role::Button, "Switch to the best next account").click();
+    h.run();
+    assert_eq!(h.state().mock.command_log().last().unwrap().args, ["switch", "--json", "--strategy", "best"]);
+    assert_eq!(h.state().mock.accounts().payload.unwrap().active_account_number, Some(6));
+    h.run();
+    assert_eq!(h.state().accounts_page.last_best, None, "on the best account now: no strip");
+}
+
+// TESTED RULES: per-model 7-day windows in the hero, in an opened row (a click on the row,
+// not its buttons), "No per-model limits reported" without any, and always on tiles.
+#[test]
+fn per_model_windows_in_hero_rows_and_tiles() {
+    let mut h = harness(Which::Accounts, 1400.0, false);
+    assert!(has_label(&h, "1 model-Fable: 17%"), "hero");
+    assert!(!has_label(&h, "6 model-Sonnet: 41%"), "a closed row shows none");
+    h.get_by_role_and_label(Role::Button, "Show per-model windows for account 6").click();
+    h.run();
+    assert!(has_label(&h, "6 model-Fable: 20%") && has_label(&h, "6 model-Sonnet: 41%"));
+    assert!(h.query_by_role_and_label(Role::Button, "Hide per-model windows for account 6").is_some());
+    h.get_by_role_and_label(Role::Button, "Show per-model windows for account 3").click();
+    h.run();
+    assert!(has_label(&h, "No per-model limits reported"));
+    // the row's own buttons do not open it
+    h.get_by_role_and_label(Role::Button, "Actions for account 2").click();
+    h.run();
+    assert!(h.query_by_role_and_label(Role::Button, "Hide per-model windows for account 2").is_none());
+
+    let h = with_settings(|s| s.accounts_layout = AccountsLayout::Tiles, 1400.0);
+    assert!(has_label(&h, "6 model-Sonnet: 41%") && has_label(&h, "2 model-Fable: 100%"));
+    assert!(has_label(&h, "6 5h: 8%"), "tiles name their rings");
 }
 
 // TESTED RULE: cswap's `plan` badges every account that has one (a seat with its tier),
 // plans.json covers the rest, and canceled / lapsed get a chip of their own, with a
-// tooltip, in the table AND on the cards (one `name_block`, two layouts calling it).
+// tooltip, in rows, narrow rows and tiles (one `chips_of`, every layout calling it).
 #[test]
-fn plan_chips_in_table_and_cards() {
-    for width in [1400.0, 700.0] {
-        let mut h = harness(Which::Accounts, width, false);
-        assert_eq!(h.state().accounts_page.last_cards, width < 1000.0);
-        for label in ["Max 5x", "Team · Max 5x", "Max 20x", "canceled", "Free", "lapsed"] {
-            assert!(has_label(&h, label), "{label} at {width}px");
+fn plan_chips_in_every_layout() {
+    for (width, tiles) in [(1400.0, false), (700.0, false), (1400.0, true)] {
+        let mut h = with_settings(
+            |s| {
+                if tiles {
+                    s.accounts_layout = AccountsLayout::Tiles
+                }
+            },
+            width,
+        );
+        // tall enough that every row is on screen for the hover
+        h.set_size(vec2(width, 1400.0));
+        h.run();
+        for label in ["Max 5x", "Team · Max 5x", "Max 20x", "canceled", "Free", "lapsed", "Pro"] {
+            assert!(has_label(&h, label), "{label} at {width}px tiles={tiles}");
         }
-        assert!(!has_label(&h, "Pro"), "plans.json's label for account 2 lost to cswap's plan");
-        // account 5's card is below the fold at 780 px high, so cards hover account 3's
-        let (chip, says) = if width < 1000.0 {
-            ("canceled", "until the paid period ends")
-        } else {
-            ("lapsed", "back on the free tier")
-        };
-        h.get_by_label(chip).hover();
+        h.get_by_label("canceled").hover();
         h.run_steps(8);
-        assert!(h.query_by_label_contains(says).is_some(), "{chip} tooltip at {width}px");
+        assert!(h.query_by_label_contains("until the paid period ends").is_some(), "tooltip at {width}px");
     }
 }
 
-// TESTED RULE: the stored login's expiry is a chip only within 7 days or once past, in
-// the table AND on the cards; its hover says how long and what to do.
+// TESTED RULE: the stored login's expiry is a chip only within 7 days or once past (hero
+// and list); its hover says how long and what to do. A wide row says "login expired" in
+// its readiness text instead of a chip (and "disabled" likewise): said twice, the chips
+// only wrapped the name line.
 #[test]
-fn login_expiry_chips_in_table_and_cards() {
+fn login_expiry_chips() {
     for width in [1400.0, 700.0] {
         let mut h = harness(Which::Accounts, width, false);
         assert!(has_label(&h, "login 3d 5h"), "account 1 at {width}px");
-        assert!(has_label(&h, "login expired"), "account 5 at {width}px");
+        let wide = width > 1000.0;
+        assert_eq!(has_label(&h, "login expired"), !wide, "account 5's chip at {width}px");
+        assert_eq!(has_label(&h, "disabled"), !wide, "account 3's chip at {width}px");
+        assert_eq!(has_label(&h, "5 readiness: Re-login needed · login expired"), wide);
         assert!(h.query_by_label_contains("login 19d").is_none(), "20 days off: no chip");
         h.get_by_label("login 3d 5h").hover();
         h.run_steps(8);
@@ -260,7 +325,7 @@ fn switch_and_rotate_go_through_the_cli() {
     assert_eq!(s.payload.unwrap().active_account_number, Some(2));
     assert!(h.state().toast_texts().iter().any(|t| t.contains("Switched to Account-2")));
     assert_eq!(h.state().mock.command_log().last().unwrap().args, ["switch", "2", "--json"]);
-    // the active row's Switch is gone (hidden, keeping its space), the old one's is back
+    // account 2 is the hero now; account 1 is a row with a Switch
     assert!(h.query_by_label("Switch to account 2").is_none());
     assert!(h.query_by_label("Switch to account 1").is_some());
 
@@ -271,15 +336,24 @@ fn switch_and_rotate_go_through_the_cli() {
     assert_eq!(h.state().mock.command_log().last().unwrap().args, ["switch", "--json", "--strategy", "best"]);
 }
 
-// e2e "the usage view switches to rings" / "the pace marker can be switched off": the
-// header toggles are app settings, saved through the service.
+// e2e "the pace marker can be switched off" and the 1.1.0 toggles: the header's buttons
+// are app settings, saved through the service.
 #[test]
 fn view_toggles_are_settings() {
     let mut h = harness(Which::Accounts, 1400.0, false);
-    h.get_by_role_and_label(Role::Button, "Show usage as rings").click();
+    h.get_by_role_and_label(Role::Button, "Show accounts as tiles").click();
     h.run();
-    assert_eq!(h.state().mock.settings().usage_view, UsageView::Rings);
-    assert!(has_label(&h, "1 5h: 45%"), "rings still name their cells");
+    assert_eq!(h.state().mock.settings().accounts_layout, AccountsLayout::Tiles);
+    h.get_by_role_and_label(Role::Button, "Show accounts as rows").click();
+    h.run();
+    assert_eq!(h.state().mock.settings().accounts_layout, AccountsLayout::Rows);
+    h.get_by_role_and_label(Role::Button, "Hide the active account card").click();
+    h.run();
+    assert!(!h.state().mock.settings().show_hero);
+    assert!(has_label(&h, "1 readiness: Active now · 55% left"));
+    h.get_by_role_and_label(Role::Button, "Show the active account on top").click();
+    h.run();
+    assert!(h.state().mock.settings().show_hero);
     h.get_by_role_and_label(Role::Button, "Hide email addresses (keeps the first three characters)").click();
     h.run();
     assert!(h.state().mock.settings().mask_emails);
@@ -370,8 +444,8 @@ fn mappings_add_with_the_picker_and_unmap() {
     assert!(!has_label(&h, "Unmap /tmp/picked-project"));
 }
 
-/// Renders for review. Widths: cards (700), the scroll band (880: list 832 between 780
-/// and the template's minimum), and the table (1400, and 1240 = the README floor).
+/// Renders for review: the Auto and Mappings pages, the Accounts dialogs, menus and empty
+/// and error states.
 #[test]
 fn renders() {
     if std::env::var_os("CSWAP_UI_SHOTS").is_none() {
@@ -379,21 +453,6 @@ fn renders() {
     }
     for dark in [false, true] {
         let theme = if dark { "dark" } else { "light" };
-        for (w, name) in [(700.0, "cards"), (880.0, "scroll"), (1240.0, "1240"), (1400.0, "table")] {
-            let mut h = harness(Which::Accounts, w, dark);
-            shot(&mut h, &format!("accounts-{name}-{theme}"));
-        }
-        let mut world = World::new(Which::Accounts, dark);
-        world.mock.set_settings(AppSettings { usage_view: UsageView::Rings, ..AppSettings::default() });
-        world.settings = world.mock.settings();
-        let mut h = harness_with(world, 1400.0);
-        shot(&mut h, &format!("accounts-rings-{theme}"));
-        let mut world = World::new(Which::Accounts, dark);
-        world.mock.set_settings(AppSettings { usage_view: UsageView::Rings, ..AppSettings::default() });
-        world.settings = world.mock.settings();
-        let mut h = harness_with(world, 700.0);
-        shot(&mut h, &format!("accounts-rings-cards-{theme}"));
-
         let world = World::new(Which::Auto, dark);
         world.mock.auto_start(false);
         world.mock.push_auto_events(vec![

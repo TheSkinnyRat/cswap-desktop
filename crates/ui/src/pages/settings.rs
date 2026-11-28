@@ -6,8 +6,8 @@
 //! (version, updater). Cards in one grid row share a height, as CSS grid rows do.
 
 use cswap_core::{
-    AppSettings, BinarySource, CsResult, CswapBinaryInfo, Event, Pending, PlainOutput, ThemeSetting, UnclaimedEntry,
-    UpdaterState, UpdaterStatus,
+    AccountsLayout, AppSettings, BinarySource, CsResult, CswapBinaryInfo, Event, Pending, PlainOutput, ThemeSetting,
+    UnclaimedEntry, UpdaterState, UpdaterStatus,
 };
 use egui::{Align, CornerRadius, Frame, Layout, Margin, Stroke, Ui, text::LayoutJob, vec2};
 
@@ -731,6 +731,15 @@ fn appearance_card(ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
                         edit(Box::new(move |s| s.theme = v));
                     }
                 });
+                widgets::field(ui, "Accounts list", Some("Rows with bars, or tiles with rings."), true, |ui| {
+                    let opts = [
+                        (AccountsLayout::Rows, Some(icon::LAYOUT_LIST), "Rows"),
+                        (AccountsLayout::Tiles, Some(icon::LAYOUT_GRID), "Tiles"),
+                    ];
+                    if let Some(v) = widgets::segmented(ui, s.accounts_layout, &opts) {
+                        edit(Box::new(move |s| s.accounts_layout = v));
+                    }
+                });
                 widgets::field(
                     ui,
                     "Refresh usage every",
@@ -755,7 +764,13 @@ fn appearance_card(ui: &mut Ui, cx: &mut Cx, min: f32) -> f32 {
                     },
                 );
                 type Flag = fn(&mut AppSettings) -> &mut bool;
-                let toggles: [(&str, Option<&str>, bool, Flag); 7] = [
+                let toggles: [(&str, Option<&str>, bool, Flag); 8] = [
+                    (
+                        "Show the active account on top",
+                        Some("Its rings, per-model limits and the best account to switch to next."),
+                        s.show_hero,
+                        |s| &mut s.show_hero,
+                    ),
                     (
                         "Refresh when the window opens or gets focus",
                         Some("At most once every 10 seconds."),

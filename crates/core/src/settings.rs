@@ -15,12 +15,15 @@ pub enum ThemeSetting {
     System,
 }
 
+/// How the Accounts page lists the accounts other than the active one (1.1.0): rows with
+/// mini bars, or tiles with small rings. It replaced 1.0's bars/rings `usageView`, whose key
+/// an older file may still carry; the settings store keeps it as an unknown key.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum UsageView {
+pub enum AccountsLayout {
     #[default]
-    Bars,
-    Rings,
+    Rows,
+    Tiles,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,8 +41,11 @@ pub struct AppSettings {
     pub auto_update: bool,
     pub mask_emails: bool,
     pub refresh_on_focus: bool,
-    pub usage_view: UsageView,
     pub show_pace: bool,
+    /// The active account as a hero card on top of the Accounts page (with the Best next
+    /// strip under it); off puts it back into the list.
+    pub show_hero: bool,
+    pub accounts_layout: AccountsLayout,
     pub sidebar_collapsed: bool,
 }
 
@@ -58,8 +64,9 @@ impl Default for AppSettings {
             auto_update: true,
             mask_emails: false,
             refresh_on_focus: true,
-            usage_view: UsageView::Bars,
             show_pace: true,
+            show_hero: true,
+            accounts_layout: AccountsLayout::Rows,
             sidebar_collapsed: false,
         }
     }
@@ -68,3 +75,25 @@ impl Default for AppSettings {
 /// A change to the settings, applied to the current value under the store's lock, so two
 /// writers (the window and the tray) never overwrite each other's fields.
 pub type SettingsEdit = Box<dyn FnOnce(&mut AppSettings) + Send>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TESTED RULE: the 1.1.0 fields round-trip under their camelCase names, and a file from
+    // 1.0 (no such keys, the retired `usageView`) still loads, with the hero shown and rows.
+    #[test]
+    fn hero_and_layout_round_trip_and_old_files_load() {
+        let s = AppSettings { show_hero: false, accounts_layout: AccountsLayout::Tiles, ..Default::default() };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["showHero"], false);
+        assert_eq!(v["accountsLayout"], "tiles");
+        assert_eq!(serde_json::from_value::<AppSettings>(v).unwrap(), s);
+
+        let old: AppSettings =
+            serde_json::from_str(r#"{"theme":"dark","usageView":"rings","showPace":false}"#).unwrap();
+        assert!(old.show_hero);
+        assert_eq!(old.accounts_layout, AccountsLayout::Rows);
+        assert_eq!((old.theme, old.show_pace), (ThemeSetting::Dark, false));
+    }
+}

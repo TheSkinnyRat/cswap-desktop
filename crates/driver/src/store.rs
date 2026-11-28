@@ -89,7 +89,7 @@ fn parse(bytes: &[u8]) -> (AppSettings, Map<String, Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cswap_core::ThemeSetting;
+    use cswap_core::{AccountsLayout, ThemeSetting};
 
     #[test]
     fn reads_0_1_x_settings_tolerantly_and_keeps_unknown_keys() {
@@ -110,6 +110,34 @@ mod tests {
         assert_eq!(raw["maskEmails"], Value::Bool(true));
         assert!(!d.path().join("settings.json.tmp").exists());
         assert!(SettingsStore::open(d.path()).get().mask_emails);
+    }
+
+    // TESTED RULE: the 1.1.0 Accounts options persist; a 1.0 file (no such keys, the
+    // retired `usageView`) opens with the hero shown and rows, and keeps `usageView`.
+    #[test]
+    fn accounts_options_persist_and_a_1_0_file_still_opens() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("settings.json"), r#"{"theme":"dark","usageView":"rings","showPace":false}"#)
+            .unwrap();
+        let mut s = SettingsStore::open(d.path());
+        let v = s.get();
+        assert!(v.show_hero);
+        assert_eq!(v.accounts_layout, AccountsLayout::Rows);
+        assert!(!v.show_pace);
+        s.edit(|x| {
+            x.show_hero = false;
+            x.accounts_layout = AccountsLayout::Tiles;
+        });
+        let raw: Value = serde_json::from_slice(&std::fs::read(d.path().join("settings.json")).unwrap()).unwrap();
+        assert_eq!((&raw["showHero"], &raw["accountsLayout"]), (&Value::Bool(false), &serde_json::json!("tiles")));
+        assert_eq!(raw["usageView"], serde_json::json!("rings"), "an unknown key survives");
+        let again = SettingsStore::open(d.path()).get();
+        assert!(!again.show_hero);
+        assert_eq!(again.accounts_layout, AccountsLayout::Tiles);
+        // a value this version cannot read falls back to the default, not the whole file
+        std::fs::write(d.path().join("settings.json"), r#"{"accountsLayout":"grid","showHero":false}"#).unwrap();
+        let odd = SettingsStore::open(d.path()).get();
+        assert_eq!((odd.accounts_layout, odd.show_hero), (AccountsLayout::Rows, false));
     }
 
     #[test]

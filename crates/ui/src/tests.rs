@@ -550,7 +550,7 @@ fn tooltip_audit() {
             let (f, rx) = fixture();
             f.cswap.edit_settings(Box::new(move |s| {
                 if rings {
-                    s.usage_view = cswap_core::UsageView::Rings;
+                    s.accounts_layout = cswap_core::AccountsLayout::Tiles;
                 }
                 s.sidebar_collapsed = custom;
             }));
@@ -562,7 +562,7 @@ fn tooltip_audit() {
             nav(&mut h, page);
             let seen = audit_tooltips(&mut h, vec2(w, hgt), step);
             let what = match (rings, custom) {
-                (true, _) => " (rings)",
+                (true, _) => " (tiles)",
                 (_, true) => " (sidebar collapsed, caption buttons)",
                 _ => "",
             };
@@ -723,11 +723,57 @@ fn confirm_dialog() {
     h.snapshot("dialog-confirm");
 }
 
+/// Review renders of the Accounts page in the whole window (sidebar and title bar as the
+/// app has them), at the mockup's widths 1120 / 860 / 760, light and dark, rows and tiles,
+/// hero on and off, plus an opened row: `CSWAP_UI_SHOTS=<dir> cargo test -p cswap-ui
+/// accounts_renders`. A rendering job for looking at, not a check.
+#[test]
+fn accounts_renders() {
+    let Some(dir) = std::env::var_os("CSWAP_UI_SHOTS") else { return };
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).expect("shots dir");
+    for dark in [false, true] {
+        for tiles in [false, true] {
+            for hero in [true, false] {
+                for w in [1120.0, 860.0, 760.0] {
+                    let (f, rx) = fixture();
+                    f.cswap.edit_settings(Box::new(move |s| {
+                        s.theme = if dark { ThemeSetting::Dark } else { ThemeSetting::Light };
+                        s.accounts_layout =
+                            if tiles { cswap_core::AccountsLayout::Tiles } else { cswap_core::AccountsLayout::Rows };
+                        s.show_hero = hero;
+                    }));
+                    let mut h = harness_sized(&f, rx, w, 900.0);
+                    settle(&mut h);
+                    let name = format!(
+                        "acc-{}-{}-{}-{w}",
+                        if tiles { "tiles" } else { "rows" },
+                        if hero { "hero" } else { "nohero" },
+                        if dark { "dark" } else { "light" }
+                    );
+                    let img = h.render().expect("render");
+                    img.save(dir.join(format!("{name}.png"))).expect("save png");
+                }
+            }
+        }
+    }
+    // an opened row, wide and narrow
+    for w in [1120.0, 760.0] {
+        let (f, rx) = fixture();
+        let mut h = harness_sized(&f, rx, w, 1000.0);
+        settle(&mut h);
+        h.get_by_role_and_label(Role::Button, "Show per-model windows for account 6").click();
+        h.get_by_role_and_label(Role::Button, "Show per-model windows for account 3").click();
+        settle(&mut h);
+        let img = h.render().expect("render");
+        img.save(dir.join(format!("acc-rows-open-light-{w}.png"))).expect("save png");
+    }
+}
+
 /// The README images (`docs/screenshots/*.png`, 0.1.23's `docs.spec.ts`), regenerated with
 /// `DOCS=1 cargo test -p cswap-ui readme_screenshots`. A rendering job, not a check: without
-/// `DOCS` it returns at once. 1240 px is the floor, not a taste: below a 1220 window the three
-/// window columns hit their minimum and the Switch button leaves the frame. Everything shown
-/// comes from the in-memory fixture (`@example.com`, `/home/you`), never from this machine.
+/// `DOCS` it returns at once. Everything shown comes from the in-memory fixture
+/// (`@example.com`, `/home/you`), never from this machine.
 #[test]
 fn readme_screenshots() {
     if std::env::var_os("DOCS").is_none() {
@@ -739,7 +785,7 @@ fn readme_screenshots() {
         let img = h.render().expect("render");
         img.save(dir.join(format!("{name}.png"))).expect("save png");
     };
-    // ONE scoped model, as real cswap reports today, so the floor shows the whole table
+    // ONE scoped model, as real cswap reports today
     let (f, rx) = fixture_of(MockFixture::OneModel);
     // the README shows the settings a new user gets
     f.cswap.set_settings(AppSettings::default());
@@ -773,15 +819,15 @@ fn readme_screenshots() {
     nav(&mut h, "Accounts");
     save(&mut h, "accounts-dark");
 
-    // the ring view, and the same page once the window is too narrow for a table
-    f.cswap.edit_settings(Box::new(|s| s.usage_view = cswap_core::UsageView::Rings));
+    // the tiles, and the rows once the window is narrow
+    f.cswap.edit_settings(Box::new(|s| s.accounts_layout = cswap_core::AccountsLayout::Tiles));
     settle(&mut h);
-    save(&mut h, "accounts-rings");
+    save(&mut h, "accounts-tiles");
     f.cswap.edit_settings(Box::new(|s| {
-        s.usage_view = cswap_core::UsageView::Bars;
+        s.accounts_layout = cswap_core::AccountsLayout::Rows;
         s.theme = ThemeSetting::Light;
     }));
-    h.set_size(vec2(620.0, 780.0));
+    h.set_size(vec2(760.0, 900.0));
     settle(&mut h);
     save(&mut h, "accounts-compact");
 
