@@ -858,6 +858,14 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
             chips.push((word.into(), tone, Some(tip.into())));
         }
     }
+    // The stored login's expiry: a chip only once it is within a week or past; the exact
+    // date otherwise rides on the name's hover text, so a healthy row stays quiet.
+    let login = view::login_expiry(a, now, off);
+    if let Some(l) = &login
+        && let Some((text, tone)) = &l.chip
+    {
+        chips.push((text.clone(), *tone, Some(l.tooltip.clone())));
+    }
     if a.active {
         chips.push(("active".into(), ChipTone::Accent, None));
     }
@@ -870,8 +878,14 @@ fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mas
     let g = widgets::galley(ui, name, style::body_medium(13.0), t.text, w);
     let name_rect = Rect::from_min_size(top, vec2(g.size().x, 18.0));
     ui.painter().galley(pos2(top.x, top.y + 9.0 - g.size().y / 2.0), g, t.text);
-    if !mask {
-        let _ = ui.interact(name_rect, Id::unique(("acct-name", a.number)), Sense::hover()).on_hover_text(&a.email);
+    let name_tip = match (mask, &login) {
+        (false, Some(l)) => Some(format!("{}\n{}", a.email, l.tooltip)),
+        (false, None) => Some(a.email.clone()),
+        (true, Some(l)) => Some(l.tooltip.clone()),
+        (true, None) => None,
+    };
+    if let Some(tip) = name_tip {
+        let _ = ui.interact(name_rect, Id::unique(("acct-name", a.number)), Sense::hover()).on_hover_text(tip);
     }
     let (mut x, mut y) = (name_rect.max.x + 6.0, top.y);
     for (i, (label, tone, tip)) in chips.iter().enumerate() {

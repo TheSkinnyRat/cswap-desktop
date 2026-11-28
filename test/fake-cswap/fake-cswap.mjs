@@ -26,11 +26,13 @@ const seed = () => ({
   version: '0.25.0',
   activeAccountNumber: 1,
   accounts: {
-    1: { email: 'you@example.com', organizationName: "you@example.com's Organization", organizationUuid: 'org-1111', alias: 'main', usage: { five_hour: 45, seven_day: 12, scoped: [{ name: 'Fable', pct: 17 }] } },
+    // loginExpiresIn (seconds from now, cswap >= 0.27's loginExpiresAt): account 1 inside
+    // the app's 7-day warning, 2 far off, 5 already expired; 3 and 4 record none.
+    1: { email: 'you@example.com', organizationName: "you@example.com's Organization", organizationUuid: 'org-1111', alias: 'main', usage: { five_hour: 45, seven_day: 12, scoped: [{ name: 'Fable', pct: 17 }] }, loginExpiresIn: 3 * 86400 + 5 * 3600 },
     2: { email: 'work@company.com', organizationName: 'Company Inc', organizationUuid: 'org-2222', usage: { five_hour: 100, seven_day: 61, scoped: [{ name: 'Fable', pct: 100 }] }, resetsIn5h: 1800, loginExpiresIn: 20 * 86400, plan: PLANS.teamSeat },
     3: { email: 'spare@example.com', organizationName: '', organizationUuid: '', disabled: true, usage: { five_hour: 3, seven_day: 40 }, plan: PLANS.canceled },
     4: { email: 'api-key-4@token.local', organizationName: '', organizationUuid: '', usageStatus: 'api_key' },
-    5: { email: 'lapsed@example.com', organizationName: '', organizationUuid: 'org-5555', usage: { five_hour: 70, seven_day: 95 }, plan: PLANS.lapsed }
+    5: { email: 'lapsed@example.com', organizationName: '', organizationUuid: 'org-5555', usage: { five_hour: 70, seven_day: 95 }, plan: PLANS.lapsed, loginExpiresIn: -2 * 86400 }
   },
   sequence: [1, 2, 3, 4, 5],
   mappings: { '/home/you/work/client-app': { email: 'work@company.com', organizationUuid: 'org-2222' } },

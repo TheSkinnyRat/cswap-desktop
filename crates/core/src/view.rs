@@ -7,7 +7,7 @@
 
 use serde_json::Value;
 
-use crate::format::{Tone, clock_of, pct, rel_time, reset_text};
+use crate::format::{Tone, clock_of, parse_iso_ms, pct, rel_time, reset_text};
 use crate::plan::{self, Standing};
 use crate::types::{Account, AutoEvent, AutoOutcome, AutoStatus, PlainOutput, PlanInfo, Usage, UsageWindow};
 
@@ -247,6 +247,43 @@ pub fn plan_badge(a: &Account, remembered: Option<&PlanInfo>, now_ms: i64, offse
         label: r.label.clone(),
         tooltip: plan_tooltip(r, a.active, now_ms, offset_secs),
         standing: Standing::Current,
+    })
+}
+
+/// Inside this, a stored login's expiry earns a chip: a week leaves time to `/login`
+/// calmly instead of finding the slot dead mid-rotation (the gateway's `LOGIN_WARN_MS`).
+pub const LOGIN_WARN_MS: i64 = 7 * 86_400_000;
+
+/// What a row says about `loginExpiresAt` (cswap >= 0.27).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoginExpiry {
+    /// `login expired` (danger) or `login 3d 5h` (warn); `None` while more than
+    /// [`LOGIN_WARN_MS`] remains, when the date is only in [`LoginExpiry::tooltip`].
+    pub chip: Option<(String, ChipTone)>,
+    /// The exact expiry, and once it matters, the remedy.
+    pub tooltip: String,
+}
+
+/// `None` when cswap gave no (readable) expiry: unknown is never "expired".
+pub fn login_expiry(a: &Account, now_ms: i64, offset_secs: i64) -> Option<LoginExpiry> {
+    let iso = a.login_expires_at.as_deref()?;
+    let at = parse_iso_ms(iso)?;
+    let when = clock_of(Some(iso), now_ms, offset_secs);
+    let fix = format!("run /login in Claude Code, then cswap add --slot {}", a.number);
+    let left = at - now_ms;
+    Some(if left <= 0 {
+        LoginExpiry {
+            chip: Some(("login expired".into(), ChipTone::Danger)),
+            tooltip: format!("Login expired {when}: re-login needed\n{fix}"),
+        }
+    } else if left <= LOGIN_WARN_MS {
+        let rest = reset_text(Some(iso), now_ms);
+        LoginExpiry {
+            chip: Some((format!("login {rest}"), ChipTone::Warn)),
+            tooltip: format!("Login expires {when} (in {rest})\nBefore then: {fix}"),
+        }
+    } else {
+        LoginExpiry { chip: None, tooltip: format!("Login valid until {when}") }
     })
 }
 
@@ -660,6 +697,47 @@ mod tests {
         assert_eq!((l.label.as_str(), word, tone), ("Free", "lapsed", ChipTone::Warn));
         assert!(l.tooltip.contains(tip));
         assert!(!l.tooltip.contains("Read by cswap"), "no fetchedAt, no empty clock");
+    }
+
+    // TESTED RULE (the gateway's, usage.ts): expired -> a clear chip and the remedy; within
+    // 7 days -> a quiet chip with the time left; otherwise no chip, the date in a tooltip.
+    #[test]
+    fn login_expiry_thresholds() {
+        let now = crate::format::parse_iso_ms("2026-11-28T10:00:00Z").unwrap();
+        let at = |ms: i64| Account {
+            number: 3,
+            login_expires_at: Some(crate::format::iso_from_ms(now + ms)),
+            ..Default::default()
+        };
+        let chip = |ms: i64| login_expiry(&at(ms), now, 0).unwrap().chip;
+        let day = 86_400_000;
+        assert_eq!(chip(-60_000), Some(("login expired".into(), ChipTone::Danger)));
+        assert_eq!(chip(0), Some(("login expired".into(), ChipTone::Danger)), "the very moment counts as gone");
+        assert_eq!(chip(1000), Some(("login 1s".into(), ChipTone::Warn)));
+        assert_eq!(chip(3 * day + 5 * 3_600_000), Some(("login 3d 5h".into(), ChipTone::Warn)));
+        assert_eq!(chip(LOGIN_WARN_MS), Some(("login 7d 0h".into(), ChipTone::Warn)), "7 days is still inside");
+        assert_eq!(chip(LOGIN_WARN_MS + 60_000), None);
+        assert_eq!(chip(20 * day), None);
+
+        let gone = login_expiry(&at(-day), now, 0).unwrap().tooltip;
+        assert_eq!(
+            gone,
+            "Login expired Nov 27 10:00: re-login needed\nrun /login in Claude Code, then cswap add --slot 3"
+        );
+        let soon = login_expiry(&at(2 * 3_600_000), now, 0).unwrap().tooltip;
+        assert_eq!(
+            soon,
+            "Login expires 12:00 (in 2h 0m)\nBefore then: run /login in Claude Code, then cswap add --slot 3"
+        );
+        assert_eq!(login_expiry(&at(20 * day), now, 0).unwrap().tooltip, "Login valid until Dec 18 10:00");
+    }
+
+    #[test]
+    fn no_or_unreadable_login_expiry_says_nothing() {
+        let a = Account::default();
+        assert_eq!(login_expiry(&a, 0, 0), None);
+        let a = Account { login_expires_at: Some("someday".into()), ..Default::default() };
+        assert_eq!(login_expiry(&a, 0, 0), None);
     }
 
     // TESTED RULE (project notes): the column set is the UNION of models across accounts,

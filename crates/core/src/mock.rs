@@ -115,6 +115,8 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         }),
         usage_fetched_at: iso(-40),
         usage_age_seconds: Some(40.0),
+        // inside the 7-day warning: a quiet `login 3d 5h` chip
+        login_expires_at: iso(3 * 86_400 + 5 * 3600),
         ..account(1, "you@example.com")
     };
     let a2 = Account {
@@ -157,6 +159,8 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         }),
         last_good_age_seconds: Some(7200.0),
         plan: cswap_plan(now, "Free", "default_claude_ai", "claude_max", "canceled", true),
+        // the login itself ran out: `login expired`, re-login needed
+        login_expires_at: iso(-86_400),
         ..account(5, "old@example.com")
     };
     ListPayload {
@@ -791,6 +795,19 @@ mod tests {
                 b("Free", Standing::Lapsed),
             ]
         );
+    }
+
+    // Expired, within a week, far off (tooltip only) and unknown, one each.
+    #[test]
+    fn fixture_has_one_login_expiry_of_each_kind() {
+        let now = 1_795_800_000_000;
+        let chips: Vec<_> = fixture_payload(now)
+            .accounts
+            .iter()
+            .map(|a| crate::view::login_expiry(a, now, 0).map(|l| l.chip.map(|(t, _)| t)))
+            .collect();
+        let c = |t: &str| Some(Some(t.to_owned()));
+        assert_eq!(chips, [c("login 3d 5h"), Some(None), None, None, c("login expired")]);
     }
 
     #[test]

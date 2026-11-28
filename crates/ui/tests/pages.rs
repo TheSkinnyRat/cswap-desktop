@@ -235,6 +235,21 @@ fn plan_chips_in_table_and_cards() {
     }
 }
 
+// TESTED RULE: the stored login's expiry is a chip only within 7 days or once past, in
+// the table AND on the cards; its hover says how long and what to do.
+#[test]
+fn login_expiry_chips_in_table_and_cards() {
+    for width in [1400.0, 700.0] {
+        let mut h = harness(Which::Accounts, width, false);
+        assert!(has_label(&h, "login 3d 5h"), "account 1 at {width}px");
+        assert!(has_label(&h, "login expired"), "account 5 at {width}px");
+        assert!(h.query_by_label_contains("login 19d").is_none(), "20 days off: no chip");
+        h.get_by_label("login 3d 5h").hover();
+        h.run_steps(8);
+        assert!(h.query_by_label_contains("Before then: run /login").is_some(), "tooltip at {width}px");
+    }
+}
+
 // e2e "switch, rotate ... change the active account through the CLI".
 #[test]
 fn switch_and_rotate_go_through_the_cli() {

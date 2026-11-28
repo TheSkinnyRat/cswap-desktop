@@ -70,7 +70,11 @@ fn lists_accounts_from_json_and_records_the_call() {
         ]
     );
     assert!(r.accounts[1].plan.as_ref().unwrap().fetched_at.is_some());
-    assert!(r.accounts[1].login_expires_at.as_deref().is_some_and(|t| t.ends_with('Z')));
+    let soon = |i: usize| view::login_expiry(&r.accounts[i], format::now_ms(), 0).and_then(|l| l.chip);
+    assert!(soon(0).is_some_and(|(t, _)| t.starts_with("login 3d")), "{:?}", soon(0));
+    assert_eq!(soon(1), None, "20 days off: tooltip only");
+    assert_eq!(soon(4).map(|(t, _)| t).as_deref(), Some("login expired"));
+    assert!(r.accounts[2].login_expires_at.is_none());
     let log = t.cli.log();
     assert_eq!(log.len(), 1);
     assert_eq!(
