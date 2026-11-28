@@ -349,6 +349,17 @@ fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOp
         .with_inner_size([1120.0, 720.0])
         .with_min_inner_size([760.0, 520.0])
         .with_visible(visible);
+    // One bar, as 0.1.23 (`titleBarStyle: 'hidden'`): the app header is the title bar
+    // (cswap_ui::chrome). macOS keeps its traffic lights over a transparent bar with the
+    // content under it; elsewhere the window is undecorated and the header draws the caption
+    // buttons. On Windows winit keeps WS_CAPTION | WS_SIZEBOX on an undecorated window, so a
+    // drag from the header still snaps (Aero Snap, Win+arrows); only Windows 11's snap-layout
+    // flyout on hovering maximize is gone, as it needs the OS's own maximize button.
+    viewport = if cfg!(target_os = "macos") {
+        viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false)
+    } else {
+        viewport.with_decorations(false)
+    };
     // macOS: the bundle's .icns is the icon; any icon given here replaces it in the Dock
     // with a raw bitmap (craft-launcher), so give the empty one eframe leaves alone.
     if cfg!(target_os = "macos") {
@@ -359,12 +370,39 @@ fn native_options(visible: bool, renderer: eframe::Renderer) -> eframe::NativeOp
     eframe::NativeOptions {
         viewport,
         renderer,
+        wgpu_options: wgpu_options(),
         // Closing must come back here, not end the process: eframe's other mode calls
         // `process::exit` from inside the event loop.
         run_and_return: true,
         centered: true,
         ..Default::default()
     }
+}
+
+/// Who draws the title bar, matching [`native_options`].
+fn window_chrome() -> cswap_ui::WindowChrome {
+    if cfg!(target_os = "macos") { cswap_ui::WindowChrome::MacOs } else { cswap_ui::WindowChrome::Custom }
+}
+
+/// wgpu (the fallback renderer) on Windows is made to present through DirectComposition: the
+/// undecorated window's drop shadow moves its client area down a pixel, and a swapchain made
+/// from the window itself is then stretched over it by the compositor, blurring every
+/// horizontal line and all text (measured by craft-launcher with the same wgpu 30).
+/// `WGPU_DX12_PRESENTATION_SYSTEM` still overrides.
+#[cfg(windows)]
+fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    use eframe::wgpu::Dx12SwapchainKind;
+    let mut config = eframe::egui_wgpu::WgpuConfiguration::default();
+    if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup) = &mut config.wgpu_setup {
+        setup.instance_descriptor.backend_options.dx12.presentation_system =
+            Dx12SwapchainKind::from_env().unwrap_or(Dx12SwapchainKind::DxgiFromVisual);
+    }
+    config
+}
+
+#[cfg(not(windows))]
+fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    eframe::egui_wgpu::WgpuConfiguration::default()
 }
 
 /// One eframe pass: from opening the window until it closes to the tray or the app exits.
@@ -446,7 +484,8 @@ impl<'a> Window<'a> {
         core.control.set_window(Some((ctx.clone(), tx)));
         let repaint = ctx.clone();
         core.sink.set_waker(Some(Arc::new(move || repaint.request_repaint())));
-        let app = CswapApp::new(cc, core.services.clone(), rx);
+        let mut app = CswapApp::new(cc, core.services.clone(), rx);
+        app.set_chrome(window_chrome());
         #[cfg(target_os = "macos")]
         if core.tray.is_none() {
             core.make_tray();

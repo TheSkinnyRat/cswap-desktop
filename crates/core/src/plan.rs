@@ -1,6 +1,12 @@
-//! The plan badge: label from Claude Code's `subscriptionType` (+ `rateLimitTier` only for
-//! the Max multiplier and Team/Enterprise seats). Pure part of `src/main/plan.ts`; reading
-//! the credential file and `plans.json` lives in the driver. OWNER: driver.
+//! The plan badge. From cswap >= 0.30 every `list --json` row carries `plan` (label, tier,
+//! organization type, subscription status), and that wins: it covers every account, not
+//! only the live one, and says when a subscription lapsed ([`from_cswap`]). Older cswap
+//! has none, so the label is still derived from Claude Code's `subscriptionType`
+//! (+ `rateLimitTier` only for the Max multiplier and Team/Enterprise seats,
+//! [`label_for`]); reading the credential file and `plans.json` lives in the driver.
+//! OWNER: driver.
+
+use crate::types::CswapPlan;
 
 const PLANS: [(&str, &str); 5] =
     [("free", "Free"), ("pro", "Pro"), ("max", "Max"), ("team", "Team"), ("enterprise", "Enterprise")];
@@ -91,9 +97,101 @@ pub fn label_for(tier: Option<&str>, subscription: Option<&str>) -> Option<Strin
     }
 }
 
+/// Where an account's subscription stands, as far as cswap can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+    Current,
+    /// `subscriptionStatus: canceled` while not yet on the free tier: still usable.
+    Canceled,
+    /// cswap's `expired`: canceled and already back on the free tier.
+    Lapsed,
+}
+
+/// The badge text and standing of cswap's `plan`, or `None` when it names nothing (the
+/// caller then falls back to `plans.json`).
+///
+/// cswap's label of a Team/Enterprise seat is the organization's ("Team") whatever tier
+/// the seat runs at, so the seat's quota is read out of the tier the same way as for the
+/// credential file ("Team · Max 5x"). Personal plans already name their tier ("Max 5x").
+pub fn from_cswap(p: &CswapPlan) -> Option<(String, Standing)> {
+    let label =
+        Some(p.label.trim()).filter(|l| !l.is_empty()).map(str::to_owned).or_else(|| tier_plan(Some(&p.tier)))?;
+    let seat = matches!(p.organization_type.as_deref(), Some("claude_team" | "claude_enterprise"))
+        .then(|| tier_plan(Some(&p.tier)))
+        .flatten()
+        .filter(|s| *s != label && !s.starts_with(&label));
+    let label = seat.map_or_else(|| label.clone(), |s| format!("{label} · {s}"));
+    let standing = if p.expired {
+        Standing::Lapsed
+    } else if p.subscription_status.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("canceled")) {
+        Standing::Canceled
+    } else {
+        Standing::Current
+    };
+    Some((label, standing))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::label_for;
+    use super::{Standing, from_cswap, label_for};
+    use crate::types::CswapPlan;
+
+    fn cs(label: &str, tier: &str, org: Option<&str>, status: Option<&str>, expired: bool) -> CswapPlan {
+        CswapPlan {
+            label: label.into(),
+            tier: tier.into(),
+            organization_type: org.map(Into::into),
+            subscription_status: status.map(Into::into),
+            expired,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn cswaps_label_is_the_badge_for_personal_plans() {
+        let p = cs("Max 5x", "default_claude_max_5x", Some("claude_max"), Some("active"), false);
+        assert_eq!(from_cswap(&p), Some(("Max 5x".into(), Standing::Current)));
+        // a paying Pro sits on the default tier; cswap's label already says Pro
+        let p = cs("Pro", "default_claude_ai", Some("claude_pro"), Some("active"), false);
+        assert_eq!(from_cswap(&p), Some(("Pro".into(), Standing::Current)));
+        // Ultra shares the Max 20x tier: the label, not the tier, names it
+        let p = cs("Ultra", "default_claude_max_20x", Some("claude_max"), None, false);
+        assert_eq!(from_cswap(&p), Some(("Ultra".into(), Standing::Current)));
+    }
+
+    #[test]
+    fn a_seat_shows_its_tier_beside_the_organization() {
+        let p = cs("Team", "default_claude_max_5x", Some("claude_team"), Some("active"), false);
+        assert_eq!(from_cswap(&p).unwrap().0, "Team · Max 5x");
+        let p = cs("Enterprise", "default_claude_max_20x", Some("claude_enterprise"), None, false);
+        assert_eq!(from_cswap(&p).unwrap().0, "Enterprise · Max 20x");
+        // an Enterprise seat on its own tier name: nothing to add, nothing guessed
+        let p = cs("Enterprise", "default_claude_zero", Some("claude_enterprise"), None, false);
+        assert_eq!(from_cswap(&p).unwrap().0, "Enterprise");
+        // the tier is only read for seats: a personal plan's label is not doubled
+        let p = cs("Max 20x", "default_claude_max_20x", Some("claude_max"), None, false);
+        assert_eq!(from_cswap(&p).unwrap().0, "Max 20x");
+    }
+
+    #[test]
+    fn canceled_and_lapsed_are_told_apart() {
+        let p = cs("Max 20x", "default_claude_max_20x", Some("claude_max"), Some("canceled"), false);
+        assert_eq!(from_cswap(&p).unwrap().1, Standing::Canceled);
+        let p = cs("Free", "default_claude_ai", Some("claude_max"), Some("canceled"), true);
+        assert_eq!(from_cswap(&p), Some(("Free".into(), Standing::Lapsed)));
+        // `expired` is cswap's verdict: it wins whatever the status string says
+        let p = cs("Free", "default_claude_ai", None, None, true);
+        assert_eq!(from_cswap(&p).unwrap().1, Standing::Lapsed);
+        let p = cs("Pro", "default_claude_ai", Some("claude_pro"), Some("past_due"), false);
+        assert_eq!(from_cswap(&p).unwrap().1, Standing::Current);
+    }
+
+    #[test]
+    fn a_blank_label_falls_back_to_the_tier_then_to_nothing() {
+        assert_eq!(from_cswap(&cs(" ", "default_claude_max_5x", None, None, false)).unwrap().0, "Max 5x");
+        assert_eq!(from_cswap(&cs("", "default_claude_ai", None, None, false)), None);
+        assert_eq!(from_cswap(&CswapPlan::default()), None);
+    }
 
     fn l(tier: Option<&str>, sub: Option<&str>) -> Option<String> {
         label_for(tier, sub)

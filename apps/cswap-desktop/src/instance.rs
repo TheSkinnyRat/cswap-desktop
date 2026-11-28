@@ -183,18 +183,17 @@ mod tests {
 
     #[test]
     fn second_claim_is_secondary_and_wakes_the_first() {
-        let dir = std::env::temp_dir().join(format!("cswap-instance-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let Claim::Primary(first) = claim(&dir).unwrap() else { panic!("first claim") };
+        // Deleted on drop, also when an assert panics.
+        let tmp = tempfile::Builder::new().prefix("cswap-instance-").tempdir().unwrap();
+        let dir = tmp.path();
+        let Claim::Primary(first) = claim(dir).unwrap() else { panic!("first claim") };
         let (tx, rx) = std::sync::mpsc::channel();
         first.on_show(move || {
             let _ = tx.send(());
         });
-        assert!(matches!(claim(&dir).unwrap(), Claim::Secondary));
+        assert!(matches!(claim(dir).unwrap(), Claim::Secondary));
         rx.recv_timeout(std::time::Duration::from_secs(5)).expect("the first copy was asked to show");
         drop(first);
-        assert!(matches!(claim(&dir).unwrap(), Claim::Primary(_)), "released on drop");
-        let _ = std::fs::remove_dir_all(&dir);
+        assert!(matches!(claim(dir).unwrap(), Claim::Primary(_)), "released on drop");
     }
 }

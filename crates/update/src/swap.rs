@@ -356,30 +356,28 @@ mod tests {
 
     #[test]
     fn portable_helper_replaces_only_a_verified_exe() {
-        let dir = std::env::temp_dir().join(format!("cswap-portable-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        // Deleted on drop, also when an assert panics.
+        let tmp = tempfile::Builder::new().prefix("cswap-portable-").tempdir().unwrap();
+        let dir = tmp.path();
         let target = dir.join("claude-swap-portable.exe");
         std::fs::write(&target, b"old").unwrap();
         let key = crate::sign::tests::test_key().verifying_key();
         // pid 0 / a pid that is not running: the wait returns at once.
         let dead = u32::MAX - 1;
-        let dl = signed(&dir, "claude-swap-desktop-win-x64-portable.exe", b"new", "1.0.1");
+        let dl = signed(dir, "claude-swap-desktop-win-x64-portable.exe", b"new", "1.0.1");
         std::fs::write(&dl.file, b"tampered").unwrap();
         assert!(helper_steps("portable", dead, &dl, &target, false, &key).is_err());
         assert_eq!(std::fs::read(&target).unwrap(), b"old", "a file failing verification is never put in place");
-        let dl = signed(&dir, "claude-swap-desktop-win-x64-portable.exe", b"new", "1.0.1");
+        let dl = signed(dir, "claude-swap-desktop-win-x64-portable.exe", b"new", "1.0.1");
         helper_steps("portable", dead, &dl, &target, false, &key).unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(unix)]
     #[test]
     fn appimage_is_renamed_over_and_executable() {
-        let dir = std::env::temp_dir().join(format!("cswap-appimage-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let tmp = tempfile::Builder::new().prefix("cswap-appimage-").tempdir().unwrap();
+        let dir = tmp.path();
         let current = dir.join("claude-swap-desktop-linux-x86_64.AppImage");
         std::fs::write(&current, b"old").unwrap();
         let new = dir.join("download");
@@ -390,6 +388,5 @@ mod tests {
         assert!(!new.exists());
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&current).unwrap().permissions().mode() & 0o777, 0o755);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

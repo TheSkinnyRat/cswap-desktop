@@ -67,6 +67,20 @@ fn account(number: u32, email: &str) -> Account {
     Account { number, email: email.into(), usage_status: "ok".into(), ..Default::default() }
 }
 
+/// `plan` as cswap >= 0.30 reports it, read an hour before `now`.
+fn cswap_plan(now: i64, label: &str, tier: &str, org: &str, status: &str, expired: bool) -> Option<CswapPlan> {
+    Some(CswapPlan {
+        label: label.into(),
+        tier: tier.into(),
+        organization_type: Some(org.into()),
+        billing_type: Some(if expired { "none" } else { "stripe_subscription" }.into()),
+        subscription_status: Some(status.into()),
+        expired,
+        fetched_at: Some(iso_from_ms(now - 3_600_000)),
+        ..Default::default()
+    })
+}
+
 /// Which model columns the fixture produces.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Fixture {
@@ -101,6 +115,8 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         }),
         usage_fetched_at: iso(-40),
         usage_age_seconds: Some(40.0),
+        // inside the 7-day warning: a quiet `login 3d 5h` chip
+        login_expires_at: iso(3 * 86_400 + 5 * 3600),
         ..account(1, "you@example.com")
     };
     let a2 = Account {
@@ -115,6 +131,9 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         }),
         usage_fetched_at: iso(-300),
         usage_age_seconds: Some(300.0),
+        login_expires_at: iso(20 * 86_400),
+        // plans.json still remembers "Pro" for this address: cswap's plan must win
+        plan: cswap_plan(now, "Team", "default_claude_max_5x", "claude_team", "active", false),
         ..account(2, "work@example.com")
     };
     let a3 = Account {
@@ -126,6 +145,7 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
         }),
         usage_fetched_at: iso(-900),
         usage_age_seconds: Some(900.0),
+        plan: cswap_plan(now, "Max 20x", "default_claude_max_20x", "claude_max", "canceled", false),
         ..account(3, "spare@example.com")
     };
     let a4 = Account { usage_status: "api_key".into(), ..account(4, "api-key-4@token.local") };
@@ -138,6 +158,9 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
             ..Default::default()
         }),
         last_good_age_seconds: Some(7200.0),
+        plan: cswap_plan(now, "Free", "default_claude_ai", "claude_max", "canceled", true),
+        // the login itself ran out: `login expired`, re-login needed
+        login_expires_at: iso(-86_400),
         ..account(5, "old@example.com")
     };
     ListPayload {
@@ -148,7 +171,9 @@ pub fn fixture_payload_for(now: i64, fixture: Fixture) -> ListPayload {
     }
 }
 
-/// The plan labels remembered for the fixture (`plans.json`).
+/// The plan labels remembered for the fixture (`plans.json`). Account 1 has no cswap
+/// `plan`, so its badge comes from here (the fallback for cswap < 0.30); account 2's
+/// entry is outranked by the `plan` cswap reports for it.
 pub fn fixture_plans(now: i64) -> BTreeMap<String, PlanInfo> {
     let plan = |label: &str, tier: &str, sub: &str, ago: i64| PlanInfo {
         label: label.into(),
@@ -744,6 +769,45 @@ mod tests {
         );
         assert_eq!(m.command_log()[0].args, ["switch", "2", "--json"]);
         assert_eq!(m.switch_to("nobody", false).take().unwrap().unwrap_err().kind, "AccountNotFoundError");
+    }
+
+    // The fixture shows every badge the page can draw: the credential-file fallback, a
+    // seat, canceled, lapsed and none at all. A fixture edit that loses one would leave
+    // that case out of every render without failing anything else.
+    #[test]
+    fn fixture_has_one_plan_badge_of_each_kind() {
+        use crate::plan::Standing;
+        let now = 1_795_800_000_000;
+        let plans = fixture_plans(now);
+        let badges: Vec<_> = fixture_payload(now)
+            .accounts
+            .iter()
+            .map(|a| crate::view::plan_badge(a, plans.get(&a.email), now, 0).map(|b| (b.label, b.standing)))
+            .collect();
+        let b = |l: &str, s| Some((l.to_owned(), s));
+        assert_eq!(
+            badges,
+            [
+                b("Max 5x", Standing::Current),
+                b("Team · Max 5x", Standing::Current),
+                b("Max 20x", Standing::Canceled),
+                None,
+                b("Free", Standing::Lapsed),
+            ]
+        );
+    }
+
+    // Expired, within a week, far off (tooltip only) and unknown, one each.
+    #[test]
+    fn fixture_has_one_login_expiry_of_each_kind() {
+        let now = 1_795_800_000_000;
+        let chips: Vec<_> = fixture_payload(now)
+            .accounts
+            .iter()
+            .map(|a| crate::view::login_expiry(a, now, 0).map(|l| l.chip.map(|(t, _)| t)))
+            .collect();
+        let c = |t: &str| Some(Some(t.to_owned()));
+        assert_eq!(chips, [c("login 3d 5h"), Some(None), None, None, c("login expired")]);
     }
 
     #[test]

@@ -1,5 +1,6 @@
-//! Plan labels (port of the I/O half of `src/main/plan.ts`; the label rule is
-//! `cswap_core::plan`). cswap reports usage, never the subscription, but Claude Code's own
+//! Plan labels for a cswap without `plan` in `list --json` (< 0.30; newer ones report the
+//! plan of every account and win, see `cswap_core::plan`). Port of the I/O half of
+//! `src/main/plan.ts`. Claude Code's own
 //! `.credentials.json` carries `subscriptionType` and `rateLimitTier` next to the tokens.
 //! Exactly those two strings are read: the file is parsed into a struct that has no other
 //! fields, so no token is held, returned, logged or cached. Only the live account's file

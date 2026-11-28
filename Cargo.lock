@@ -849,7 +849,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-desktop"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "cswap-core",
  "cswap-driver",
@@ -871,6 +871,7 @@ dependencies = [
  "png",
  "rfd",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "tray-icon",
@@ -881,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-driver"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "cswap-core",
  "libc",
@@ -895,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-ui"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "cswap-core",
@@ -908,7 +909,7 @@ dependencies = [
 
 [[package]]
 name = "cswap-update"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.22.1",
  "cswap-core",
@@ -921,6 +922,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "tracing",
  "windows-sys 0.61.2",

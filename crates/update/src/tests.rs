@@ -42,16 +42,11 @@ fn serve(routes: impl FnOnce(&str) -> HashMap<String, Vec<u8>>) -> FakeGithub {
 
 const ASSET: &str = "claude-swap-desktop-win-x64-portable.exe";
 
-fn temp_dir(tag: &str) -> PathBuf {
-    static N: AtomicUsize = AtomicUsize::new(0);
-    let d = std::env::temp_dir().join(format!(
-        "cswap-upd-{tag}-{}-{}",
-        std::process::id(),
-        N.fetch_add(1, Ordering::SeqCst)
-    ));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// A fresh dir under the OS temp dir, deleted when the guard drops — also when the test
+/// panics (a failed assert unwinds through it). Plain `temp_dir().join(..)` dirs were
+/// never removed: every `cargo test` left two `cswap-upd-*` dirs per updater test behind.
+fn temp_dir(tag: &str) -> tempfile::TempDir {
+    tempfile::Builder::new().prefix(&format!("cswap-upd-{tag}-")).tempdir().unwrap()
 }
 
 /// A release `tag` whose asset serves `served` but whose signature covers `signed`.
@@ -79,10 +74,13 @@ struct Run {
     updater: Arc<Updater>,
     quits: Arc<AtomicUsize>,
     dir: PathBuf,
+    /// Last field: dropped after the updater, which writes into `dir`.
+    _tmp: tempfile::TempDir,
 }
 
 fn updater(fake: &FakeGithub, kind: Option<InstallKind>) -> Run {
-    let dir = temp_dir("run");
+    let tmp = temp_dir("run");
+    let dir = tmp.path().to_path_buf();
     let (sink, _rx) = EventSink::new();
     let quits = Arc::new(AtomicUsize::new(0));
     let q = quits.clone();
@@ -98,7 +96,7 @@ fn updater(fake: &FakeGithub, kind: Option<InstallKind>) -> Run {
         fake.base.clone(),
     );
     std::mem::forget(_rx);
-    Run { updater, quits, dir }
+    Run { updater, quits, dir, _tmp: tmp }
 }
 
 fn check(u: &Updater) -> UpdaterState {
@@ -190,7 +188,8 @@ fn link_only_copies_see_the_update_but_download_nothing() {
 #[test]
 fn no_key_or_dev_build_means_disabled_and_no_request() {
     let (sink, _rx) = EventSink::new();
-    let cfg = UpdateConfig { repo: "o/r".into(), current: "1.0.0".into(), data_dir: temp_dir("off"), auto: false };
+    let tmp = temp_dir("off");
+    let cfg = UpdateConfig { repo: "o/r".into(), current: "1.0.0".into(), data_dir: tmp.path().into(), auto: false };
     let quit: Arc<dyn Fn() + Send + Sync> = Arc::new(|| {});
     // An address nothing listens on: a request would fail as Error, not stay Disabled.
     let u = Updater::with(

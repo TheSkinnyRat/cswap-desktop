@@ -59,6 +59,7 @@ pub struct CswapApp {
     p_refresh: Option<Pending<AccountsState>>,
     focused: Option<bool>,
     started: bool,
+    chrome: crate::WindowChrome,
 }
 
 impl CswapApp {
@@ -98,6 +99,7 @@ impl CswapApp {
             p_refresh: None,
             focused: None,
             started: false,
+            chrome: crate::WindowChrome::Native,
         }
     }
 
@@ -111,6 +113,13 @@ impl CswapApp {
         self.auto_page.utc_offset = Some(utc_offset);
         self.log_page.utc_offset = Some(utc_offset);
         self.settings_page.utc_offset = Some(utc_offset);
+    }
+
+    /// Who draws the title bar; the app crate sets this to match how it built the window
+    /// (undecorated on Windows/Linux, a transparent title bar on macOS). `Native` by default,
+    /// so tests and the demo keep the OS bar.
+    pub fn set_chrome(&mut self, chrome: crate::WindowChrome) {
+        self.chrome = chrome;
     }
 
     pub fn settings(&self) -> &AppSettings {
@@ -229,6 +238,7 @@ impl CswapApp {
                 binary: self.binary.as_ref(),
                 updater: &self.updater,
                 mac: self.services.host.platform() == "macos",
+                chrome: self.chrome,
                 now_ms: cswap_core::format::now_ms(),
             };
             egui::Panel::top("titlebar")
@@ -293,11 +303,21 @@ impl CswapApp {
             self.refresh();
         }
         self.toasts.show(&ctx);
+        // Last, so the resize bands sit above everything drawn this frame.
+        if self.chrome == crate::WindowChrome::Custom {
+            crate::chrome::window_edges(&ctx);
+        }
     }
 }
 
 impl eframe::App for CswapApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // macOS: centre the traffic lights in the 38 px header, 14 px in (0.1.23's
+        // `trafficLightPosition`); AppKit's default puts them in a 28 px bar, off the header's
+        // middle. AppKit moves them back on every layout, so this runs every frame.
+        if self.chrome == crate::WindowChrome::MacOs {
+            frame.set_traffic_lights_position(ui.ctx(), egui::Rangef::new(0.0, shell::TITLEBAR_H), 14.0);
+        }
         self.frame(ui);
     }
 }
