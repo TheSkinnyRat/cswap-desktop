@@ -194,6 +194,24 @@ pub fn clock_of(iso: Option<&str>, now_ms: i64, offset_secs: i64) -> String {
     }
 }
 
+const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/// Like [`clock_of`], but a stamp within the coming week reads `Tue 14:00`: the hero's
+/// forecast talks about this week, where a weekday says more than a date.
+pub fn weekday_clock(iso: Option<&str>, now_ms: i64, offset_secs: i64) -> String {
+    let Some(t) = iso.and_then(parse_iso_ms) else { return String::new() };
+    let local = t.div_euclid(1000) + offset_secs;
+    let today = (now_ms.div_euclid(1000) + offset_secs).div_euclid(86_400);
+    let day = local.div_euclid(86_400);
+    if day <= today || day - today >= 7 {
+        return clock_of(iso, now_ms, offset_secs);
+    }
+    let sod = local.rem_euclid(86_400);
+    // 1970-01-01 was a Thursday (index 3).
+    let wd = WEEKDAYS[(day + 3).rem_euclid(7) as usize];
+    format!("{wd} {:02}:{:02}", sod / 3600, sod % 3600 / 60)
+}
+
 /// `14:30:05`, local 24-hour time of a stamp (the Auto feed's first column).
 pub fn time_of(iso: &str, offset_secs: i64) -> String {
     let Some(t) = parse_iso_ms(iso) else { return String::new() };
@@ -368,6 +386,18 @@ mod tests {
         assert_eq!(clock_of(Some(&iso_from_ms(NOW + 7 * 3_600_000)), NOW, 0), "Nov 28 00:20");
         assert_eq!(clock_of(Some("x"), NOW, 0), "");
         assert_eq!(time_of(&iso_from_ms(NOW + 5_000), wib), "00:20:05");
+    }
+
+    #[test]
+    fn weekday_clock_names_the_day_within_a_week() {
+        let wib = 7 * 3600;
+        let at = |h: i64| iso_from_ms(NOW + h * 3_600_000);
+        // NOW is Saturday 28 Nov 00:20 in UTC+7
+        assert_eq!(weekday_clock(Some(&at(1)), NOW, wib), "01:20", "today: the time alone");
+        assert_eq!(weekday_clock(Some(&at(24)), NOW, wib), "Sun 00:20");
+        assert_eq!(weekday_clock(Some(&at(3 * 24 + 14)), NOW, wib), "Tue 14:20");
+        assert_eq!(weekday_clock(Some(&at(7 * 24)), NOW, wib), "Dec 5 00:20", "a week out: the date");
+        assert_eq!(weekday_clock(Some("x"), NOW, 0), "");
     }
 
     #[test]

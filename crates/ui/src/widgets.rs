@@ -72,6 +72,10 @@ pub mod icon {
     pub const COPY: &str = "\u{E09E}";
     pub const CIRCLE_X: &str = "\u{E084}";
     pub const TRIANGLE_ALERT: &str = "\u{E193}";
+    pub const LAYOUT_LIST: &str = "\u{E1D9}";
+    pub const LAYOUT_GRID: &str = "\u{E0FF}";
+    pub const PANEL_TOP: &str = "\u{E435}";
+    pub const CORNER_DOWN_RIGHT: &str = "\u{E0A2}";
 }
 
 /// The palette this frame is drawn in.

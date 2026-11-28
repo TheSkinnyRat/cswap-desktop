@@ -1,30 +1,36 @@
-//! Port of `src/renderer/src/pages/Accounts.tsx`. OWNER: ui-accounts.
+//! The Accounts page, 1.1.0 redesign (agreed with Purwa 28 Nov 2026, mockup variant A
+//! "Hero + list"). OWNER: ui-accounts.
 //!
-//! Rules born from Purwa using 0.1.x (project notes, "Halaman Accounts"):
-//! - the page's shape follows the width of the LIST, not of the window: cards below a
-//!   FIXED 780 px ([`view::CARD_BELOW`]), a table above;
-//! - window columns are generated: 5-hour, 7-day, then one per model ANY account reports;
-//!   they belong to the table, so a row without that model gets an empty `-` cell
-//!   (plain hyphen, vertically centred), and the header names the column instead of a
-//!   name inside each bar. Cards drop the cell instead;
-//! - between 780 px and the template's minimum (≈956 px) only the list scrolls sideways.
+//! - a hero card for the active account (rings, per-model bars, forecast, status), then a
+//!   Best next strip naming the account `cswap switch --strategy best` would pick;
+//! - the other accounts as rows (mini bars; click a row for its per-model windows) or as
+//!   tiles (small rings), sorted by readiness ([`cswap_core::ready`]);
+//! - the shape follows the page's CONTENT width ([`view::page_shape`]), never the window's,
+//!   and nothing scrolls sideways. Chips wrap only when the name line has no room left.
+//!
+//! 1.0's table (generated model columns, the 780–956 px horizontal-scroll band) is gone.
 
-use egui::{Align, Color32, CornerRadius, Id, Layout, Margin, Rect, Sense, Shape, Stroke, Ui, UiBuilder, pos2, vec2};
+use std::collections::HashSet;
+
+use egui::{
+    Align, Align2, Color32, CornerRadius, Id, Layout, Margin, Rect, Sense, Shape, Stroke, Ui, UiBuilder, pos2, vec2,
+};
 
 use cswap_core::format::{
     age_seconds, iso_from_ms, mask_email, now_ms, org_tag, parse_iso_ms, pct, reset_text, status_label, status_tone,
     tone,
 };
-use cswap_core::view::{self, ChipTone, WindowCell};
+use cswap_core::ready::{self, Readiness, ReadyInfo};
+use cswap_core::view::{self, ChipTone, PageShape};
 use cswap_core::{
-    Account, AccountsState, AddAccountOptions, AddTokenOptions, AppSettings, CsResult, Event, ExportOptions,
-    ImportOptions, LaunchedSession, Mapping, Pending, PlainOutput, PlanInfo, RotateStrategy, SwitchPayload, Transfer,
-    UsageView,
+    Account, AccountsLayout, AccountsState, AddAccountOptions, AddTokenOptions, AppSettings, ConfigPayload, CsResult,
+    Event, ExportOptions, ImportOptions, LaunchedSession, Mapping, Pending, PlainOutput, PlanInfo, RotateStrategy,
+    SwitchPayload, Transfer, UsageWindow,
 };
 
 use crate::cx::Cx;
 use crate::style;
-use crate::theme::Tokens;
+use crate::theme::{TRANSITION_SECS, Tokens};
 use crate::toast::ToastKind;
 use crate::usage;
 use crate::widgets::{self, Button, Variant, icon, item, item_hint};
@@ -112,7 +118,12 @@ enum Dlg {
 enum RowAct {
     Switch,
     Menu(usize),
+    Toggle,
 }
+
+/// How often the page re-reads `autoswitch.model` (one `cswap config --json`): the Best
+/// next pick folds those models in, as cswap's own `switch --strategy best` does.
+const CONFIG_EVERY_SECS: f64 = 600.0;
 
 pub struct AccountsPage {
     /// Fixed clock (Unix ms) for tests and screenshots; the wall clock otherwise.
@@ -121,9 +132,18 @@ pub struct AccountsPage {
     pub utc_offset: Option<i64>,
     ops: Vec<Op>,
     dlg: Option<Dlg>,
-    /// What the last frame laid out, for tests: list width and whether it was cards.
-    pub last_list_width: f32,
-    pub last_cards: bool,
+    /// Rows opened to show their per-model windows.
+    expanded: HashSet<u32>,
+    /// `autoswitch.model`, parsed as cswap parses it.
+    models: Vec<String>,
+    config: Option<Pending<CsResult<ConfigPayload>>>,
+    config_at: Option<f64>,
+    /// What the last frame laid out, for tests: content width, its shape, the list's
+    /// order (slots) and the Best next pick.
+    pub last_content_width: f32,
+    pub last_shape: PageShape,
+    pub last_order: Vec<u32>,
+    pub last_best: Option<u32>,
 }
 
 impl Default for AccountsPage {
@@ -132,9 +152,29 @@ impl Default for AccountsPage {
     }
 }
 
+/// One chip of a name line: text, tone, hover text.
+struct ChipSpec {
+    label: String,
+    tone: ChipTone,
+    tip: Option<String>,
+}
+
 impl AccountsPage {
     pub fn new() -> Self {
-        Self { now_ms: None, utc_offset: None, ops: Vec::new(), dlg: None, last_list_width: 0.0, last_cards: false }
+        Self {
+            now_ms: None,
+            utc_offset: None,
+            ops: Vec::new(),
+            dlg: None,
+            expanded: HashSet::new(),
+            models: Vec::new(),
+            config: None,
+            config_at: None,
+            last_content_width: 0.0,
+            last_shape: PageShape::Wide,
+            last_order: Vec::new(),
+            last_best: None,
+        }
     }
 
     pub fn on_event(&mut self, _ev: &Event) {}
@@ -190,6 +230,28 @@ impl AccountsPage {
         }
     }
 
+    /// Keeps `autoswitch.model` fresh enough for the Best next pick. A failed read leaves
+    /// the last known models (none at first: 5-hour and 7-day only, cswap's own default).
+    fn poll_config(&mut self, ui: &Ui, cx: &Cx) {
+        let now = ui.input(|i| i.time);
+        if self.config.is_none() && self.config_at.is_none_or(|t| now - t >= CONFIG_EVERY_SECS) {
+            self.config = Some(cx.services.cswap.config());
+            self.config_at = Some(now);
+        }
+        if let Some(p) = &mut self.config {
+            match p.take() {
+                Some(Ok(c)) => {
+                    let v = c.settings.iter().find(|s| s.key == "autoswitch.model").map(|s| &s.value);
+                    self.models = v.and_then(|v| v.as_str()).map(ready::parse_models).unwrap_or_default();
+                    self.config = None;
+                }
+                Some(Err(_)) => self.config = None,
+                None if p.is_lost() => self.config = None,
+                None => {}
+            }
+        }
+    }
+
     fn switch_to(&mut self, cx: &Cx, n: u32) {
         let p = cx.services.cswap.switch_to(&n.to_string(), false);
         self.ops.push(Op { key: format!("switch-{n}"), kind: OpKind::Switch(p) });
@@ -202,6 +264,7 @@ impl AccountsPage {
 
     pub fn ui(&mut self, ui: &mut Ui, cx: &mut Cx) {
         self.poll(cx);
+        self.poll_config(ui, cx);
         let t = cx.tokens.clone();
         let settings = cx.settings.clone();
         let state = cx.accounts.clone();
@@ -212,8 +275,8 @@ impl AccountsPage {
         }
         egui::ScrollArea::vertical().id_salt("accounts-page").auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-            self.header(ui, cx, &t, &list, &settings);
-            egui::Frame::new().inner_margin(Margin { left: 24, right: 24, top: 0, bottom: 32 }).show(ui, |ui| {
+            self.header(ui, cx, &t, &state, &list, &settings);
+            egui::Frame::new().inner_margin(Margin { left: 24, right: 24, top: 4, bottom: 32 }).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 self.body(ui, cx, &t, &state, &list, &settings);
             });
@@ -221,32 +284,42 @@ impl AccountsPage {
         self.dialogs(ui.ctx(), cx, &t, &list);
     }
 
-    fn header(&mut self, ui: &mut Ui, cx: &mut Cx, t: &Tokens, list: &[Account], s: &AppSettings) {
-        let rings = s.usage_view == UsageView::Rings;
-        let active = list.iter().find(|a| a.active);
+    fn header(
+        &mut self,
+        ui: &mut Ui,
+        cx: &mut Cx,
+        t: &Tokens,
+        state: &AccountsState,
+        list: &[Account],
+        s: &AppSettings,
+    ) {
         let rotate =
             Button::new("Rotate").icon(icon::SHUFFLE).trailing(icon::CHEVRON_DOWN).loading(self.busy("rotate"));
         let add = Button::new("Add account").variant(Variant::Primary).icon(icon::PLUS).trailing(icon::CHEVRON_DOWN);
-        let actions_w = 32.0 * 4.0 + rotate.width(ui) + add.width(ui) + 8.0 * 5.0;
+        let actions_w = 32.0 * 5.0 + rotate.width(ui) + add.width(ui) + 8.0 * 3.0 + 2.0 * 3.0;
         let mask = s.mask_emails;
+        let tiles = s.accounts_layout == AccountsLayout::Tiles;
         let mut picked: (Option<usize>, Option<usize>, Option<usize>) = (None, None, None);
-        let mut toggles = (false, false, false);
+        let mut toggles = [false; 4];
+        let sub = if list.is_empty() {
+            None
+        } else {
+            let age = state
+                .fetched_at
+                .as_deref()
+                .and_then(parse_iso_ms)
+                .map(|f| age_seconds(Some((self.now() - f) as f64 / 1000.0)));
+            Some(match age {
+                Some(age) => format!("{} · usage refreshed {age}", view::count_text(list.len())),
+                None => view::count_text(list.len()),
+            })
+        };
         widgets::page_header(
             ui,
             "Accounts",
             |ui| {
-                if let Some(a) = active {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        widgets::line(ui, "Active: ", style::body(12.5), t.text_2);
-                        let name = a.alias.clone().unwrap_or_else(|| mask_email(&a.email, mask));
-                        widgets::line(ui, name, style::body_medium(12.5), t.text);
-                        if a.is_organization {
-                            widgets::line(ui, format!(" · {}", org_tag(a, mask)), style::body(12.5), t.text_3);
-                        }
-                    });
-                } else if !list.is_empty() {
-                    widgets::line(ui, "No active managed account", style::body(12.5), t.text_2);
+                if let Some(sub) = sub {
+                    widgets::line(ui, sub, style::body(12.0), t.text_2);
                 }
             },
             actions_w,
@@ -282,55 +355,52 @@ impl AccountsPage {
                         with(item("Next available (skip limited)"), icon::SHUFFLE),
                     ],
                 );
-                let (m_icon, m_tip) = if mask {
-                    (icon::EYE_OFF, "Show email addresses")
-                } else {
-                    (icon::EYE, "Hide email addresses (keeps the first three characters)")
+                // the four view toggles sit close together, a group apart from the buttons
+                ui.spacing_mut().item_spacing.x = 2.0;
+                ui.add_space(6.0);
+                let toggle = |ui: &mut Ui, glyph: &str, tip: &str| {
+                    Button::new("").variant(Variant::Ghost).icon(glyph).label(tip).show(ui).on_hover_text(tip).clicked()
                 };
-                toggles.2 = Button::new("")
-                    .variant(Variant::Ghost)
-                    .icon(m_icon)
-                    .label(m_tip)
-                    .show(ui)
-                    .on_hover_text(m_tip)
-                    .clicked();
-                let (p_icon, p_tip) = if s.show_pace {
-                    (icon::GAUGE, "Hide the pace marker")
+                toggles[3] = if mask {
+                    toggle(ui, icon::EYE_OFF, "Show email addresses")
                 } else {
-                    (icon::CIRCLE_GAUGE, "Show where an evenly-spread week would be")
+                    toggle(ui, icon::EYE, "Hide email addresses (keeps the first three characters)")
                 };
-                toggles.1 = Button::new("")
-                    .variant(Variant::Ghost)
-                    .icon(p_icon)
-                    .label(p_tip)
-                    .show(ui)
-                    .on_hover_text(p_tip)
-                    .clicked();
-                let (v_icon, v_tip) = if rings {
-                    (icon::TEXT_ALIGN_START, "Show usage as bars")
+                toggles[2] = if s.show_pace {
+                    toggle(ui, icon::GAUGE, "Hide the pace marker")
                 } else {
-                    (icon::CIRCLE_DASHED, "Show usage as rings")
+                    toggle(ui, icon::CIRCLE_GAUGE, "Show where an evenly-spread week would be")
                 };
-                toggles.0 = Button::new("")
-                    .variant(Variant::Ghost)
-                    .icon(v_icon)
-                    .label(v_tip)
-                    .show(ui)
-                    .on_hover_text(v_tip)
-                    .clicked();
+                toggles[1] = if s.show_hero {
+                    toggle(ui, icon::PANEL_TOP, "Hide the active account card")
+                } else {
+                    toggle(ui, icon::PANEL_TOP, "Show the active account on top")
+                };
+                toggles[0] = if tiles {
+                    toggle(ui, icon::LAYOUT_LIST, "Show accounts as rows")
+                } else {
+                    toggle(ui, icon::LAYOUT_GRID, "Show accounts as tiles")
+                };
             },
         );
-        if toggles.0 {
-            let v = if rings { UsageView::Bars } else { UsageView::Rings };
-            cx.services.cswap.edit_settings(Box::new(move |s| s.usage_view = v));
+        let edit = |f: Box<dyn FnOnce(&mut AppSettings) + Send>| {
+            cx.services.cswap.edit_settings(f);
+        };
+        if toggles[0] {
+            let v = if tiles { AccountsLayout::Rows } else { AccountsLayout::Tiles };
+            edit(Box::new(move |s| s.accounts_layout = v));
         }
-        if toggles.1 {
+        if toggles[1] {
+            let v = !s.show_hero;
+            edit(Box::new(move |s| s.show_hero = v));
+        }
+        if toggles[2] {
             let v = !s.show_pace;
-            cx.services.cswap.edit_settings(Box::new(move |s| s.show_pace = v));
+            edit(Box::new(move |s| s.show_pace = v));
         }
-        if toggles.2 {
+        if toggles[3] {
             let v = !mask;
-            cx.services.cswap.edit_settings(Box::new(move |s| s.mask_emails = v));
+            edit(Box::new(move |s| s.mask_emails = v));
         }
         match picked.0 {
             Some(0) => self.rotate(cx, None),
@@ -413,88 +483,135 @@ impl AccountsPage {
             return;
         }
         let width = ui.available_width();
-        let cards = view::is_cards(width);
-        self.last_list_width = width;
-        self.last_cards = cards;
-        let models = view::models(list);
-        let rings = s.usage_view == UsageView::Rings;
-        let min_w = view::table_min_width(models.len(), rings);
+        let shape = view::page_shape(width);
+        self.last_content_width = width;
+        self.last_shape = shape;
+        let (now, off) = (self.now(), self.offset());
+        let hero = list.iter().find(|a| a.active).filter(|_| s.show_hero);
+        let rows = ready::arrange(list, hero.is_some(), now);
+        self.last_order = rows.iter().map(|(a, _)| a.number).collect();
+        // The strip belongs to the hero: hidden with it.
+        let best = hero.and_then(|_| ready::best_next(list, &self.models));
+        self.last_best = best;
         let mut acts: Vec<(Account, RowAct)> = Vec::new();
-        if !cards && width < min_w {
-            // Only the list scrolls sideways; the page and the window never do.
-            egui::ScrollArea::horizontal().id_salt("accounts-hscroll").auto_shrink([false, true]).show(ui, |ui| {
-                self.list(ui, cx, t, state, list, s, &models, min_w, false, &mut acts);
-            });
-        } else {
-            self.list(ui, cx, t, state, list, s, &models, width, cards, &mut acts);
+        let p = Paint { t, s, now, off, mask: s.mask_emails };
+        ui.spacing_mut().item_spacing.y = 0.0;
+        if let Some(a) = hero {
+            hero_card(ui, &p, a, state.plans.get(&a.email), shape);
+            ui.add_space(12.0);
+            if let Some(b) = best.and_then(|n| list.iter().find(|a| a.number == n)) {
+                if self.best_strip(ui, &p, b, state.plans.get(&b.email)) {
+                    self.rotate(cx, Some(RotateStrategy::Best));
+                }
+                ui.add_space(18.0);
+            } else {
+                ui.add_space(6.0);
+            }
+            if !rows.is_empty() {
+                let hint = match s.accounts_layout {
+                    AccountsLayout::Rows => "Ready first · click a row for per-model windows",
+                    AccountsLayout::Tiles => "Ready first",
+                };
+                section_head(ui, t, "Other accounts", hint);
+                ui.add_space(8.0);
+            }
+        }
+        if !rows.is_empty() {
+            match s.accounts_layout {
+                AccountsLayout::Rows => self.rows(ui, &p, state, &rows, shape, &mut acts),
+                AccountsLayout::Tiles => self.tiles(ui, &p, state, &rows, &mut acts),
+            }
         }
         for (a, act) in acts {
             self.row_action(cx, a, act);
         }
-        // footer line
-        if let Some(f) = state.fetched_at.as_deref().and_then(parse_iso_ms) {
-            let age = age_seconds(Some((self.now() - f) as f64 / 1000.0));
-            let left = format!("{} · usage refreshed {age}", view::count_text(list.len()));
-            let right = "Every write goes through the cswap CLI — nothing here edits the vault directly.";
-            let w = ui.available_width();
-            let lw = widgets::measure(ui, &left, style::body(11.5)).x;
-            let rw = widgets::measure(ui, right, style::body(11.5)).x;
-            ui.add_space(-4.0);
-            if lw + rw + 16.0 <= w {
-                let (r, _) = ui.allocate_exact_size(vec2(w, 16.0), Sense::hover());
-                let gl = widgets::galley(ui, left, style::body(11.5), t.text_3, w);
-                ui.painter().galley(r.min, gl, t.text_3);
-                let gr = widgets::galley(ui, right, style::body(11.5), t.text_3, w);
-                ui.painter().galley(pos2(r.max.x - rw, r.min.y), gr, t.text_3);
-            } else {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                widgets::line(ui, left, style::body(11.5), t.text_3);
-                widgets::wrap_text(ui, right, style::body(11.5), t.text_3);
-            }
-        }
+        ui.add_space(10.0);
+        let note = "Every write goes through the cswap CLI — nothing here edits the vault directly.";
+        widgets::wrap_text(ui, note, style::body(11.5), t.text_3);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn list(
-        &mut self,
-        ui: &mut Ui,
-        cx: &Cx,
-        t: &Tokens,
-        state: &AccountsState,
-        list: &[Account],
-        s: &AppSettings,
-        models: &[String],
-        width: f32,
-        cards: bool,
-        acts: &mut Vec<(Account, RowAct)>,
-    ) {
-        let rings = s.usage_view == UsageView::Rings;
-        let cols = view::grid_columns(width, models.len(), rings);
-        widgets::card_frame(t).show(ui, |ui| {
-            ui.set_width(width - 2.0);
-            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            if !cards {
-                header_row(ui, t, &cols, models);
-            }
-            for (i, a) in list.iter().enumerate() {
-                let last = i + 1 == list.len();
-                let plan = state.plans.get(&a.email);
-                let act = if cards {
-                    self.card_row(ui, cx, t, a, plan, models, s, last)
-                } else {
-                    self.table_row(ui, cx, t, a, plan, models, s, &cols, last)
+    /// The Best next strip. True when its Switch was clicked.
+    fn best_strip(&self, ui: &mut Ui, p: &Paint, b: &Account, plan: Option<&PlanInfo>) -> bool {
+        let t = p.t;
+        let w = ui.available_width();
+        let mut clicked = false;
+        egui::Frame::new()
+            .fill(t.accent_soft)
+            .corner_radius(CornerRadius::same(8))
+            .inner_margin(Margin::symmetric(14, 10))
+            .show(ui, |ui| {
+                let iw = w - 28.0;
+                ui.set_width(iw);
+                let btn = Button::new("Switch")
+                    .small()
+                    .variant(Variant::Primary)
+                    .loading(self.busy("rotate"))
+                    .label("Switch to the best next account");
+                let bw = btn.width(ui);
+                let top = ui.cursor().min;
+                let text_w = iw - 14.0 - 12.0 - bw - 12.0;
+                let u = view::usage_of(b);
+                let left = |w: Option<&UsageWindow>| match w {
+                    Some(w) => format!("{}% left", pct(Some((100.0 - w.pct).max(0.0))).trim_end_matches('%')),
+                    None => "no data".into(),
                 };
-                if let Some(act) = act {
-                    acts.push((a.clone(), act));
+                let tail = format!(
+                    " — 5-hour {}, 7-day {}",
+                    left(u.and_then(|u| u.five_hour.as_ref())),
+                    left(u.and_then(|u| u.seven_day.as_ref()))
+                );
+                let chip = view::plan_badge(b, plan, p.now, p.off).map(|b| b.label);
+                // "Best next: name [plan] — 5-hour …": one line while it fits, the numbers
+                // under it otherwise (never sideways).
+                let head = "Best next: ";
+                let name = display_name(b, p.mask);
+                let hw = widgets::measure(ui, head, style::body(12.0)).x;
+                let nw = widgets::measure(ui, &name, style::body_semibold(12.0)).x;
+                let cw = chip.as_deref().map(|c| widgets::chip_width(ui, c) + 6.0).unwrap_or(0.0);
+                let tw = widgets::measure(ui, &tail, style::body(12.0)).x;
+                let one_line = hw + nw + cw + tw <= text_w;
+                let line_h = 18.0;
+                let h: f32 = if one_line { line_h } else { line_h * 2.0 + 2.0 };
+                let h = h.max(28.0);
+                let pnt = ui.painter().clone();
+                widgets::paint_icon(ui, icon::CORNER_DOWN_RIGHT, pos2(top.x + 7.0, top.y + h / 2.0), 14.0, t.text_2);
+                let x0 = top.x + 14.0 + 12.0;
+                let y1 = if one_line { top.y + (h - line_h) / 2.0 } else { top.y + (h - 2.0 * line_h - 2.0) / 2.0 };
+                let mut x = x0;
+                let g = widgets::galley(ui, head, style::body(12.0), t.text, text_w);
+                pnt.galley(pos2(x, y1 + (line_h - g.size().y) / 2.0), g, t.text);
+                x += hw;
+                let g = widgets::galley(ui, name, style::body_semibold(12.0), t.text, (x0 + text_w - x).max(20.0));
+                let gw = g.size().x;
+                pnt.galley(pos2(x, y1 + (line_h - g.size().y) / 2.0), g, t.text);
+                x += gw + 6.0;
+                if let Some(c) = &chip
+                    && x + cw <= x0 + text_w + 6.0
+                {
+                    let r = Rect::from_min_size(pos2(x, y1), vec2(cw - 6.0, 18.0));
+                    widgets::place(ui, UiBuilder::new().max_rect(r), |ui| widgets::chip(ui, c, ChipTone::Muted));
+                    x += cw;
                 }
-            }
-        });
+                let (tx, ty) = if one_line { (x - 6.0, y1) } else { (x0, y1 + line_h + 2.0) };
+                let tail = if one_line { tail.as_str() } else { tail.trim_start() };
+                let g = widgets::galley(ui, tail, style::body(12.0), t.text, (x0 + text_w - tx).max(20.0));
+                pnt.galley(pos2(tx, ty + (line_h - g.size().y) / 2.0), g, t.text);
+                let br = Rect::from_min_size(pos2(top.x + iw - bw, top.y + (h - 28.0) / 2.0), vec2(bw, 28.0));
+                clicked = widgets::place(ui, UiBuilder::new().max_rect(br), |ui| btn.show(ui).clicked()).inner;
+                ui.allocate_space(vec2(iw, h));
+            });
+        clicked
     }
 
     fn row_action(&mut self, cx: &mut Cx, a: Account, act: RowAct) {
         let n = a.number;
         match act {
             RowAct::Switch => self.switch_to(cx, n),
+            RowAct::Toggle => {
+                if !self.expanded.remove(&n) {
+                    self.expanded.insert(n);
+                }
+            }
             RowAct::Menu(0) => self.dlg = Some(Dlg::Alias { alias: a.alias.clone().unwrap_or_default(), a, run: None }),
             RowAct::Menu(1) => self.dlg = Some(Dlg::Move { a, slot: String::new(), run: None }),
             RowAct::Menu(2) => {
@@ -518,9 +635,8 @@ impl AccountsPage {
         }
     }
 
-    /// Switch + row menu. Returns the action picked.
-    fn actions(&self, ui: &mut Ui, _t: &Tokens, a: &Account) -> Option<RowAct> {
-        let mut out = None;
+    /// The ⋯ menu of an account (every per-account action and dialog).
+    fn menu(&self, ui: &mut Ui, a: &Account) -> Option<RowAct> {
         let n = a.number;
         let disabled = a.disabled == Some(true);
         let menu_label = format!("Actions for account {n}");
@@ -546,251 +662,368 @@ impl AccountsPage {
                 ..Default::default()
             }),
         ];
-        if let Some(i) = widgets::menu_list(&m, 280.0, &items) {
-            out = Some(RowAct::Menu(i));
-        }
-        // The active row keeps the button's space (columns must not move) but hides it.
+        widgets::menu_list(&m, 280.0, &items).map(RowAct::Menu)
+    }
+
+    /// Switch, dimmed (still clickable: cswap has the last word) unless the account is
+    /// ready. The live account keeps the button's space empty, so columns do not move.
+    fn switch_button(&self, ui: &mut Ui, a: &Account, kind: Readiness) -> Option<RowAct> {
+        let n = a.number;
         let label = format!("Switch to account {n}");
-        let b = Button::new("Switch")
-            .small()
-            .variant(if a.active { Variant::Ghost } else { Variant::Default })
-            .loading(self.busy(&format!("switch-{n}")))
-            .label(&label);
+        let b = Button::new("Switch").small().loading(self.busy(&format!("switch-{n}"))).label(&label);
         if a.active {
             let w = b.width(ui);
             ui.add_space(w);
-        } else if b.show(ui).clicked() {
-            out = Some(RowAct::Switch);
+            return None;
+        }
+        let dim = kind != Readiness::Ready;
+        let r = ui.scope(|ui| {
+            if dim {
+                ui.multiply_opacity(0.6);
+            }
+            b.show(ui)
+        });
+        r.inner.clicked().then_some(RowAct::Switch)
+    }
+
+    /// Width of [`Self::switch_button`] + 4 + the ⋯ button.
+    fn actions_width(ui: &Ui) -> f32 {
+        Button::new("Switch").small().width(ui) + 4.0 + 28.0
+    }
+
+    // ---- rows ------------------------------------------------------------------------
+
+    fn rows(
+        &self,
+        ui: &mut Ui,
+        p: &Paint,
+        state: &AccountsState,
+        rows: &[(&Account, ReadyInfo)],
+        shape: PageShape,
+        acts: &mut Vec<(Account, RowAct)>,
+    ) {
+        let t = p.t;
+        let width = ui.available_width();
+        let narrow = shape != PageShape::Wide;
+        let act_w = Self::actions_width(ui);
+        // Wide template (the mockup's `.rr`): # | name | readiness 120 | 5-hour | 7-day | actions.
+        // The name column takes what its widest name line needs (up to leaving the bars 110
+        // each), so its chips do not wrap beside an empty readiness column.
+        let inner = width - 2.0 - 2.0 * ROW_PAD;
+        let free = inner - NUM_W - READY_W - act_w - 5.0 * GAP;
+        let need = rows
+            .iter()
+            .map(|(a, _)| name_line_width(ui, a, &chips_of(a, state.plans.get(&a.email), p, true)))
+            .fold(0.0, f32::max);
+        let share = free * 1.4 / 3.4;
+        let name_w = if need > share { need.min(free - 2.0 * BAR_MIN).max(share) } else { share };
+        let bar_w = (free - name_w) / 2.0;
+        let cols = Cols { name_w, bar_w, act_w };
+        widgets::card_frame(t).show(ui, |ui| {
+            ui.set_width(width - 2.0);
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            for (i, (a, r)) in rows.iter().enumerate() {
+                let last = i + 1 == rows.len();
+                let plan = state.plans.get(&a.email);
+                let open = self.expanded.contains(&a.number);
+                if let Some(act) = self.row(ui, p, a, r, plan, narrow, &cols, open, last) {
+                    acts.push(((*a).clone(), act));
+                }
+            }
+        });
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn row(
+        &self,
+        ui: &mut Ui,
+        p: &Paint,
+        a: &Account,
+        r: &ReadyInfo,
+        plan: Option<&PlanInfo>,
+        narrow: bool,
+        c: &Cols,
+        open: bool,
+        last: bool,
+    ) -> Option<RowAct> {
+        let t = p.t;
+        let n = a.number;
+        let top_left = ui.cursor().min;
+        let width = ui.available_width();
+        let id = Id::unique(("acct-row", n));
+        // The click target goes in BEFORE the row's buttons, so they stay on top of it; its
+        // height is last frame's (the row's own is known only once it is laid out).
+        let prev_h = remembered(ui, id);
+        let hit =
+            ui.interact(Rect::from_min_size(top_left, vec2(width, prev_h.max(1.0))), id.with("hit"), Sense::click());
+        let what = if open { "Hide" } else { "Show" };
+        let hit_name = format!("{what} per-model windows for account {n}");
+        hit.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &hit_name));
+        let bg = ui.painter().add(Shape::Noop);
+        let mut row =
+            ui.new_child(UiBuilder::new().max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0))).id_salt(id));
+        if r.kind == Readiness::HeldOut {
+            row.multiply_opacity(0.6);
+        }
+        let mut out = None;
+        let x_num = top_left.x + ROW_PAD;
+        let x_name = x_num + NUM_W + GAP;
+        let y0 = top_left.y + 11.0;
+        let right = top_left.x + width - ROW_PAD;
+        let chips = chips_of(a, plan, p, !narrow);
+        let name_w = if narrow { right - c.act_w - GAP - x_name } else { c.name_w };
+        let name_h = widgets::place(
+            &mut row,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(x_name, y0), vec2(name_w, 400.0))),
+            |ui| name_block(ui, p, a, &chips, style::body_medium(13.0), name_w),
+        )
+        .inner;
+        let bars_h = 26.0;
+        let (main_h, line1_mid, bars_y) = if narrow {
+            let h1 = name_h.max(28.0);
+            (h1 + 8.0 + bars_h, y0 + 14.0, y0 + h1 + 8.0)
+        } else {
+            let h = name_h.max(bars_h).max(34.0);
+            (h, y0 + h / 2.0, y0 + (h - bars_h) / 2.0)
+        };
+        // number with its chevron, turning 90° as the row opens
+        let turn = row.ctx().animate_bool_with_time(id.with("open"), open, TRANSITION_SECS);
+        let pnt = row.painter().clone();
+        let chev_c = pos2(x_num + 4.0, line1_mid);
+        chevron(&pnt, chev_c, turn, t.text_3);
+        pnt.text(pos2(x_num + 12.0, line1_mid), Align2::LEFT_CENTER, n.to_string(), style::body(12.0), t.text_3);
+        // bars
+        let u = view::usage_of(a);
+        let five = u.and_then(|u| u.five_hour.clone());
+        let seven = u.and_then(|u| u.seven_day.clone());
+        let (bx1, bw) = if narrow {
+            let bw = (right - x_name - GAP) / 2.0;
+            (x_name, bw)
+        } else {
+            (x_name + c.name_w + GAP + READY_W + GAP, c.bar_w)
+        };
+        for (k, (key, label, w)) in [("5h", "5-hour", &five), ("7d", "7-day", &seven)].into_iter().enumerate() {
+            let x = bx1 + k as f32 * (bw + GAP);
+            widgets::place(
+                &mut row,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, bars_y), vec2(bw, bars_h))),
+                |ui| mini_bar(ui, p, n, key, label, w.as_ref(), bw),
+            );
+        }
+        // readiness (wide only: a narrow row says it with the Switch's dimming)
+        if !narrow {
+            let x = x_name + c.name_w + GAP;
+            widgets::place(
+                &mut row,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, line1_mid - 15.0), vec2(READY_W, 30.0))),
+                |ui| readiness_block(ui, t, n, r),
+            );
+        }
+        // actions
+        let act_y = if narrow { y0 } else { line1_mid - 14.0 };
+        let act = widgets::place(
+            &mut row,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(pos2(right - c.act_w, act_y), vec2(c.act_w, 28.0)))
+                .layout(Layout::right_to_left(Align::Center)),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let m = self.menu(ui, a);
+                let s = self.switch_button(ui, a, r.kind);
+                m.or(s)
+            },
+        )
+        .inner;
+        out = out.or(act);
+        // per-model windows, opened by a click on the row (~150 ms)
+        let mut h = 11.0 + main_h + 11.0;
+        if turn > 0.0 {
+            let models: Vec<(String, UsageWindow)> =
+                u.and_then(|u| u.scoped.clone()).unwrap_or_default().into_iter().map(|s| (s.name, s.window)).collect();
+            let ex_x = x_name;
+            let ex_w = right - ex_x;
+            let ex_top = top_left.y + 11.0 + main_h + 10.0;
+            let full = expansion_height(&models, ex_w);
+            let shown = full * turn;
+            let clip = Rect::from_min_size(pos2(top_left.x, ex_top - 2.0), vec2(width, shown + 4.0));
+            let mut ex =
+                row.new_child(UiBuilder::new().max_rect(Rect::from_min_size(pos2(ex_x, ex_top), vec2(ex_w, full))));
+            ex.set_clip_rect(clip.intersect(row.clip_rect()));
+            expansion(&mut ex, p, n, &models, ex_w);
+            h += shown + 10.0 * turn;
+        }
+        let rect = Rect::from_min_size(top_left, vec2(width, h));
+        remember(ui, id, h);
+        let hover = widgets::hover_t(ui, id.with("bg"), ui.rect_contains_pointer(rect));
+        let base = if a.active { t.accent_soft.gamma_multiply(0.4) } else { Color32::TRANSPARENT };
+        let fill = style::mix(base, t.surface_2, hover * 0.7);
+        let radius = if last { CornerRadius { nw: 0, ne: 0, sw: 9, se: 9 } } else { CornerRadius::ZERO };
+        ui.painter().set(bg, egui::epaint::RectShape::filled(rect, radius, fill));
+        if !last {
+            ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border));
+        }
+        ui.allocate_rect(rect, Sense::hover());
+        if out.is_none() && hit.clicked() {
+            out = Some(RowAct::Toggle);
         }
         out
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn table_row(
-        &mut self,
+    // ---- tiles -----------------------------------------------------------------------
+
+    fn tiles(
+        &self,
         ui: &mut Ui,
-        cx: &Cx,
-        t: &Tokens,
-        a: &Account,
-        plan: Option<&PlanInfo>,
-        models: &[String],
-        s: &AppSettings,
-        cols: &[f32],
-        last: bool,
-    ) -> Option<RowAct> {
-        let _ = cx;
-        let (now, off) = (self.now(), self.offset());
-        let rings = s.usage_view == UsageView::Rings;
-        let top_left = ui.cursor().min;
+        p: &Paint,
+        state: &AccountsState,
+        rows: &[(&Account, ReadyInfo)],
+        acts: &mut Vec<(Account, RowAct)>,
+    ) {
         let width = ui.available_width();
-        let bg = ui.painter().add(Shape::Noop);
-        let mut xs = Vec::with_capacity(cols.len());
-        let mut x = top_left.x + view::ROW_PAD_X;
-        for w in cols {
-            xs.push(x);
-            x += w + view::COL_GAP;
-        }
-        let y0 = top_left.y + 10.0;
-        let mut row = ui.new_child(
-            UiBuilder::new()
-                .max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0)))
-                .id_salt(("acct-row", a.number)),
-        );
-        if a.disabled == Some(true) {
-            row.multiply_opacity(0.7);
-        }
-        let cell = |row: &mut Ui, i: usize, f: &mut dyn FnMut(&mut Ui)| -> f32 {
-            widgets::place(
-                row,
-                UiBuilder::new().max_rect(Rect::from_min_size(pos2(xs[i], y0), vec2(cols[i], 10_000.0))),
-                |ui| {
-                    ui.set_width(cols[i]);
-                    f(ui)
-                },
-            )
-            .response
-            .rect
-            .height()
-        };
-        // top-aligned cells first (the row is `items-start`), to learn the row's height
-        let mut h = 19.0f32;
-        h = h.max(cell(&mut row, 1, &mut |ui| {
-            name_block(ui, t, a, plan, s.mask_emails, now, off);
-        }));
-        let cells = view::window_cells(a, models, false);
-        let mut empty_cols = Vec::new();
-        for (k, c) in cells.iter().enumerate() {
-            let col = 2 + k;
-            match &c.window {
-                Some(_) => {
-                    let ch = cell(&mut row, col, &mut |ui| {
-                        window_cell(ui, t, a.number, c, false, rings, s.show_pace, now, off)
-                    });
-                    h = h.max(ch);
+        let cols = view::tile_columns(width);
+        let tile_w = (width - view::TILE_GAP * (cols - 1) as f32) / cols as f32;
+        for (k, chunk) in rows.chunks(cols).enumerate() {
+            let top = ui.cursor().min;
+            let id = Id::unique(("tile-row", k));
+            // A grid row is as tall as its tallest tile, footers on one line: the heights
+            // are last frame's, so nothing is laid out twice.
+            let row_h = remembered(ui, id);
+            let mut tallest: f32 = 0.0;
+            for (i, (a, r)) in chunk.iter().enumerate() {
+                let x = top.x + i as f32 * (tile_w + view::TILE_GAP);
+                let plan = state.plans.get(&a.email);
+                let (natural, act) = self.tile(ui, p, a, r, plan, pos2(x, top.y), tile_w, row_h);
+                tallest = tallest.max(natural);
+                if let Some(act) = act {
+                    acts.push(((*a).clone(), act));
                 }
-                None => empty_cols.push(col),
             }
+            remember(ui, id, tallest);
+            ui.allocate_rect(Rect::from_min_size(top, vec2(width, tallest.max(row_h))), Sense::hover());
+            ui.add_space(view::TILE_GAP);
         }
-        // stretched + vertically centred cells
-        let mid = y0 + h / 2.0;
-        let p = row.painter().clone();
-        let dot = if a.active { t.accent } else { Color32::TRANSPARENT };
-        p.circle_filled(pos2(xs[0] + 3.0, mid), 3.0, dot);
-        p.text(pos2(xs[0] + 12.0, mid), egui::Align2::LEFT_CENTER, a.number.to_string(), style::mono(12.0), t.text_3);
-        for col in empty_cols {
-            // A plain hyphen, not an em dash (Purwa, 10 Sep), centred in the stretched cell.
-            p.text(pos2(xs[col], mid), egui::Align2::LEFT_CENTER, "-", style::body(12.0), t.text_3);
-            // The empty cell is a node of its own, named like a filled one, so a test can
-            // point at the cell that holds the column.
-            let key = &cells[col - 2].key;
-            let r = row.interact(
-                Rect::from_min_size(pos2(xs[col], y0), vec2(cols[col], h)),
-                Id::unique(("window", a.number, key)),
-                Sense::hover(),
-            );
-            let name = format!("{} {key}: -", a.number);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
-        }
-        let si = cols.len() - 2;
-        let status_h = status_height(a);
-        widgets::place(
-            &mut row,
-            UiBuilder::new()
-                .max_rect(Rect::from_min_size(pos2(xs[si], mid - status_h / 2.0), vec2(cols[si], status_h))),
-            |ui| status_block(ui, t, a),
-        );
-        let ai = cols.len() - 1;
-        let act = widgets::place(
-            &mut row,
-            UiBuilder::new()
-                .max_rect(Rect::from_min_size(pos2(xs[ai], mid - 14.0), vec2(cols[ai], 28.0)))
-                .layout(Layout::right_to_left(Align::Center)),
-            |ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                self.actions(ui, t, a)
-            },
-        )
-        .inner;
-        let rect = Rect::from_min_size(top_left, vec2(width, h + 20.0));
-        let hovered = ui.rect_contains_pointer(rect);
-        let fill = match (a.active, hovered) {
-            (true, false) => t.accent_soft.gamma_multiply(0.4),
-            (true, true) => t.accent_soft.gamma_multiply(0.5),
-            (false, true) => t.surface_2.gamma_multiply(0.5),
-            (false, false) => Color32::TRANSPARENT,
-        };
-        ui.painter().set(bg, egui::epaint::RectShape::filled(rect, CornerRadius::ZERO, fill));
-        if !last {
-            ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border));
-        }
-        ui.allocate_rect(rect, Sense::hover());
-        act
     }
 
+    /// One tile at `at`, `h` tall (0 = its own height). Returns its natural height.
     #[allow(clippy::too_many_arguments)]
-    fn card_row(
-        &mut self,
+    fn tile(
+        &self,
         ui: &mut Ui,
-        cx: &Cx,
-        t: &Tokens,
+        p: &Paint,
         a: &Account,
+        r: &ReadyInfo,
         plan: Option<&PlanInfo>,
-        models: &[String],
-        s: &AppSettings,
-        last: bool,
-    ) -> Option<RowAct> {
-        let _ = cx;
-        let (now, off) = (self.now(), self.offset());
-        let rings = s.usage_view == UsageView::Rings;
-        let top_left = ui.cursor().min;
-        let width = ui.available_width();
+        at: egui::Pos2,
+        w: f32,
+        h: f32,
+    ) -> (f32, Option<RowAct>) {
+        let t = p.t;
+        let n = a.number;
         let bg = ui.painter().add(Shape::Noop);
-        let mut act = None;
-        let inner = widgets::place(
-            ui,
-            UiBuilder::new()
-                .max_rect(Rect::from_min_size(top_left, vec2(width, 10_000.0)))
-                .id_salt(("acct-card", a.number)),
-            |ui| {
-                if a.disabled == Some(true) {
-                    ui.multiply_opacity(0.7);
-                }
-                egui::Frame::new().inner_margin(Margin::same(12)).show(ui, |ui| {
-                    let w = width - 24.0;
-                    ui.set_width(w);
-                    ui.spacing_mut().item_spacing = vec2(10.0, 12.0);
-                    // top line: number, name, actions
-                    let top = ui.cursor().min;
-                    let num_w = 6.0 + 6.0 + widgets::measure(ui, &a.number.to_string(), style::mono(12.0)).x + 10.0;
-                    let act_w = 104.0;
-                    let p = ui.painter().clone();
-                    p.circle_filled(
-                        pos2(top.x + 3.0, top.y + 9.0),
-                        3.0,
-                        if a.active { t.accent } else { Color32::TRANSPARENT },
-                    );
-                    p.text(
-                        pos2(top.x + 12.0, top.y + 9.0),
-                        egui::Align2::LEFT_CENTER,
-                        a.number.to_string(),
-                        style::mono(12.0),
-                        t.text_3,
-                    );
-                    let name_w = (w - num_w - act_w).max(60.0);
-                    let nh = widgets::place(
-                        ui,
-                        UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + num_w, top.y), vec2(name_w, 400.0))),
-                        |ui| {
-                            ui.set_width(name_w);
-                            name_block(ui, t, a, plan, s.mask_emails, now, off)
-                        },
-                    )
-                    .inner;
-                    act = widgets::place(
-                        ui,
-                        UiBuilder::new()
-                            .max_rect(Rect::from_min_size(pos2(top.x + w - act_w, top.y - 4.0), vec2(act_w, 28.0)))
-                            .layout(Layout::right_to_left(Align::Center)),
-                        |ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            self.actions(ui, t, a)
-                        },
-                    )
-                    .inner;
-                    ui.allocate_space(vec2(w, nh.max(20.0)));
-                    // windows; models this account lacks are absent, not dashes
-                    let cells = view::window_cells(a, models, true);
-                    if rings {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing = vec2(16.0, 8.0);
-                            for c in &cells {
-                                window_cell(ui, t, a.number, c, true, true, s.show_pace, now, off);
-                            }
-                        });
-                    } else {
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 10.0;
-                            for c in &cells {
-                                ui.scope(|ui| window_cell(ui, t, a.number, c, true, false, s.show_pace, now, off));
-                            }
-                        });
-                    }
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = vec2(8.0, 4.0);
-                        status_inline(ui, t, a);
-                    });
-                });
-            },
-        )
-        .response;
-        let rect = Rect::from_min_size(top_left, vec2(width, inner.rect.height()));
-        let fill = if a.active { t.accent_soft.gamma_multiply(0.4) } else { Color32::TRANSPARENT };
-        ui.painter().set(bg, egui::epaint::RectShape::filled(rect, CornerRadius::ZERO, fill));
-        if !last {
-            ui.painter().hline(rect.x_range(), rect.max.y - 0.5, Stroke::new(1.0, t.border));
+        let mut tile = ui
+            .new_child(UiBuilder::new().max_rect(Rect::from_min_size(at, vec2(w, 10_000.0))).id_salt(("acct-tile", n)));
+        if r.kind == Readiness::HeldOut {
+            tile.multiply_opacity(0.6);
         }
-        ui.allocate_rect(rect, Sense::hover());
-        act
+        let (px, py) = (16.0, 14.0);
+        let iw = w - 2.0 * px;
+        let x0 = at.x + px;
+        let mut y = at.y + py;
+        let mut out = None;
+        // name / email, ⋯
+        let menu_w = 28.0;
+        let pnt = tile.painter().clone();
+        let name = display_name(a, p.mask);
+        let g = widgets::galley(&tile, name, style::body_medium(13.0), t.text, iw - menu_w - 6.0);
+        let name_rect = Rect::from_min_size(pos2(x0, y), g.size());
+        pnt.galley(name_rect.min, g, t.text);
+        name_tooltip(&mut tile, p, a, name_rect);
+        let g = widgets::galley(&tile, sub_line(a, p.mask), style::body(12.0), t.text_3, iw - menu_w - 6.0);
+        pnt.galley(pos2(x0, y + 19.0), g, t.text_3);
+        let m = widgets::place(
+            &mut tile,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0 + iw - menu_w, y - 2.0), vec2(menu_w, 28.0))),
+            |ui| self.menu(ui, a),
+        )
+        .inner;
+        out = out.or(m);
+        y += 19.0 + 17.0 + 6.0;
+        // chips, wrapping inside the tile
+        let chips = chips_of(a, plan, p, true);
+        if !chips.is_empty() {
+            let ch = widgets::place(
+                &mut tile,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(iw, 200.0))),
+                |ui| flow_chips(ui, n, &chips, iw),
+            )
+            .inner;
+            y += ch;
+        }
+        y += 12.0;
+        // two rings
+        let u = view::usage_of(a);
+        let mut rx = x0;
+        for (key, label, win) in [
+            ("5h", "5-hour", u.and_then(|u| u.five_hour.clone())),
+            ("7d", "7-day", u.and_then(|u| u.seven_day.clone())),
+        ] {
+            let rw = widgets::place(
+                &mut tile,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(rx, y), vec2(90.0, 120.0))),
+                |ui| ring_with_caption(ui, p, n, key, label, win.as_ref(), 64.0, false),
+            )
+            .inner;
+            rx += rw + 14.0;
+        }
+        y += 64.0 + 2.0 + 16.0 + 14.0 + 10.0;
+        // per model, always shown
+        let models: Vec<(String, UsageWindow)> =
+            u.and_then(|u| u.scoped.clone()).unwrap_or_default().into_iter().map(|s| (s.name, s.window)).collect();
+        let mh = widgets::place(
+            &mut tile,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(iw, 400.0))),
+            |ui| model_rows(ui, p, n, &models, iw, true),
+        )
+        .inner;
+        y += mh + 10.0;
+        // footer: readiness, Switch; pinned to the bottom of the grid row
+        let foot_h = 1.0 + 10.0 + 30.0;
+        let natural = y + 4.0 + foot_h + py - at.y;
+        let total = natural.max(h);
+        let fy = at.y + total - py - foot_h;
+        pnt.hline(x0..=x0 + iw, fy + 0.5, Stroke::new(1.0, t.border));
+        widgets::place(
+            &mut tile,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, fy + 11.0), vec2(iw - 90.0, 30.0))),
+            |ui| readiness_block(ui, t, n, r),
+        );
+        let s = widgets::place(
+            &mut tile,
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(pos2(x0 + iw - 90.0, fy + 12.0), vec2(90.0, 28.0)))
+                .layout(Layout::right_to_left(Align::Center)),
+            |ui| self.switch_button(ui, a, r.kind),
+        )
+        .inner;
+        out = out.or(s);
+        let rect = Rect::from_min_size(at, vec2(w, total));
+        let fill = if a.active { style::mix(t.surface, t.accent, 0.06) } else { t.surface };
+        let shadow = style::card_shadow(t).as_shape(rect, CornerRadius::same(crate::theme::RADIUS_LG));
+        ui.painter().set(
+            bg,
+            Shape::Vec(vec![
+                shadow.into(),
+                egui::epaint::RectShape::new(
+                    rect,
+                    CornerRadius::same(crate::theme::RADIUS_LG),
+                    fill,
+                    Stroke::new(1.0, t.border),
+                    egui::StrokeKind::Inside,
+                )
+                .into(),
+            ]),
+        );
+        (natural, out)
     }
 
     // ---- dialogs ---------------------------------------------------------------------
@@ -817,208 +1050,600 @@ impl AccountsPage {
     }
 }
 
-fn header_row(ui: &mut Ui, t: &Tokens, cols: &[f32], models: &[String]) {
-    let w = ui.available_width();
-    let (r, _) = ui.allocate_exact_size(vec2(w, 30.0), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(r, CornerRadius { nw: 8, ne: 8, sw: 0, se: 0 }, t.bg.gamma_multiply(0.5));
-    p.hline(r.x_range(), r.max.y - 0.5, Stroke::new(1.0, t.border));
-    let mut labels: Vec<String> = vec!["#".into(), "ACCOUNT".into(), "5-HOUR WINDOW".into(), "7-DAY WINDOW".into()];
-    labels.extend(models.iter().map(|m| m.to_uppercase()));
-    labels.extend(["STATUS".into(), String::new()]);
-    let mut x = r.min.x + view::ROW_PAD_X;
-    for (i, (l, cw)) in labels.iter().zip(cols).enumerate() {
-        let lx = if i == 0 { x + 13.0 } else { x };
-        let g = widgets::galley(ui, l.clone(), style::body(11.0), t.text_3, *cw);
-        let resp = ui.interact(
-            Rect::from_min_size(pos2(lx, r.min.y), vec2(g.size().x, 30.0)),
-            Id::unique(("col-head", i)),
-            Sense::hover(),
-        );
-        if i >= 4 && i < 4 + models.len() {
-            let _ = resp.on_hover_text(format!("{} window", models[i - 4]));
-        }
-        ui.painter().galley(pos2(lx, r.center().y - g.size().y / 2.0), g, t.text_3);
-        x += cw + view::COL_GAP;
+// ---- shared pieces ----------------------------------------------------------------------
+
+/// The mockup's row: 11 px top and bottom, 16 px sides, 16 px gaps, `#` 22, readiness 120.
+const ROW_PAD: f32 = 16.0;
+const GAP: f32 = 16.0;
+const NUM_W: f32 = 22.0;
+const READY_W: f32 = 120.0;
+/// The bars never get narrower than this to make room for a long name line: `5-hour 100%`
+/// and `2d 21h` side by side still fit.
+const BAR_MIN: f32 = 128.0;
+
+/// Column widths of the wide row template.
+struct Cols {
+    name_w: f32,
+    bar_w: f32,
+    act_w: f32,
+}
+
+/// What every painted piece of the page needs.
+struct Paint<'a> {
+    t: &'a Tokens,
+    s: &'a AppSettings,
+    now: i64,
+    off: i64,
+    mask: bool,
+}
+
+/// Height a block had last frame (0 before the first), so a row can centre or bottom-align
+/// its parts and place its click target without laying itself out twice.
+fn remembered(ui: &Ui, id: Id) -> f32 {
+    ui.ctx().data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0)
+}
+
+fn remember(ui: &Ui, id: Id, h: f32) {
+    if (remembered(ui, id) - h).abs() > 0.5 {
+        ui.ctx().data_mut(|d| d.insert_temp(id, h));
+        ui.ctx().request_repaint();
     }
 }
 
-/// Name, badges and the line under it. Returns the height used.
-fn name_block(ui: &mut Ui, t: &Tokens, a: &Account, plan: Option<&PlanInfo>, mask: bool, now: i64, off: i64) -> f32 {
-    let w = ui.available_width();
-    let top = ui.cursor().min;
-    let name = a.alias.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| mask_email(&a.email, mask));
-    let mut chips: Vec<(String, ChipTone, Option<String>)> = Vec::new();
-    // cswap's `plan` for every account, else the label remembered in plans.json; a
-    // canceled or lapsed subscription adds a second chip so it reads without the tooltip.
-    if let Some(b) = view::plan_badge(a, plan, now, off) {
+fn display_name(a: &Account, mask: bool) -> String {
+    a.alias.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| mask_email(&a.email, mask))
+}
+
+/// The line under a name: `(email ·) org`.
+fn sub_line(a: &Account, mask: bool) -> String {
+    let mut line = String::new();
+    if a.alias.as_deref().is_some_and(|s| !s.is_empty()) {
+        line.push_str(&mask_email(&a.email, mask));
+        line.push_str(" · ");
+    }
+    line.push_str(&org_tag(a, mask));
+    line
+}
+
+/// Plan (cswap's `plan`, else plans.json), canceled / lapsed, the login's expiry once it
+/// is within a week or past, and `disabled`. Where a readiness text beside the name
+/// already says "Held out · disabled" or "Re-login needed · login expired" (a wide row, a
+/// tile: `readiness_shown`), those two chips are left out: repeated, they only made the
+/// name line wrap. The hero says "active" by being the hero.
+fn chips_of(a: &Account, plan: Option<&PlanInfo>, p: &Paint, readiness_shown: bool) -> Vec<ChipSpec> {
+    let mut chips = Vec::new();
+    if let Some(b) = view::plan_badge(a, plan, p.now, p.off) {
         let standing = b.standing_chip();
-        chips.push((b.label, ChipTone::Muted, Some(b.tooltip)));
+        chips.push(ChipSpec { label: b.label, tone: ChipTone::Muted, tip: Some(b.tooltip) });
         if let Some((word, tone, tip)) = standing {
-            chips.push((word.into(), tone, Some(tip.into())));
+            chips.push(ChipSpec { label: word.into(), tone, tip: Some(tip.into()) });
         }
     }
-    // The stored login's expiry: a chip only once it is within a week or past; the exact
-    // date otherwise rides on the name's hover text, so a healthy row stays quiet.
-    let login = view::login_expiry(a, now, off);
-    if let Some(l) = &login
-        && let Some((text, tone)) = &l.chip
+    if let Some(l) = view::login_expiry(a, p.now, p.off)
+        && let Some((text, tone)) = l.chip
+        && !(readiness_shown && tone == ChipTone::Danger)
     {
-        chips.push((text.clone(), *tone, Some(l.tooltip.clone())));
+        chips.push(ChipSpec { label: text, tone, tip: Some(l.tooltip) });
     }
-    if a.active {
-        chips.push(("active".into(), ChipTone::Accent, None));
+    if !readiness_shown && a.disabled == Some(true) {
+        chips.push(ChipSpec {
+            label: "disabled".into(),
+            tone: ChipTone::Muted,
+            tip: Some("Held out of rotation".into()),
+        });
     }
-    if a.disabled == Some(true) {
-        chips.push(("disabled".into(), ChipTone::Muted, Some("Held out of rotation".into())));
-    }
-    // flex-wrap: the name keeps its width and the badges wrap under it; only a name wider
-    // than the cell is truncated.
-    // `font-medium`, as 0.1.23's account name
-    let g = widgets::galley(ui, name, style::body_medium(13.0), t.text, w);
-    let name_rect = Rect::from_min_size(top, vec2(g.size().x, 18.0));
-    ui.painter().galley(pos2(top.x, top.y + 9.0 - g.size().y / 2.0), g, t.text);
-    let name_tip = match (mask, &login) {
+    chips
+}
+
+/// Width of the name and all its chips on one line.
+fn name_line_width(ui: &Ui, a: &Account, chips: &[ChipSpec]) -> f32 {
+    let name = display_name(a, false);
+    widgets::measure(ui, &name, style::body_medium(13.0)).x
+        + chips.iter().map(|c| 6.0 + widgets::chip_width(ui, &c.label)).sum::<f32>()
+        + 2.0
+}
+
+/// The name's hover text: the full address and the login's expiry.
+fn name_tooltip(ui: &mut Ui, p: &Paint, a: &Account, rect: Rect) {
+    let login = view::login_expiry(a, p.now, p.off);
+    let tip = match (p.mask, &login) {
         (false, Some(l)) => Some(format!("{}\n{}", a.email, l.tooltip)),
         (false, None) => Some(a.email.clone()),
         (true, Some(l)) => Some(l.tooltip.clone()),
         (true, None) => None,
     };
-    if let Some(tip) = name_tip {
-        let _ = ui.interact(name_rect, Id::unique(("acct-name", a.number)), Sense::hover()).on_hover_text(tip);
+    if let Some(tip) = tip {
+        let _ = ui
+            .interact(rect, Id::unique(("acct-name", a.number, rect.min.y as i32)), Sense::hover())
+            .on_hover_text(tip);
     }
+}
+
+/// Name, its chips, and the email / org line under them. A chip goes to a new line only
+/// when it does not fit on the current one. Returns the height used.
+fn name_block(ui: &mut Ui, p: &Paint, a: &Account, chips: &[ChipSpec], font: egui::FontId, w: f32) -> f32 {
+    let t = p.t;
+    let top = ui.cursor().min;
+    let line_h = font.size.max(18.0) + 2.0;
+    let g = widgets::galley(ui, display_name(a, p.mask), font, t.text, w);
+    let name_rect = Rect::from_min_size(pos2(top.x, top.y + (line_h - g.size().y) / 2.0), g.size());
+    ui.painter().galley(name_rect.min, g, t.text);
+    name_tooltip(ui, p, a, name_rect);
     let (mut x, mut y) = (name_rect.max.x + 6.0, top.y);
-    for (i, (label, tone, tip)) in chips.iter().enumerate() {
-        let cw = widgets::chip_width(ui, label);
-        if x + cw > top.x + w {
+    for (i, c) in chips.iter().enumerate() {
+        let cw = widgets::chip_width(ui, &c.label);
+        if x + cw > top.x + w && x > top.x {
             x = top.x;
-            y += 24.0;
+            y += 22.0;
         }
-        let r = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| {
-            widgets::chip(ui, label, *tone)
-        })
-        .inner;
-        if let Some(tip) = tip {
-            let _ = ui.interact(r.rect, Id::unique(("acct-chip", a.number, i)), Sense::hover()).on_hover_text(tip);
+        let r = Rect::from_min_size(pos2(x, y + (line_h - 18.0) / 2.0), vec2(cw, 18.0));
+        let resp = widgets::place(ui, UiBuilder::new().max_rect(r), |ui| widgets::chip(ui, &c.label, c.tone)).inner;
+        if let Some(tip) = &c.tip {
+            let _ = ui
+                .interact(resp.rect, Id::unique(("acct-chip", a.number, i, top.y as i32)), Sense::hover())
+                .on_hover_text(tip);
         }
         x += cw + 6.0;
     }
-    // second line: (email ·) org
-    let y2 = y + 20.0;
-    let mut line = String::new();
-    if a.alias.as_deref().is_some_and(|s| !s.is_empty()) {
-        line.push_str(&mask_email(&a.email, mask));
-        line.push_str("  ·  ");
-    }
-    line.push_str(&org_tag(a, mask));
-    let g2 = widgets::galley(ui, line, style::body(11.5), t.text_3, w);
+    let y2 = y + line_h;
+    let g2 = widgets::galley(ui, sub_line(a, p.mask), style::body(12.0), t.text_3, w);
     ui.painter().galley(pos2(top.x, y2), g2, t.text_3);
     let h = y2 + 16.0 - top.y;
     ui.allocate_space(vec2(w, h));
     h
 }
 
-/// A filled window cell: bars (percentage, reset, track) or a ring.
-#[allow(clippy::too_many_arguments)]
-fn window_cell(
-    ui: &mut Ui,
-    t: &Tokens,
-    n: u32,
-    c: &WindowCell,
-    card: bool,
-    rings: bool,
-    pace: bool,
-    now: i64,
-    off: i64,
-) {
-    let id = Id::unique(("window", n, &c.key));
-    let Some(w) = &c.window else {
-        let r = widgets::line(ui, "-", style::body(12.0), t.text_3);
-        let name = format!("{n} {}: -", c.key);
-        r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
-        return;
-    };
-    let tip = view::window_tooltip(w, &c.tooltip_name, now, off);
-    let reset = w.resets_at.as_deref().map(|r| reset_text(Some(r), now));
-    let pace = if pace { w.expected_pct } else { None };
-    let tn = tone(Some(w.pct));
-    let a11y = format!("{n} {}: {}", c.key, pct(Some(w.pct)));
-    if rings {
-        let label = card.then_some(c.card_name.as_str());
-        let r = usage::ring(ui, t, id, Some(w.pct), pace, label, reset.as_deref(), ui.available_width());
-        r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
-        let _ = r.on_hover_text(tip);
-        return;
+/// Chips alone, flowing over lines (tiles). Returns the height used.
+fn flow_chips(ui: &mut Ui, n: u32, chips: &[ChipSpec], w: f32) -> f32 {
+    let top = ui.cursor().min;
+    let (mut x, mut y) = (top.x, top.y);
+    for (i, c) in chips.iter().enumerate() {
+        let cw = widgets::chip_width(ui, &c.label);
+        if x + cw > top.x + w && x > top.x {
+            x = top.x;
+            y += 22.0;
+        }
+        let resp =
+            widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, y), vec2(cw, 18.0))), |ui| {
+                widgets::chip(ui, &c.label, c.tone)
+            })
+            .inner;
+        if let Some(tip) = &c.tip {
+            let _ = ui.interact(resp.rect, Id::unique(("tile-chip", n, i)), Sense::hover()).on_hover_text(tip);
+        }
+        x += cw + 6.0;
     }
-    let width = ui.available_width();
-    // The text line, 4 px, then the track: no item spacing from the card's column layout.
+    y + 18.0 - top.y
+}
+
+/// The small uppercase label (`ACTIVE NOW`, `PER MODEL · 7-DAY`, `OTHER ACCOUNTS`).
+fn caps_label(ui: &Ui, text: &str, size: f32, color: Color32) -> std::sync::Arc<egui::Galley> {
+    let mut job = widgets::job(&text.to_uppercase(), style::body_medium(size), color);
+    job.sections[0].format.extra_letter_spacing = size * 0.06;
+    ui.painter().layout_job(job)
+}
+
+fn section_head(ui: &mut Ui, t: &Tokens, label: &str, hint: &str) {
+    let w = ui.available_width();
+    let (r, _) = ui.allocate_exact_size(vec2(w, 16.0), Sense::hover());
+    let g = caps_label(ui, label, 11.0, t.text_3);
+    let lw = g.size().x;
+    ui.painter().galley(pos2(r.min.x + 2.0, r.center().y - g.size().y / 2.0), g, t.text_3);
+    let hg = widgets::galley(ui, hint, style::body(11.0), t.text_3, (w - lw - 24.0).max(10.0));
+    ui.painter().galley(pos2(r.max.x - 2.0 - hg.size().x, r.center().y - hg.size().y / 2.0), hg, t.text_3);
+}
+
+/// A `›` that turns to `⌄` as `turn` goes 0 → 1.
+fn chevron(p: &egui::Painter, c: egui::Pos2, turn: f32, color: Color32) {
+    let a = turn * std::f32::consts::FRAC_PI_2;
+    let rot = |v: egui::Vec2| c + vec2(v.x * a.cos() - v.y * a.sin(), v.x * a.sin() + v.y * a.cos());
+    let pts = vec![rot(vec2(-1.5, -3.5)), rot(vec2(2.0, 0.0)), rot(vec2(-1.5, 3.5))];
+    p.add(Shape::line(pts, Stroke::new(1.3, color)));
+}
+
+/// Dot, label, and the small line under it.
+fn readiness_block(ui: &mut Ui, t: &Tokens, n: u32, r: &ReadyInfo) {
+    let top = ui.cursor().min;
+    let dot = match r.kind.tone() {
+        ChipTone::Ok => t.ok,
+        ChipTone::Warn => t.warn,
+        ChipTone::Danger => t.danger,
+        _ => t.text_3,
+    };
+    let w = ui.available_width();
+    let g1 = widgets::galley(ui, r.kind.label(), style::body_medium(12.0), t.text, w - 13.0);
+    let g2 = widgets::galley(ui, &r.detail, style::body(11.0), t.text_3, w - 13.0);
+    let h = g1.size().y + g2.size().y;
+    let y = top.y + (30.0 - h) / 2.0;
+    ui.painter().circle_filled(pos2(top.x + 3.5, y + h / 2.0), 3.5, dot);
+    ui.painter().galley(pos2(top.x + 13.0, y), g1, t.text);
+    ui.painter().galley(pos2(top.x + 13.0, y + h - g2.size().y), g2, t.text_3);
+    let (_, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::hover());
+    let name = format!("{n} readiness: {} · {}", r.kind.label(), r.detail);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &name));
+}
+
+/// The pace a window shows, when the setting is on.
+fn pace_of(p: &Paint, w: &UsageWindow) -> Option<f64> {
+    if p.s.show_pace { w.expected_pct } else { None }
+}
+
+/// The mockup's `.mb`: `5-hour 8%` left, the reset right, a 6 px track under them.
+fn mini_bar(ui: &mut Ui, p: &Paint, n: u32, key: &str, label: &str, w: Option<&UsageWindow>, width: f32) {
+    let t = p.t;
+    let id = Id::unique(("window", n, key));
     ui.spacing_mut().item_spacing.y = 0.0;
     let (top, _) = ui.allocate_exact_size(vec2(width, 16.0), Sense::hover());
-    let p = ui.painter().clone();
-    // right side first: ("ahead") reset
-    let mut right = top.max.x;
-    if let Some(r) = &reset {
-        let g = widgets::galley(ui, r.clone(), style::body(12.0), t.text_3, width * 0.5);
-        right -= g.size().x;
-        p.galley(pos2(right, top.center().y - g.size().y / 2.0), g, t.text_3);
-        right -= 4.0;
+    let pnt = ui.painter().clone();
+    // The percentage first; the reset takes what is left (and is in the tooltip anyway).
+    let head = format!("{label} {}", w.map(|w| pct(Some(w.pct))).unwrap_or_else(|| "-".into()));
+    let lg = widgets::galley(ui, head, style::body(11.0), t.text_2, width);
+    let lw = lg.size().x;
+    pnt.galley(pos2(top.min.x, top.center().y - lg.size().y / 2.0), lg, t.text_2);
+    let reset = w.and_then(|w| w.resets_at.as_deref()).map(|r| reset_text(Some(r), p.now)).unwrap_or_default();
+    if width - lw - 8.0 > 12.0 {
+        let rg = widgets::galley(ui, reset, style::body(11.0), t.text_3, width - lw - 8.0);
+        pnt.galley(pos2(top.max.x - rg.size().x, top.center().y - rg.size().y / 2.0), rg, t.text_3);
     }
-    if !c.is_model && w.ahead_of_pace == Some(true) {
-        let cw = widgets::chip_width(ui, "ahead");
-        let cr = Rect::from_min_size(pos2(right - cw, top.center().y - 9.0), vec2(cw, 18.0));
-        widgets::place(ui, UiBuilder::new().max_rect(cr), |ui| widgets::chip(ui, "ahead", ChipTone::Warn));
-        right -= cw + 4.0;
-    }
-    let mut x = top.min.x;
-    if card {
-        let g =
-            widgets::galley(ui, format!("{} ", c.card_name), style::body(12.0), t.text_3, (right - x - 8.0).max(10.0));
-        let gw = g.size().x;
-        p.galley(pos2(x, top.center().y - g.size().y / 2.0), g, t.text_3);
-        x += gw;
-    }
-    let g =
-        widgets::galley(ui, pct(Some(w.pct)), style::body(12.0), usage::pct_color(t, tn), (right - x - 4.0).max(10.0));
-    p.galley(pos2(x, top.center().y - g.size().y / 2.0), g, t.text);
     ui.add_space(4.0);
-    usage::bar(ui, t, id, Some(w.pct), tn, pace, width);
-    let whole = Rect::from_min_max(top.min, pos2(top.max.x, top.max.y + 9.0));
+    usage::bar(ui, t, id, w.map(|w| w.pct), tone(w.map(|w| w.pct)), w.and_then(|w| pace_of(p, w)), width);
+    let whole = Rect::from_min_max(top.min, pos2(top.max.x, top.max.y + 10.0));
     let r = ui.interact(whole, id.with("tip"), Sense::hover());
+    let a11y = format!("{n} {key}: {}", w.map(|w| pct(Some(w.pct))).unwrap_or_else(|| "-".into()));
     r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
-    let _ = r.on_hover_text(tip);
-}
-
-fn status_height(a: &Account) -> f32 {
-    let extra = view::is_stale(a) || a.usage_age_seconds.is_some_and(|s| s >= 60.0);
-    if extra { 18.0 + 4.0 + 14.0 } else { 18.0 }
-}
-
-fn status_extra(a: &Account) -> Option<(String, Option<&'static str>)> {
-    if view::is_stale(a) {
-        Some((format!("last good {}", age_seconds(a.last_good_age_seconds)), Some("Last successful usage measurement")))
-    } else {
-        a.usage_age_seconds.filter(|s| *s >= 60.0).map(|s| (age_seconds(Some(s)), None))
+    if let Some(w) = w {
+        let name = if key == "5h" {
+            "5-hour window"
+        } else if key == "7d" {
+            "7-day window"
+        } else {
+            label
+        };
+        let _ = r.on_hover_text(view::window_tooltip(w, name, p.now, p.off));
     }
 }
 
-fn status_block(ui: &mut Ui, t: &Tokens, a: &Account) {
-    ui.spacing_mut().item_spacing.y = 4.0;
-    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status));
-    let _ = r.on_hover_text(&a.usage_status);
-    if let Some((s, tip)) = status_extra(a) {
-        let r = widgets::line(ui, s, style::body(11.0), t.text_3);
-        if let Some(tip) = tip {
-            let _ = r.on_hover_text(tip);
+/// A ring with `5-hour` and `resets 3h 30m` centred under it. Returns the width used.
+#[allow(clippy::too_many_arguments)]
+fn ring_with_caption(
+    ui: &mut Ui,
+    p: &Paint,
+    n: u32,
+    key: &str,
+    label: &str,
+    w: Option<&UsageWindow>,
+    size: f32,
+    large: bool,
+) -> f32 {
+    let t = p.t;
+    let top = ui.cursor().min;
+    let reset = w.and_then(|w| w.resets_at.as_deref()).map(|r| format!("resets {}", reset_text(Some(r), p.now)));
+    let sub = reset.unwrap_or_else(|| if w.is_none() { "no data".into() } else { String::new() });
+    let g1 = widgets::galley(ui, label, style::body(12.0), t.text_2, 200.0);
+    let g2 = widgets::galley(ui, sub, style::body(11.0), t.text_3, 200.0);
+    let cw = size.max(g1.size().x).max(g2.size().x);
+    let id = Id::unique(("window", n, key));
+    let rr = widgets::place(
+        ui,
+        UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x + (cw - size) / 2.0, top.y), vec2(size, size))),
+        |ui| usage::ring(ui, t, id, w.map(|w| w.pct), w.and_then(|w| pace_of(p, w)), size),
+    )
+    .inner;
+    let y1 = top.y + size + if large { 4.0 } else { 2.0 };
+    ui.painter().galley(pos2(top.x + (cw - g1.size().x) / 2.0, y1), g1.clone(), t.text_2);
+    ui.painter().galley(pos2(top.x + (cw - g2.size().x) / 2.0, y1 + g1.size().y), g2.clone(), t.text_3);
+    let h = size + 4.0 + g1.size().y + g2.size().y;
+    let a11y = format!("{n} {key}: {}", w.map(|w| pct(Some(w.pct))).unwrap_or_else(|| "-".into()));
+    rr.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
+    if let Some(w) = w {
+        let name = if key == "5h" { "5-hour window" } else { "7-day window" };
+        let _ = rr.on_hover_text(view::window_tooltip(w, name, p.now, p.off));
+    }
+    ui.allocate_space(vec2(cw, h));
+    cw
+}
+
+/// `PER MODEL · 7-DAY` and one `name | bar | %` row per model (or the "none" line).
+/// `small` is a tile's (10/11 px, 56 px names), else the hero's (11/12 px, 70 px names).
+fn model_rows(ui: &mut Ui, p: &Paint, n: u32, models: &[(String, UsageWindow)], w: f32, small: bool) -> f32 {
+    let t = p.t;
+    let top = ui.cursor().min;
+    let (lab, font, name_w, pct_w, row_h) =
+        if small { (10.0, 11.0, 56.0, 34.0, 17.0) } else { (11.0, 12.0, 70.0, 54.0, 22.0) };
+    let g = caps_label(ui, "Per model · 7-day", lab, t.text_3);
+    let mut y = top.y;
+    ui.painter().galley(pos2(top.x, y), g.clone(), t.text_3);
+    y += g.size().y + if small { 2.0 } else { 6.0 };
+    if models.is_empty() {
+        widgets::place(
+            ui,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x, y + 2.0), vec2(w, row_h))),
+            |ui| none_reported(ui, font, t.text_3),
+        );
+        y += row_h;
+    }
+    for (name, win) in models {
+        let mid = y + row_h / 2.0;
+        let gn = widgets::galley(ui, name, style::body(font), if small { t.text_2 } else { t.text }, name_w - 4.0);
+        ui.painter().galley(pos2(top.x, mid - gn.size().y / 2.0), gn, t.text);
+        let bar_x = top.x + name_w + if small { 8.0 } else { 10.0 };
+        let bar_w = (w - name_w - pct_w - if small { 16.0 } else { 20.0 }).max(20.0);
+        let key = format!("model-{name}");
+        let id = Id::unique(("window", n, &key));
+        widgets::place(
+            ui,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(bar_x, mid - 3.0), vec2(bar_w, 6.0))),
+            |ui| usage::bar(ui, t, id, Some(win.pct), tone(Some(win.pct)), pace_of(p, win), bar_w),
+        );
+        let gp = widgets::galley(ui, pct(Some(win.pct)), style::body(font), t.text_3, pct_w);
+        ui.painter().galley(pos2(top.x + w - gp.size().x, mid - gp.size().y / 2.0), gp, t.text_3);
+        let hit =
+            ui.interact(Rect::from_min_max(pos2(top.x, y), pos2(top.x + w, y + row_h)), id.with("tip"), Sense::hover());
+        let a11y = format!("{n} {key}: {}", pct(Some(win.pct)));
+        hit.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, &a11y));
+        let _ = hit.on_hover_text(view::window_tooltip(win, name, p.now, p.off));
+        y += row_h;
+    }
+    let h = y - top.y;
+    ui.allocate_space(vec2(w, h));
+    h
+}
+
+/// "No per-model limits reported", as a node a test (or a screen reader) can find.
+fn none_reported(ui: &mut Ui, size: f32, color: Color32) {
+    let text = "No per-model limits reported";
+    let r = widgets::line(ui, text, style::body(size), color);
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::Label, true, text));
+}
+
+/// The opened row: one mini bar per model, `Fable · 7-day 20%`, in an auto-fill grid of
+/// columns at least 200 px wide.
+fn expansion(ui: &mut Ui, p: &Paint, n: u32, models: &[(String, UsageWindow)], w: f32) {
+    let top = ui.cursor().min;
+    if models.is_empty() {
+        none_reported(ui, 11.0, p.t.text_3);
+        return;
+    }
+    let cols = (((w + 24.0) / (200.0 + 24.0)).floor() as usize).max(1);
+    let cw = (w - 24.0 * (cols - 1) as f32) / cols as f32;
+    for (i, (name, win)) in models.iter().enumerate() {
+        let (r, c) = (i / cols, i % cols);
+        let at = pos2(top.x + c as f32 * (cw + 24.0), top.y + r as f32 * (26.0 + 6.0));
+        let key = format!("model-{name}");
+        let label = format!("{name} · 7-day");
+        widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(at, vec2(cw, 26.0))), |ui| {
+            mini_bar(ui, p, n, &key, &label, Some(win), cw)
+        });
+    }
+}
+
+fn expansion_height(models: &[(String, UsageWindow)], w: f32) -> f32 {
+    if models.is_empty() {
+        return 14.0;
+    }
+    let cols = (((w + 24.0) / (200.0 + 24.0)).floor() as usize).max(1);
+    let rows = models.len().div_ceil(cols);
+    rows as f32 * 26.0 + (rows - 1) as f32 * 6.0
+}
+
+// ---- the hero ---------------------------------------------------------------------------
+
+const HERO_RING: f32 = 104.0;
+const HERO_RING_GAP: f32 = 22.0;
+
+/// The active account's card: who it is (+ the forecast), two large rings, and per model
+/// with the status. Narrow: per model + status under a divider; compact: rings centred.
+fn hero_card(ui: &mut Ui, p: &Paint, a: &Account, plan: Option<&PlanInfo>, shape: PageShape) {
+    let t = p.t;
+    let w = ui.available_width();
+    widgets::card_frame(t).inner_margin(Margin::symmetric(20, 18)).show(ui, |ui| {
+        let iw = w - 42.0;
+        ui.set_width(iw);
+        let top = ui.cursor().min;
+        let id = Id::unique("hero");
+        let rings_w = rings_width(ui, p, a);
+        let mut y_end;
+        match shape {
+            PageShape::Wide => {
+                let gap = 28.0;
+                let rest = iw - rings_w - 2.0 * gap;
+                let who_w = rest * 1.25 / 2.25;
+                let mod_w = rest - who_w;
+                // centred on one line: heights from last frame (see `remembered`)
+                let hs = [remembered(ui, id.with(0)), remembered(ui, id.with(1)), remembered(ui, id.with(2))];
+                let row_h = hs.iter().cloned().fold(0.0, f32::max);
+                let xs = [top.x, top.x + who_w + gap, top.x + who_w + gap + rings_w + gap];
+                let ws = [who_w, rings_w, mod_w];
+                let mut got = [0.0f32; 3];
+                for k in 0..3 {
+                    let y = top.y + (row_h - hs[k]).max(0.0) / 2.0;
+                    let r = Rect::from_min_size(pos2(xs[k], y), vec2(ws[k], 600.0));
+                    got[k] = widgets::place(ui, UiBuilder::new().max_rect(r), |ui| match k {
+                        0 => hero_who(ui, p, a, plan, ws[k]),
+                        1 => hero_rings(ui, p, a),
+                        _ => hero_models(ui, p, a, ws[k]),
+                    })
+                    .inner;
+                }
+                for (k, g) in got.iter().enumerate() {
+                    remember(ui, id.with(k), *g);
+                }
+                y_end = top.y + got.iter().cloned().fold(0.0, f32::max).max(row_h);
+            }
+            PageShape::Narrow => {
+                let gap = 20.0;
+                let who_w = iw - rings_w - gap;
+                let hs = [remembered(ui, id.with(10)), remembered(ui, id.with(11))];
+                let row_h = hs[0].max(hs[1]);
+                let h0 = widgets::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(
+                        pos2(top.x, top.y + (row_h - hs[0]).max(0.0) / 2.0),
+                        vec2(who_w, 600.0),
+                    )),
+                    |ui| hero_who(ui, p, a, plan, who_w),
+                )
+                .inner;
+                let h1 = widgets::place(
+                    ui,
+                    UiBuilder::new().max_rect(Rect::from_min_size(
+                        pos2(top.x + iw - rings_w, top.y + (row_h - hs[1]).max(0.0) / 2.0),
+                        vec2(rings_w, 600.0),
+                    )),
+                    |ui| hero_rings(ui, p, a),
+                )
+                .inner;
+                remember(ui, id.with(10), h0);
+                remember(ui, id.with(11), h1);
+                y_end = top.y + h0.max(h1).max(row_h);
+            }
+            PageShape::Compact => {
+                let h0 =
+                    widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(iw, 600.0))), |ui| {
+                        hero_who(ui, p, a, plan, iw)
+                    })
+                    .inner;
+                let y = top.y + h0 + 16.0;
+                let h1 = widgets::place(
+                    ui,
+                    UiBuilder::new()
+                        .max_rect(Rect::from_min_size(pos2(top.x + (iw - rings_w) / 2.0, y), vec2(rings_w, 600.0))),
+                    |ui| hero_rings(ui, p, a),
+                )
+                .inner;
+                y_end = y + h1;
+            }
         }
-    }
+        if shape != PageShape::Wide {
+            y_end += 16.0;
+            ui.painter().hline(top.x..=top.x + iw, y_end - 0.5, Stroke::new(1.0, t.border));
+            y_end += 10.0;
+            let h = widgets::place(
+                ui,
+                UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x, y_end), vec2(iw, 600.0))),
+                |ui| hero_models(ui, p, a, iw),
+            )
+            .inner;
+            y_end += h;
+        }
+        ui.allocate_space(vec2(iw, y_end - top.y));
+    });
 }
 
-fn status_inline(ui: &mut Ui, t: &Tokens, a: &Account) {
-    let r = widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status));
-    let _ = r.on_hover_text(&a.usage_status);
-    if let Some((s, _)) = status_extra(a) {
-        widgets::line(ui, s, style::body(11.0), t.text_3);
+fn rings_width(ui: &Ui, p: &Paint, a: &Account) -> f32 {
+    let u = view::usage_of(a);
+    let cap = |w: Option<&UsageWindow>| {
+        let s = w
+            .and_then(|w| w.resets_at.as_deref())
+            .map(|r| format!("resets {}", reset_text(Some(r), p.now)))
+            .unwrap_or_default();
+        widgets::measure(ui, &s, style::body(11.0)).x.max(HERO_RING)
+    };
+    cap(u.and_then(|u| u.five_hour.as_ref())) + HERO_RING_GAP + cap(u.and_then(|u| u.seven_day.as_ref()))
+}
+
+fn hero_who(ui: &mut Ui, p: &Paint, a: &Account, plan: Option<&PlanInfo>, w: f32) -> f32 {
+    let t = p.t;
+    let top = ui.cursor().min;
+    let g = caps_label(ui, "Active now", 11.0, t.text_3);
+    let lh = g.size().y;
+    ui.painter().galley(top, g, t.text_3);
+    let chips = chips_of(a, plan, p, false);
+    let nh = widgets::place(
+        ui,
+        UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x, top.y + lh + 4.0), vec2(w, 300.0))),
+        |ui| name_block(ui, p, a, &chips, style::body_semibold(18.0), w),
+    )
+    .inner;
+    let mut y = top.y + lh + 4.0 + nh;
+    if let Some((text, tone)) = ready::forecast(a, p.now, p.off) {
+        y += 12.0;
+        let dot = if tone == ChipTone::Ok { t.ok } else { t.warn };
+        let g = widgets::wrapped(ui, text, style::body(12.0), t.text_2, w - 13.0);
+        let gh = g.size().y;
+        ui.painter().circle_filled(pos2(top.x + 3.5, y + 8.0), 3.5, dot);
+        ui.painter().galley(pos2(top.x + 13.0, y), g, t.text_2);
+        y += gh;
     }
+    let h = y - top.y;
+    ui.allocate_space(vec2(w, h));
+    h
+}
+
+fn hero_rings(ui: &mut Ui, p: &Paint, a: &Account) -> f32 {
+    let u = view::usage_of(a);
+    let top = ui.cursor().min;
+    let five = u.and_then(|u| u.five_hour.clone());
+    let seven = u.and_then(|u| u.seven_day.clone());
+    let n = a.number;
+    let mut x = top.x;
+    let mut h: f32 = 0.0;
+    for (key, label, win) in [("5h", "5-hour", five.as_ref()), ("7d", "7-day", seven.as_ref())] {
+        let r = widgets::place(
+            ui,
+            UiBuilder::new().max_rect(Rect::from_min_size(pos2(x, top.y), vec2(200.0, 200.0))),
+            |ui| {
+                let w = ring_with_caption(ui, p, n, key, label, win, HERO_RING, true);
+                (w, ui.min_rect().height())
+            },
+        )
+        .inner;
+        x += r.0 + HERO_RING_GAP;
+        h = h.max(r.1);
+    }
+    ui.allocate_space(vec2(x - HERO_RING_GAP - top.x, h));
+    h
+}
+
+fn hero_models(ui: &mut Ui, p: &Paint, a: &Account, w: f32) -> f32 {
+    let t = p.t;
+    let top = ui.cursor().min;
+    let models: Vec<(String, UsageWindow)> = view::usage_of(a)
+        .and_then(|u| u.scoped.clone())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s.name, s.window))
+        .collect();
+    let mh = widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(top, vec2(w, 400.0))), |ui| {
+        model_rows(ui, p, a.number, &models, w, false)
+    })
+    .inner;
+    // status chip · login expires in … · measured …
+    let y = top.y + mh + 6.0;
+    let chip_r =
+        widgets::place(ui, UiBuilder::new().max_rect(Rect::from_min_size(pos2(top.x, y), vec2(w, 18.0))), |ui| {
+            widgets::chip(ui, &status_label(&a.usage_status), status_tone(&a.usage_status))
+        })
+        .inner;
+    let _ = chip_r.clone().on_hover_text(&a.usage_status);
+    let mut bits: Vec<String> = Vec::new();
+    if let Some(at) = a.login_expires_at.as_deref().and_then(parse_iso_ms) {
+        let iso = iso_from_ms(at);
+        bits.push(if at > p.now {
+            format!("login expires in {}", reset_text(Some(&iso), p.now))
+        } else {
+            "login expired".into()
+        });
+    }
+    if view::is_stale(a) {
+        bits.push(format!("last good {}", age_seconds(a.last_good_age_seconds)));
+    } else if let Some(s) = a.usage_age_seconds.filter(|s| *s >= 60.0) {
+        bits.push(format!("measured {}", age_seconds(Some(s))));
+    }
+    if !bits.is_empty() {
+        let x = chip_r.rect.max.x;
+        let g = widgets::galley(
+            ui,
+            format!(" · {}", bits.join(" · ")),
+            style::body(11.0),
+            t.text_3,
+            (top.x + w - x).max(10.0),
+        );
+        ui.painter().galley(pos2(x, y + 9.0 - g.size().y / 2.0), g, t.text_3);
+    }
+    let h = y + 18.0 - top.y;
+    ui.allocate_space(vec2(w, h));
+    h
 }
 
 // ---- dialog bodies ------------------------------------------------------------------

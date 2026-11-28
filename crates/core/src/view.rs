@@ -1,6 +1,6 @@
-//! View model of the Accounts page that is worth testing without a window: the generated
-//! window columns (5-hour, 7-day, then one per scoped model across ALL accounts), the
-//! table/card threshold, plan badge text. OWNER: ui-accounts.
+//! View model of the Accounts page that is worth testing without a window: the layout's
+//! width thresholds, plan and login chips, window tooltips. Readiness, ordering and the
+//! Best next pick live in [`crate::ready`]. OWNER: ui-accounts.
 //!
 //! Also the pure parts of the Auto and Mappings pages (event lines, config specs), for the
 //! same reason: a wrong word or a missing cell here fails silently in a window.
@@ -11,23 +11,40 @@ use crate::format::{Tone, clock_of, parse_iso_ms, pct, rel_time, reset_text};
 use crate::plan::{self, Standing};
 use crate::types::{Account, AutoEvent, AutoOutcome, AutoStatus, PlainOutput, PlanInfo, Usage, UsageWindow};
 
-/// Cards below this LIST width, table above. Deliberately NOT derived from the column
-/// template (Purwa's call, 10 Sep 2026, PR #2): three window columns want ≈956 px, and
-/// deriving it turned a usable window into cards. Between 780 and the template's minimum
-/// the list scrolls sideways on purpose; nothing else does.
-pub const CARD_BELOW: f32 = 780.0;
+/// Below this CONTENT width (the page, not the window) the Accounts page goes narrow: the
+/// hero puts per-model bars and the status under a divider, and a row becomes two lines
+/// (name, then the two bars at equal widths) with no readiness text. 1.0's table needed a
+/// horizontal scroll band above this; 1.1.0's rows never scroll sideways.
+pub const NARROW_BELOW: f32 = 780.0;
+/// Below this content width the hero's rings sit centred under the name.
+pub const COMPACT_BELOW: f32 = 600.0;
+/// Tiles: an auto-fill grid of columns at least this wide, `TILE_GAP` apart.
+pub const TILE_MIN: f32 = 260.0;
+pub const TILE_GAP: f32 = 12.0;
 
-/// Column template, px (0.1.23's `T`): `#`, account (`minmax(160,2fr)`), one
-/// `minmax(win,1fr)` per window, status, actions. Rings are narrower than bars.
-pub const COL_NUM: f32 = 28.0;
-pub const COL_ACCOUNT: f32 = 160.0;
-pub const COL_WIN: f32 = 132.0;
-pub const COL_RING: f32 = 116.0;
-pub const COL_STATUS: f32 = 148.0;
-pub const COL_ACTIONS: f32 = 104.0;
-/// `gap-4` between columns and `px-3` inside a row.
-pub const COL_GAP: f32 = 16.0;
-pub const ROW_PAD_X: f32 = 12.0;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageShape {
+    Wide,
+    Narrow,
+    /// Narrow, and too narrow for the rings beside the name.
+    Compact,
+}
+
+/// The page's shape from the width its content has (an unmeasured 0 is wide).
+pub fn page_shape(content_width: f32) -> PageShape {
+    if content_width <= 0.0 || content_width >= NARROW_BELOW {
+        PageShape::Wide
+    } else if content_width >= COMPACT_BELOW {
+        PageShape::Narrow
+    } else {
+        PageShape::Compact
+    }
+}
+
+/// CSS `repeat(auto-fill, minmax(TILE_MIN, 1fr))`: how many tile columns fit, at least one.
+pub fn tile_columns(width: f32) -> usize {
+    (((width + TILE_GAP) / (TILE_MIN + TILE_GAP)).floor() as usize).max(1)
+}
 
 /// The usage a row shows: the live measurement, else the last good one (stale).
 pub fn usage_of(a: &Account) -> Option<&Usage> {
@@ -37,129 +54,6 @@ pub fn usage_of(a: &Account) -> Option<&Usage> {
 /// Showing `lastGoodUsage` because the live fetch failed.
 pub fn is_stale(a: &Account) -> bool {
     a.usage.is_none() && a.last_good_usage.is_some()
-}
-
-/// Every per-model window in the list, first-seen order. The columns belong to the table
-/// and not to a row: an account without one needs an empty cell, or its status and
-/// actions slide one column left of everyone else's.
-pub fn models(accounts: &[Account]) -> Vec<String> {
-    let mut seen: Vec<String> = Vec::new();
-    for a in accounts {
-        for s in usage_of(a).and_then(|u| u.scoped.as_ref()).into_iter().flatten() {
-            if !seen.contains(&s.name) {
-                seen.push(s.name.clone());
-            }
-        }
-    }
-    seen
-}
-
-/// Table or cards, from the width the LIST has (not the window's).
-pub fn is_cards(list_width: f32) -> bool {
-    list_width > 0.0 && list_width < CARD_BELOW
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct WindowCell {
-    /// `5h`, `7d` or `model-<name>`; stable, for tests and widget ids.
-    pub key: String,
-    /// What the tooltip calls it: `5-hour window`, `7-day window`, the model's name.
-    pub tooltip_name: String,
-    /// The name a card prints before the percentage (no header there to say it).
-    pub card_name: String,
-    /// `None` = an empty cell (`-`) holding the column.
-    pub window: Option<UsageWindow>,
-    /// Weekly windows carry a pace; the chip "ahead" only shows outside model cells.
-    pub is_model: bool,
-}
-
-/// The window cells of one row. In a table: 5-hour, 7-day, then EVERY model the table
-/// knows, empty where this account has none. In a card: there are no columns to hold and
-/// no header naming them, so a model the account lacks is simply absent.
-pub fn window_cells(a: &Account, models: &[String], cards: bool) -> Vec<WindowCell> {
-    let u = usage_of(a);
-    let mut cells = vec![
-        WindowCell {
-            key: "5h".into(),
-            tooltip_name: "5-hour window".into(),
-            card_name: "5-hour".into(),
-            window: u.and_then(|u| u.five_hour.clone()),
-            is_model: false,
-        },
-        WindowCell {
-            key: "7d".into(),
-            tooltip_name: "7-day window".into(),
-            card_name: "7-day".into(),
-            window: u.and_then(|u| u.seven_day.clone()),
-            is_model: false,
-        },
-    ];
-    for m in models {
-        let w =
-            u.and_then(|u| u.scoped.as_ref()).and_then(|s| s.iter().find(|s| &s.name == m)).map(|s| s.window.clone());
-        if cards && w.is_none() {
-            continue;
-        }
-        cells.push(WindowCell {
-            key: format!("model-{m}"),
-            tooltip_name: m.clone(),
-            card_name: m.clone(),
-            window: w,
-            is_model: true,
-        });
-    }
-    cells
-}
-
-/// Column widths of the table at a list width, like the CSS grid 0.1.23 used:
-/// `[num, account (2fr), win × (2 + models) (1fr each), status, actions]`. Every window
-/// column gets the same width; when the list is narrower than the minimums the columns
-/// stay at their minimums and the list scrolls.
-pub fn grid_columns(list_width: f32, n_models: usize, rings: bool) -> Vec<f32> {
-    let win = if rings { COL_RING } else { COL_WIN };
-    let n_win = 2 + n_models;
-    let n_cols = 4 + n_win;
-    let fixed = COL_NUM + COL_STATUS + COL_ACTIONS;
-    let free = list_width - 2.0 * ROW_PAD_X - COL_GAP * (n_cols - 1) as f32 - fixed;
-    // `minmax(min, N fr)` as CSS grid resolves it: share the free space by flex factor;
-    // a track whose share is below its minimum is frozen at the minimum and the rest is
-    // shared again among the others. Below the sum of minimums everything sits at its min.
-    let mins: Vec<f32> = std::iter::once(COL_ACCOUNT).chain(std::iter::repeat_n(win, n_win)).collect();
-    let flex: Vec<f32> = std::iter::once(2.0).chain(std::iter::repeat_n(1.0, n_win)).collect();
-    let mut frozen = vec![false; mins.len()];
-    let mut sizes = mins.clone();
-    loop {
-        let rest: f32 = free - (0..mins.len()).filter(|&i| frozen[i]).map(|i| mins[i]).sum::<f32>();
-        let fr_total: f32 = (0..mins.len()).filter(|&i| !frozen[i]).map(|i| flex[i]).sum();
-        if fr_total == 0.0 {
-            break;
-        }
-        let fr = rest / fr_total;
-        let mut changed = false;
-        for i in 0..mins.len() {
-            if !frozen[i] && flex[i] * fr < mins[i] {
-                frozen[i] = true;
-                changed = true;
-            }
-        }
-        if !changed {
-            for i in 0..mins.len() {
-                sizes[i] = if frozen[i] { mins[i] } else { flex[i] * fr };
-            }
-            break;
-        }
-    }
-    let (account, window) = (sizes[0], sizes[1]);
-    let mut cols = vec![COL_NUM, account];
-    cols.extend(std::iter::repeat_n(window, n_win));
-    cols.extend([COL_STATUS, COL_ACTIONS]);
-    cols
-}
-
-/// The width under which the table scrolls sideways: ≈956 px with three window columns.
-pub fn table_min_width(n_models: usize, rings: bool) -> f32 {
-    let cols = grid_columns(0.0, n_models, rings);
-    cols.iter().sum::<f32>() + COL_GAP * (cols.len() - 1) as f32 + 2.0 * ROW_PAD_X
 }
 
 /// Hover text of a window cell.
@@ -619,23 +513,7 @@ pub fn config_text(v: &Value) -> String {
 mod tests {
     use super::*;
     use crate::mock::{auto_event, fixture_payload};
-    use crate::types::ScopedWindow;
     use serde_json::json;
-
-    fn acct(n: u32, scoped: &[&str]) -> Account {
-        let w = |p| UsageWindow { pct: p, ..Default::default() };
-        Account {
-            number: n,
-            usage: Some(Usage {
-                five_hour: Some(w(1.0)),
-                seven_day: Some(w(2.0)),
-                scoped: (!scoped.is_empty())
-                    .then(|| scoped.iter().map(|s| ScopedWindow { name: s.to_string(), window: w(3.0) }).collect()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
 
     // TESTED RULE: cswap's `plan` is the badge of every account that has one; the label
     // remembered from the credential file is only the fallback (older cswap, unread slot).
@@ -740,63 +618,21 @@ mod tests {
         assert_eq!(login_expiry(&a, 0, 0), None);
     }
 
-    // TESTED RULE (project notes): the column set is the UNION of models across accounts,
-    // first-seen order, and it includes models only present in lastGoodUsage.
+    // TESTED RULE: the shape follows the CONTENT width: narrow below 780, the hero's rings
+    // centred below 600; tiles fill columns of at least 260 px.
     #[test]
-    fn model_columns_are_the_union_across_accounts() {
-        let list = [acct(1, &[]), acct(2, &["Fable"]), acct(3, &["Opus", "Fable"])];
-        assert_eq!(models(&list), ["Fable", "Opus"]);
-        assert!(models(&[acct(1, &[])]).is_empty());
-        // The fixture: Fable live on 1 and 2, Sonnet only in account 5's last-good usage.
-        assert_eq!(models(&fixture_payload(0).accounts), ["Fable", "Sonnet"]);
-    }
-
-    // TESTED RULE: in a table an account without a model still gets that column, as an
-    // empty cell; in a card it is absent.
-    #[test]
-    fn a_missing_model_is_an_empty_cell_in_a_table_and_absent_in_a_card() {
-        let list = [acct(1, &[]), acct(2, &["Fable"])];
-        let m = models(&list);
-        let table = window_cells(&list[0], &m, false);
-        assert_eq!(table.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(), ["5h", "7d", "model-Fable"]);
-        assert!(table[2].window.is_none(), "empty cell holds the column");
-        let card = window_cells(&list[0], &m, true);
-        assert_eq!(card.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(), ["5h", "7d"]);
-        // A row with no usage at all still has its 5h/7d cells (shown as "-").
-        let none = Account { number: 4, ..Default::default() };
-        let cells = window_cells(&none, &m, false);
-        assert_eq!(cells.len(), 3);
-        assert!(cells.iter().all(|c| c.window.is_none()));
-    }
-
-    // TESTED RULE: cards below a FIXED 780 px list width, not one derived from columns.
-    #[test]
-    fn cards_below_780_regardless_of_columns() {
-        assert!(is_cards(779.0));
-        assert!(!is_cards(780.0));
-        assert!(!is_cards(800.0), "the table scrolls instead, even with many model columns");
-        assert!(table_min_width(3, false) > 800.0);
-        assert!(!is_cards(0.0), "unmeasured: not cards");
-    }
-
-    #[test]
-    fn grid_matches_the_css_template() {
-        // Three window columns want ≈956 px: the scroll band is 780..956.
-        assert_eq!(table_min_width(1, false), 956.0);
-        assert!(table_min_width(1, true) < 956.0);
-        // Below the minimum: columns at their minimums (the list scrolls).
-        let c = grid_columns(800.0, 1, false);
-        assert_eq!(c, [28.0, 160.0, 132.0, 132.0, 132.0, 148.0, 104.0]);
-        // Wide: window columns equal, account twice a window column, all filling the row.
-        for w in [1000.0, 1240.0, 1700.0] {
-            let c = grid_columns(w, 1, false);
-            assert!((c[2] - c[3]).abs() < 0.01 && (c[3] - c[4]).abs() < 0.01, "{w}: {c:?}");
-            let used: f32 = c.iter().sum::<f32>() + COL_GAP * 6.0 + 2.0 * ROW_PAD_X;
-            assert!((used - w).abs() < 0.5, "{w}: fills the row ({used})");
-            assert!(c[1] >= COL_ACCOUNT && c[2] >= COL_WIN);
-        }
-        let c = grid_columns(1700.0, 1, false);
-        assert!((c[1] - 2.0 * c[2]).abs() < 0.01);
+    fn shape_and_tile_columns_follow_the_content_width() {
+        assert_eq!(page_shape(1072.0), PageShape::Wide);
+        assert_eq!(page_shape(780.0), PageShape::Wide);
+        assert_eq!(page_shape(779.0), PageShape::Narrow);
+        assert_eq!(page_shape(600.0), PageShape::Narrow);
+        assert_eq!(page_shape(599.0), PageShape::Compact);
+        assert_eq!(page_shape(0.0), PageShape::Wide, "unmeasured");
+        assert_eq!(tile_columns(855.0), 3);
+        assert_eq!(tile_columns(803.0), 2);
+        assert_eq!(tile_columns(532.0), 2);
+        assert_eq!(tile_columns(531.0), 1);
+        assert_eq!(tile_columns(100.0), 1);
     }
 
     #[test]
