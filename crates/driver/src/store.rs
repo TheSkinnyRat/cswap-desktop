@@ -140,6 +140,24 @@ mod tests {
         assert_eq!((odd.accounts_layout, odd.show_hero), (AccountsLayout::Rows, false));
     }
 
+    // TESTED RULE: `dockIcon` (1.2.0) persists; a 1.1 file without it opens with `always`,
+    // and a value this version does not know falls back to `always` alone.
+    #[test]
+    fn dock_icon_persists_and_old_or_odd_files_open() {
+        use cswap_core::DockIcon;
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("settings.json"), r#"{"theme":"dark","showHero":false}"#).unwrap();
+        let mut s = SettingsStore::open(d.path());
+        assert_eq!(s.get().dock_icon, DockIcon::Always);
+        s.edit(|x| x.dock_icon = DockIcon::WhileWindowOpen);
+        let raw: Value = serde_json::from_slice(&std::fs::read(d.path().join("settings.json")).unwrap()).unwrap();
+        assert_eq!(raw["dockIcon"], serde_json::json!("whileWindowOpen"));
+        assert_eq!(SettingsStore::open(d.path()).get().dock_icon, DockIcon::WhileWindowOpen);
+        std::fs::write(d.path().join("settings.json"), r#"{"dockIcon":"sometimes","showHero":false}"#).unwrap();
+        let odd = SettingsStore::open(d.path()).get();
+        assert_eq!((odd.dock_icon, odd.show_hero), (DockIcon::Always, false));
+    }
+
     #[test]
     fn a_corrupt_or_missing_file_is_defaults() {
         let d = tempfile::tempdir().unwrap();

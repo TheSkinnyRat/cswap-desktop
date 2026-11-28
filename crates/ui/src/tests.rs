@@ -8,7 +8,7 @@ use std::sync::mpsc::Receiver;
 
 use cswap_core::mock::{Fixture as MockFixture, MockCswap};
 use cswap_core::{
-    AppSettings, CommandLogEntry, Cswap, CswapBinaryInfo, Event, EventSink, Page, ThemeSetting, UpdaterState,
+    AppSettings, CommandLogEntry, Cswap, CswapBinaryInfo, DockIcon, Event, EventSink, Page, ThemeSetting, UpdaterState,
     UpdaterStatus,
 };
 use egui::accesskit::Role;
@@ -154,6 +154,28 @@ fn renders_settings_and_log_in_light_and_dark() {
     settle(&mut h);
     h.get_by_label_contains("No account found with identifier: 9");
     shot(&mut h, "log-dark-expanded");
+}
+
+// TESTED RULE: "Show in Dock" is offered on macOS only, and choosing an option saves it.
+#[test]
+fn show_in_dock_is_a_macos_setting() {
+    let (f, rx) = fixture();
+    let mut h = harness_sized(&f, rx, 1240.0, 1100.0);
+    settle(&mut h);
+    nav(&mut h, "Settings");
+    assert!(h.query_by_label("Show in Dock").is_none(), "no Dock on linux");
+
+    let (mut f, rx) = fixture();
+    f.host = RecordingHost::new("macos");
+    let mut h = harness_sized(&f, rx, 1240.0, 1100.0);
+    settle(&mut h);
+    nav(&mut h, "Settings");
+    h.get_by_label("Hidden from the Dock, Claude Swap lives in the menu bar.");
+    h.get_by_role_and_label(Role::ComboBox, "Show in Dock").click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::MenuItem, "Never").click();
+    settle(&mut h);
+    assert_eq!(f.cswap.settings().dock_icon, DockIcon::Never);
 }
 
 #[test]

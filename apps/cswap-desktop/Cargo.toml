@@ -50,7 +50,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 # out, so the Dock / Cmd+Tab bring it back (see shell.rs).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
+# The Dock icon setting switches the activation policy (shell.rs `sync_dock`); winit (the
+# one eframe already uses) takes the starting policy, so a `never` app shows no Dock icon.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSRunningApplication"] }
+winit = { version = "0.30", default-features = false }
 
 [dev-dependencies]
 # Test dirs that delete themselves, also on a panic.
